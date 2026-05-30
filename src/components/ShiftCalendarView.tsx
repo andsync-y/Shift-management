@@ -34,8 +34,16 @@ export default function ShiftCalendarView({
   highlightStaffId?: string;
 }) {
   const [mode, setMode] = useState<ViewMode>("month");
-  // 週ビューの基準日。既定は対象月の1日を含む週。
-  const [cursor, setCursor] = useState<Date>(new Date(year, month - 1, 1));
+  // 週ビューの基準日。既定は「最初にシフトがある日」を含む週
+  //（無ければ対象月の1日）。オープン前の空週から始まらないようにする。
+  const [cursor, setCursor] = useState<Date>(() => {
+    const dates = shifts.map((s) => s.work_date).sort();
+    if (dates.length > 0) {
+      const [y, m, d] = dates[0].split("-").map(Number);
+      return new Date(y, m - 1, d);
+    }
+    return new Date(year, month - 1, 1);
+  });
   // スタッフ絞り込み（空 = 全員表示）
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [filterOpen, setFilterOpen] = useState(false);
