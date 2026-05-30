@@ -1,0 +1,84 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+import {
+  EMPLOYMENT_LABELS_JA,
+  ROLE_LABELS_JA,
+  type Profile,
+} from "@/lib/types";
+import StaffForm from "./StaffForm";
+
+export default async function StaffPage() {
+  const supabase = await createClient();
+  const { data: staff } = await supabase
+    .from("profiles")
+    .select("*")
+    .order("created_at", { ascending: true });
+
+  return (
+    <div className="space-y-6">
+      <h1 className="text-2xl font-bold">スタッフ管理</h1>
+
+      <div className="card">
+        <h2 className="mb-4 font-semibold">新規スタッフ登録</h2>
+        <StaffForm />
+      </div>
+
+      <div className="card">
+        <h2 className="mb-4 font-semibold">登録済みスタッフ（{staff?.length ?? 0}名）</h2>
+        <div className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-gray-200 text-left text-gray-500">
+                <th className="py-2 pr-4">氏名</th>
+                <th className="py-2 pr-4">権限</th>
+                <th className="py-2 pr-4">雇用形態</th>
+                <th className="py-2 pr-4">週時間(最低/最大)</th>
+                <th className="py-2 pr-4">状態</th>
+                <th className="py-2 pr-4">希望シフト</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(staff as Profile[] | null)?.map((s) => (
+                <tr key={s.id} className="border-b border-gray-100">
+                  <td className="py-2 pr-4">
+                    <span className="inline-flex items-center gap-2">
+                      <span
+                        className="inline-block h-3 w-3 rounded-full"
+                        style={{ backgroundColor: s.display_color }}
+                      />
+                      {s.full_name}
+                    </span>
+                  </td>
+                  <td className="py-2 pr-4">{ROLE_LABELS_JA[s.role]}</td>
+                  <td className="py-2 pr-4">{EMPLOYMENT_LABELS_JA[s.employment_type]}</td>
+                  <td className="py-2 pr-4">
+                    {s.min_hours_per_week} / {s.max_hours_per_week}h
+                  </td>
+                  <td className="py-2 pr-4">
+                    {s.is_active ? (
+                      <span className="badge bg-green-100 text-green-700">稼働中</span>
+                    ) : (
+                      <span className="badge bg-gray-100 text-gray-500">停止</span>
+                    )}
+                  </td>
+                  <td className="py-2 pr-4">
+                    <Link href={`/admin/staff/${s.id}`} className="text-brand hover:underline">
+                      編集
+                    </Link>
+                  </td>
+                </tr>
+              ))}
+              {(!staff || staff.length === 0) && (
+                <tr>
+                  <td colSpan={6} className="py-4 text-center text-gray-400">
+                    まだスタッフが登録されていません。
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}

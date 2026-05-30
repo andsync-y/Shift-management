@@ -1,0 +1,148 @@
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
+import {
+  PERIOD_STATUS_LABELS_JA,
+  type Profile,
+  type Shift,
+  type ShiftPeriod,
+  type ShiftRequirement,
+} from "@/lib/types";
+import ShiftCalendar from "@/components/ShiftCalendar";
+import RequirementsEditor from "./RequirementsEditor";
+import GeneratePanel from "./GeneratePanel";
+import ShiftEditor from "./ShiftEditor";
+import SalonBoardPanel from "./SalonBoardPanel";
+
+const STATUS_STYLE: Record<string, string> = {
+  draft: "bg-gray-100 text-gray-600",
+  published: "bg-blue-100 text-blue-700",
+  confirmed: "bg-green-100 text-green-700",
+};
+
+export default async function PeriodDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const supabase = await createClient();
+
+  const { data: period } = await supabase
+    .from("shift_periods")
+    .select("*")
+    .eq("id", id)
+    .single();
+  if (!period) notFound();
+  const p = period as ShiftPeriod;
+
+  const [{ data: requirements }, { data: shifts }, { data: staff }] = await Promise.all([
+    supabase.from("shift_requirements").select("*").eq("period_id", id),
+    supabase.from("shifts").select("*").eq("period_id", id),
+    supabase.from("profiles").select("*"),
+  ]);
+
+  const staffList = (staff ?? []) as Profile[];
+  const shiftList = (shifts ?? []) as Shift[];
+
+  // スタッフごとの合計時間
+  const hours: Record<string, number> = {};
+  for (const s of shiftList) {
+    const dur =
+      (Number(s.end_time.slice(0, 2)) * 60 + Number(s.end_time.slice(3, 5)) -
+        Number(s.start_time.slice(0, 2)) * 60 - Number(s.start_time.slice(3, 5))) /
+      60;
+    hours[s.staff_id] = (hours[s.staff_id] ?? 0) + dur;
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center gap-2 text-sm text-gray-500">
+        <Link href="/admin/shifts" className="hover:text-brand">シフト作成</Link>
+        <span>/</span>
+        <span>{p.year}年{p.month}月</span>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <h1 className="text-2xl font-bold">{p.year}年{p.month}月 のシフト</h1>
+        <span className={`badge ${STATUS_STYLE[p.status]}`}>
+          {PERIOD_STATUS_LABELS_JA[p.status]}
+        </span>
+      </div>
+
+      <div className="card">
+        <h2 className="mb-3 font-semibold">必要人数の設定</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          曜日・時間帯ごとに必要なスタッフ数を登録します。AIシフト生成の基準になります。
+        </p>
+        <RequirementsEditor
+          periodId={id}
+          initial={(requirements ?? []) as ShiftRequirement[]}
+        />
+      </div>
+
+      <div className="card">
+        <h2 className="mb-3 font-semibold">AIシフト生成・公開</h2>
+        <GeneratePanel periodId={id} status={p.status} />
+      </div>
+
+      <div className="card">
+        <div className="mb-3 flex items-center justify-between">
+          <h2 className="font-semibold">シフト表（{shiftList.length}件）</h2>
+        </div>
+        {shiftList.length > 0 ? (
+          <ShiftCalendar
+            year={p.year}
+            month={p.month}
+            shifts={shiftList}
+            staff={staffList}
+          />
+        ) : (
+          <p className="text-sm text-gray-400">
+            まだシフトがありません。上の「AIでシフトを自動生成」を実行してください。
+          </p>
+        )}
+      </div>
+
+      <div className="card">
+        <h2 className="mb-3 font-semibold">シフトの手動調整</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          AI生成の結果を個別に追加・時刻変更・削除できます。手動で調整したシフトは再生成すると失われるため、確定前に調整してください。
+        </p>
+        <ShiftEditor
+          periodId={id}
+          year={p.year}
+          month={p.month}
+          shifts={shiftList}
+          staff={staffList}
+        />
+      </div>
+
+      {p.status === "confirmed" && (
+        <div className="card">
+          <h2 className="mb-3 font-semibold">サロンボードへ反映</h2>
+          <SalonBoardPanel periodId={id} />
+        </div>
+      )}
+
+      {Object.keys(hours).length > 0 && (
+        <div className="card">
+          <h2 className="mb-3 font-semibold">スタッフ別 合計勤務時間</h2>
+          <ul className="grid gap-1 text-sm sm:grid-cols-2 lg:grid-cols-3">
+            {staffList
+              .filter((s) => hours[s.id])
+              .map((s) => (
+                <li key={s.id} className="flex items-center justify-between border-b border-gray-100 py-1">
+                  <span className="inline-flex items-center gap-2">
+                    <span className="inline-block h-3 w-3 rounded-full" style={{ backgroundColor: s.display_color }} />
+                    {s.full_name}
+                  </span>
+                  <span className="font-medium">{hours[s.id].toFixed(1)}h</span>
+                </li>
+              ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
