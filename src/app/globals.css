@@ -673,13 +673,13 @@ body {
   border-left: 3px solid transparent;
   min-width: 0;
   overflow: hidden;
+  flex-wrap: wrap;
+  row-gap: 1px;
 }
 .evt .nm {
-  min-width: 0;
   font-weight: 500;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  flex: none;
 }
 .evt.mine {
   outline: 1.5px solid var(--accent);
