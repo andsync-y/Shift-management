@@ -6,7 +6,7 @@ import {
   type Shift,
   type ShiftPeriod,
 } from "@/lib/types";
-import ShiftCalendar from "@/components/ShiftCalendar";
+import ShiftCalendarView from "@/components/ShiftCalendarView";
 
 export default async function StaffShiftsPage() {
   const me = await requireUser();
@@ -68,7 +68,7 @@ export default async function StaffShiftsPage() {
 
       <div className="card">
         <h2 className="mb-3 font-semibold">シフト表（あなたの勤務を強調表示）</h2>
-        <ShiftCalendar
+        <ShiftCalendarView
           year={latest.year}
           month={latest.month}
           shifts={(shifts ?? []) as Shift[]}

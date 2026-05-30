@@ -1,6 +1,11 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
-import { PERIOD_STATUS_LABELS_JA } from "@/lib/types";
+import {
+  PERIOD_STATUS_LABELS_JA,
+  type Profile,
+  type Shift,
+} from "@/lib/types";
+import ShiftCalendarView from "@/components/ShiftCalendarView";
 
 export default async function AdminDashboard() {
   const supabase = await createClient();
@@ -19,6 +24,19 @@ export default async function AdminDashboard() {
         .order("month", { ascending: false })
         .limit(5),
     ]);
+
+  // 最新のシフト期間のカレンダーをダッシュボードに表示
+  const latest = periods?.[0];
+  let latestShifts: Shift[] = [];
+  let staffList: Profile[] = [];
+  if (latest) {
+    const [{ data: shifts }, { data: staff }] = await Promise.all([
+      supabase.from("shifts").select("*").eq("period_id", latest.id),
+      supabase.from("profiles").select("*"),
+    ]);
+    latestShifts = (shifts ?? []) as Shift[];
+    staffList = (staff ?? []) as Profile[];
+  }
 
   return (
     <div className="space-y-6">
@@ -47,6 +65,34 @@ export default async function AdminDashboard() {
           </Link>
         </div>
       </div>
+
+      {latest && (
+        <div className="card">
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-semibold">
+              {latest.year}年{latest.month}月 のシフト
+            </h2>
+            <Link
+              href={`/admin/shifts/${latest.id}`}
+              className="text-sm text-brand hover:underline"
+            >
+              編集 →
+            </Link>
+          </div>
+          {latestShifts.length > 0 ? (
+            <ShiftCalendarView
+              year={latest.year}
+              month={latest.month}
+              shifts={latestShifts}
+              staff={staffList}
+            />
+          ) : (
+            <p className="text-sm text-gray-400">
+              このシフト期間にはまだシフトがありません。シフト作成画面で生成してください。
+            </p>
+          )}
+        </div>
+      )}
 
       <div className="card">
         <h2 className="mb-3 font-semibold">最近のシフト期間</h2>
