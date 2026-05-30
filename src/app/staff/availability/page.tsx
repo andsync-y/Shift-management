@@ -1,10 +1,11 @@
-import { requireUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { AvailabilityPreference } from "@/lib/types";
 import AvailabilityEditor from "@/components/AvailabilityEditor";
 
+// 希望シフトの編集はオーナーのみ（スタッフはアクセス不可）。
 export default async function StaffAvailabilityPage() {
-  const me = await requireUser();
+  const me = await requireAdmin();
   const supabase = await createClient();
 
   const { data: availability } = await supabase
