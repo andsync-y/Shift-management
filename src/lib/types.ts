@@ -18,6 +18,7 @@ export interface Profile {
   display_color: string;
   skills: string[];
   is_active: boolean;
+  initial_password: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -92,7 +93,7 @@ export interface TimeOffRequest {
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export const ROLE_LABELS_JA: Record<UserRole, string> = {
-  super_admin: "管理者",
+  super_admin: "オーナー",
   staff: "スタッフ",
 };
 

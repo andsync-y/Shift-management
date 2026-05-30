@@ -181,6 +181,7 @@ async function upsertStaff(s) {
     min_hours_per_week: s.min,
     max_hours_per_week: s.max,
     display_color: s.color,
+    initial_password: DEFAULT_PASSWORD,
   });
 
   // 希望シフトを入れ替え（重複防止のため一旦削除）

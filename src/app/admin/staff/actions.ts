@@ -57,6 +57,7 @@ export async function createStaff(
     min_hours_per_week: input.min_hours_per_week,
     max_hours_per_week: input.max_hours_per_week,
     display_color: input.display_color,
+    initial_password: input.password,
   });
 
   if (profileError) {
