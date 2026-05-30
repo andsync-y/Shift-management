@@ -9,6 +9,8 @@ export default function TimeOffForm() {
   const [allDay, setAllDay] = useState(true);
   const [dates, setDates] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  const [start, setStart] = useState("10:00");
+  const [end, setEnd] = useState("19:00");
 
   const reqType = allDay ? "off" : "time_change";
   const kind = allDay ? "休み" : "時間変更";
@@ -47,9 +49,34 @@ export default function TimeOffForm() {
       </div>
 
       <div className="section-body">
+        {/* 申請の種類を最初にはっきり選ばせる（あいまいな組み合わせを無くす） */}
+        <div className="field" style={{ marginTop: 0, marginBottom: 20 }}>
+          <label>
+            Type <span className="jp-label">／ 申請の種類 ＊</span>
+          </label>
+          <div className="seg" role="tablist" style={{ display: "inline-flex" }}>
+            <button
+              type="button"
+              className={allDay ? "on" : ""}
+              onClick={() => setAllDay(true)}
+            >
+              終日休み（1日まるごと）
+            </button>
+            <button
+              type="button"
+              className={!allDay ? "on" : ""}
+              onClick={() => setAllDay(false)}
+            >
+              時間変更（勤務時間を変える）
+            </button>
+          </div>
+        </div>
+
         <p className="help" style={{ marginTop: 0, marginBottom: 24 }}>
-          「終日休み」をオンにすると<b className="soft">休み</b>、オフにすると勤務時間を指定する
-          <b className="soft">時間変更</b>として申請されます。対象日は複数追加できます。
+          {allDay
+            ? "選んだ日を「終日休み」として申請します。勤務時間の入力はありません。"
+            : "選んだ日について、希望する新しい勤務時間を指定して申請します。"}
+          対象日は複数追加できます。
         </p>
 
         <form action={formAction}>
@@ -72,10 +99,6 @@ export default function TimeOffForm() {
             <button type="button" className="btn-outline" style={{ padding: "12px 22px" }} onClick={addDate}>
               追加
             </button>
-            <label className="check">
-              <input type="checkbox" checked={allDay} onChange={(e) => setAllDay(e.target.checked)} />
-              <span>終日休み</span>
-            </label>
           </div>
 
           {!allDay && (
@@ -84,13 +107,25 @@ export default function TimeOffForm() {
                 <label>
                   Start <span className="jp-label">／ 希望開始時刻 ＊</span>
                 </label>
-                <input className="input" name="start_time" type="time" defaultValue="10:00" />
+                <input
+                  className="input"
+                  name="start_time"
+                  type="time"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
               </div>
               <div className="field">
                 <label>
                   End <span className="jp-label">／ 希望終了時刻 ＊</span>
                 </label>
-                <input className="input" name="end_time" type="time" defaultValue="19:00" />
+                <input
+                  className="input"
+                  name="end_time"
+                  type="time"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                />
               </div>
             </div>
           )}
@@ -104,7 +139,7 @@ export default function TimeOffForm() {
                     <span className="atm en">
                       {Number(m)}/{Number(day)}
                     </span>
-                    <span className={`mk ${allDay ? "early" : "late"}`}>{allDay ? "終日" : "時間変更"}</span>
+                    <span className={`mk ${allDay ? "early" : "late"}`}>{allDay ? "終日" : `${start}–${end}`}</span>
                     <button type="button" className="ax" onClick={() => removeDate(d)} aria-label="削除">
                       ×
                     </button>
@@ -136,7 +171,33 @@ export default function TimeOffForm() {
             </p>
           )}
 
-          <div style={{ marginTop: 26 }}>
+          {/* 送信前の確認プレビュー：間違った申請を防ぐ */}
+          {dates.length > 0 && (
+            <div
+              className="alert-banner ok"
+              style={{ marginTop: 26, alignItems: "center" }}
+            >
+              <span className="ab-icon">✓</span>
+              <div>
+                <p className="ab-title" style={{ marginBottom: 4 }}>
+                  この内容で申請します
+                </p>
+                <p className="help" style={{ margin: 0 }}>
+                  {dates
+                    .map((d) => {
+                      const [, m, day] = d.split("-");
+                      return `${Number(m)}/${Number(day)}`;
+                    })
+                    .join("・")}{" "}
+                  を{" "}
+                  <b className="soft">{allDay ? "終日休み" : `${start}–${end} への時間変更`}</b>{" "}
+                  として申請（{dates.length}日）
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 22 }}>
             <button type="submit" className="btn-fill" disabled={pending || dates.length === 0}>
               {pending ? "申請中..." : allDay ? "お休みを申請" : "時間変更を申請"}
               {dates.length > 0 ? `（${dates.length}日）` : ""}

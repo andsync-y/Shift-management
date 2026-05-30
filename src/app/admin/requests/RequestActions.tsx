@@ -35,13 +35,14 @@ export default function RequestActions({
       </span>
     );
   }
+  // すでに承認/却下済み：反対の状態へ切り替えられる（誤承認の取り消し用）
   return (
     <button
       className="btn-link ink"
       onClick={() => act(status === "approved" ? "rejected" : "approved")}
       disabled={pending}
     >
-      変更
+      {status === "approved" ? "承認を取消" : "承認する"}
     </button>
   );
 }
