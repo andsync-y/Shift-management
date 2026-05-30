@@ -128,6 +128,7 @@ export default function ShiftCalendarView({
     const today = ymd(new Date());
 
     return (
+      <div className="cal-scroll">
       <div className="cal-grid">
         <div className="cal-dow">
           {DAY_LABELS_JA.map((w, i) => (
@@ -171,6 +172,7 @@ export default function ShiftCalendarView({
           })}
         </div>
       </div>
+      </div>
     );
   }
 
@@ -208,13 +210,17 @@ export default function ShiftCalendarView({
               <div className="tl-day">
                 <span
                   className="d en"
-                  style={dow === 0 ? { color: "var(--accent-ink)" } : undefined}
+                  style={
+                    dow === 0
+                      ? { color: "var(--accent-ink)" }
+                      : dow === 6
+                      ? { color: "#4a6079" }
+                      : undefined
+                  }
                 >
                   {date.getDate()}
                 </span>
-                <span className="w">
-                  {date.getMonth() + 1}月・{DAY_LABELS_JA[dow]}曜日
-                </span>
+                <span className="w">（{DAY_LABELS_JA[dow]}）</span>
               </div>
               {evts.length ? (
                 <div className="tl-lanes">

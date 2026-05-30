@@ -31,48 +31,51 @@ export default function NavBar({
   const home = profile.role === "super_admin" ? "/admin" : "/staff";
 
   return (
-    <header className="appbar">
-      <div className="appbar-inner">
-        <Link href={home} className="brand">
-          <span className="mark">全力ストレッチ岐阜長良店</span>
-        </Link>
+    <>
+      <header className="appbar">
+        <div className="appbar-inner">
+          <Link href={home} className="brand">
+            <span className="mark">全力ストレッチ岐阜長良店</span>
+          </Link>
 
-        <nav className="nav">
-          {items.map((item) => (
-            <Link
-              key={item.href}
-              href={item.href}
-              className={isActive(item.href) ? "active" : ""}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
+          <nav className="nav">
+            {items.map((item) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={isActive(item.href) ? "active" : ""}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
 
-        <div className="appbar-right">
-          <span className="who">
-            <b>{profile.full_name}</b>
-            <span className="role-label">{roleEn}</span>
-          </span>
-          <form action={signOut}>
-            <button type="submit" className="btn-link ink">
-              ログアウト
-            </button>
-          </form>
+          <div className="appbar-right">
+            <span className="who">
+              <b>{profile.full_name}</b>
+              <span className="role-label">{roleEn}</span>
+            </span>
+            <form action={signOut}>
+              <button type="submit" className="btn-link ink">
+                ログアウト
+              </button>
+            </form>
+          </div>
+
+          <button
+            className="hamburger"
+            aria-label="メニュー"
+            aria-expanded={open}
+            onClick={() => setOpen((o) => !o)}
+          >
+            <span style={open ? { transform: "translateY(6.5px) rotate(45deg)" } : {}} />
+            <span style={open ? { opacity: 0 } : {}} />
+            <span style={open ? { transform: "translateY(-6.5px) rotate(-45deg)" } : {}} />
+          </button>
         </div>
+      </header>
 
-        <button
-          className="hamburger"
-          aria-label="メニュー"
-          aria-expanded={open}
-          onClick={() => setOpen((o) => !o)}
-        >
-          <span style={open ? { transform: "translateY(6.5px) rotate(45deg)" } : {}} />
-          <span style={open ? { opacity: 0 } : {}} />
-          <span style={open ? { transform: "translateY(-6.5px) rotate(-45deg)" } : {}} />
-        </button>
-      </div>
-
+      {/* モバイルメニュー（appbarの外に置く: backdrop-filter下では fixed が効かないため） */}
       <div className={"mobile-menu" + (open ? " open" : "")}>
         {items.map((item) => (
           <Link
@@ -99,6 +102,6 @@ export default function NavBar({
           </form>
         </div>
       </div>
-    </header>
+    </>
   );
 }
