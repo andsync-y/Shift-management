@@ -106,17 +106,25 @@ export default function ShiftCalendarView({
     return staffMap.get(staffId)?.display_color ?? "#8e897f";
   }
 
-  // 休みチップ（承認済みの休み希望）
+  // 休み／時間変更チップ（承認済み）
   function OffEvt({ t }: { t: TimeOffRequest }) {
     const p = staffMap.get(t.staff_id);
-    const label = t.start_time && t.end_time ? `${hm(t.start_time)}–${hm(t.end_time)}` : "終日";
+    const isChange = t.request_type === "time_change";
+    const time = t.start_time && t.end_time ? `${hm(t.start_time)}–${hm(t.end_time)}` : "終日";
     return (
       <div
-        className="evt off"
-        title={`${p ? p.full_name : "?"} 休み（${label}）`}
+        className={"evt " + (isChange ? "change" : "off")}
+        title={`${p ? p.full_name : "?"} ${isChange ? "時間変更希望" : "休み"}（${time}）`}
       >
         <span className="nm">{p ? surname(p.full_name) : "?"}</span>
-        <span className="mk off-mk">休</span>
+        <span className={"mk " + (isChange ? "change-mk" : "off-mk")}>
+          {isChange ? "変" : "休"}
+        </span>
+        {isChange && t.start_time && t.end_time && (
+          <span className="tm">
+            {hm(t.start_time)}–{hm(t.end_time)}
+          </span>
+        )}
       </div>
     );
   }
@@ -188,7 +196,7 @@ export default function ShiftCalendarView({
                 <div className="cal-daynum">{date.getDate()}</div>
                 <div className="cal-events">
                   {evts.map((s) => (
-                    <Evt key={s.id} s={s} withTime={false} />
+                    <Evt key={s.id} s={s} withTime={true} />
                   ))}
                   {offs.map((t) => (
                     <OffEvt key={t.id} t={t} />
@@ -284,15 +292,18 @@ export default function ShiftCalendarView({
                   })}
                   {offs.map((t) => {
                     const p = staffMap.get(t.staff_id);
+                    const isChange = t.request_type === "time_change";
                     const label =
                       t.start_time && t.end_time
                         ? `${hm(t.start_time)}–${hm(t.end_time)}`
                         : "終日";
                     return (
                       <div className="tl-off" key={t.id}>
-                        <span className="mk off-mk">休</span>
+                        <span className={"mk " + (isChange ? "change-mk" : "off-mk")}>
+                          {isChange ? "変" : "休"}
+                        </span>
                         <span className="nm">{p ? surname(p.full_name) : "?"}</span>
-                        <span className="tm">{label}</span>
+                        <span className="tm">{isChange ? `→ ${label}` : label}</span>
                       </div>
                     );
                   })}

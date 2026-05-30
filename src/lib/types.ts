@@ -5,6 +5,7 @@ export type EmploymentType = "full_time" | "part_time";
 export type AvailabilityPref = "preferred" | "available" | "unavailable";
 export type PeriodStatus = "draft" | "published" | "confirmed";
 export type RequestStatus = "pending" | "approved" | "rejected";
+export type RequestType = "off" | "time_change";
 
 export interface Profile {
   id: string;
@@ -85,6 +86,7 @@ export interface TimeOffRequest {
   start_time: string | null;
   end_time: string | null;
   reason: string | null;
+  request_type: RequestType;
   status: RequestStatus;
   reviewed_by: string | null;
   reviewed_at: string | null;

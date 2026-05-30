@@ -711,6 +711,8 @@ body {
   font-family: "Archivo", sans-serif;
   font-size: 10.5px;
   white-space: nowrap;
+  flex: none;
+  margin-left: auto;
 }
 .evt-more {
   font-size: 10.5px;
@@ -1568,4 +1570,16 @@ body {
   font-family: "Archivo", sans-serif;
   font-size: 10.5px;
   color: var(--ink-3);
+}
+
+/* 時間変更希望（承認済み）チップ */
+.evt.change {
+  background: color-mix(in oklab, #94560e 9%, transparent);
+  border-left-color: #94560e;
+  color: #7a4708;
+}
+.mk.change-mk {
+  color: #94560e;
+  border-color: color-mix(in oklab, #94560e 32%, transparent);
+  background: color-mix(in oklab, #94560e 7%, transparent);
 }
