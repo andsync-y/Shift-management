@@ -19,6 +19,7 @@ export interface Profile {
   skills: string[];
   is_active: boolean;
   initial_password: string | null;
+  calendar_token: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -599,7 +599,7 @@ body {
 }
 .cal-dow {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   border-bottom: 1px solid var(--line);
 }
 .cal-dow div {
@@ -621,7 +621,7 @@ body {
 
 .cal-weeks {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(7, minmax(0, 1fr));
 }
 .cal-cell {
   min-height: 128px;
@@ -659,6 +659,7 @@ body {
   display: flex;
   flex-direction: column;
   gap: 3px;
+  min-width: 0;
 }
 .evt {
   display: flex;
@@ -670,6 +671,8 @@ body {
   padding: 3px 7px;
   border-radius: 3px;
   border-left: 3px solid transparent;
+  min-width: 0;
+  overflow: hidden;
 }
 .evt .nm {
   min-width: 0;
