@@ -83,6 +83,23 @@ export default function LoginPage() {
           {loading ? "ログイン中..." : "ログイン"}
         </button>
 
+        {process.env.NEXT_PUBLIC_LINE_LOGIN === "1" && (
+          <a
+            href="/auth/line"
+            className="btn-outline"
+            style={{
+              width: "100%",
+              justifyContent: "center",
+              marginTop: 12,
+              background: "#06C755",
+              borderColor: "#06C755",
+              color: "#fff",
+            }}
+          >
+            LINE でログイン
+          </a>
+        )}
+
         <p className="login-foot">アカウントは管理者が発行します</p>
       </form>
     </div>

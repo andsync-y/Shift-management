@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { pushLineToMany } from "@/lib/line";
+import { appUrl } from "@/lib/app-url";
 import { generateShifts } from "@/lib/shift-generator/solver";
 import { reviewShiftPlan } from "@/lib/shift-generator/llm";
 import { generateShiftsWithClaude } from "@/lib/shift-generator/claude-generator";
@@ -339,6 +341,27 @@ export async function setPeriodStatus(
   if (status === "published") patch.published_at = new Date().toISOString();
   if (status === "confirmed") patch.confirmed_at = new Date().toISOString();
   await supabase.from("shift_periods").update(patch).eq("id", periodId);
+
+  // 公開したら対象スタッフへ LINE 通知（連携済みの人だけ・未設定なら no-op）
+  if (status === "published") {
+    const { data: period } = await supabase
+      .from("shift_periods")
+      .select("year, month")
+      .eq("id", periodId)
+      .maybeSingle();
+    const { data: staff } = await supabase
+      .from("profiles")
+      .select("line_user_id")
+      .eq("role", "staff")
+      .eq("is_active", true);
+    const ids = (staff ?? []).map((s) => s.line_user_id as string | null);
+    const ym = period ? `${period.year}年${period.month}月` : "新しい月";
+    await pushLineToMany(
+      ids,
+      `${ym}のシフトが公開されました。確認してください 👉 ${appUrl("/staff")}`
+    );
+  }
+
   revalidatePath(`/admin/shifts/${periodId}`);
   revalidatePath("/admin/shifts");
 }

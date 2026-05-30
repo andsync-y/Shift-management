@@ -34,8 +34,11 @@ export async function middleware(request: NextRequest) {
 
   const { pathname } = request.nextUrl;
   const isAuthRoute = pathname.startsWith("/login");
+  // LINE 連携フロー（未ログインで通す）
+  const isLineFlow = pathname.startsWith("/auth/line") || pathname.startsWith("/link-line");
   const isProtected =
-    pathname.startsWith("/admin") || pathname.startsWith("/staff");
+    !isLineFlow &&
+    (pathname.startsWith("/admin") || pathname.startsWith("/staff"));
 
   if (!user && isProtected) {
     const url = request.nextUrl.clone();
