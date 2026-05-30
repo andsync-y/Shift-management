@@ -1742,3 +1742,9 @@ body {
 .total-item .thours { font-family:"Archivo",sans-serif; font-weight:300; font-size:24px;
   letter-spacing:-0.01em; color:var(--ink); }
 .total-item .thours small { font-size:13px; color:var(--ink-3); margin-left:2px; font-weight:400; }
+
+/* シフト期間一覧：狭い画面でバッジが見切れないように */
+@media (max-width: 760px) {
+  .period-status { grid-template-columns: auto 1fr auto; gap: 12px; }
+  .period-status .ym { font-size: 16px; }
+}
