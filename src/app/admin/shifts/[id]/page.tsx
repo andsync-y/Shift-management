@@ -7,6 +7,7 @@ import {
   type Shift,
   type ShiftPeriod,
   type ShiftRequirement,
+  type TimeOffRequest,
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import RequirementsEditor from "./RequirementsEditor";
@@ -31,14 +32,24 @@ export default async function PeriodDetailPage({
   if (!period) notFound();
   const p = period as ShiftPeriod;
 
-  const [{ data: requirements }, { data: shifts }, { data: staff }] = await Promise.all([
-    supabase.from("shift_requirements").select("*").eq("period_id", id),
-    supabase.from("shifts").select("*").eq("period_id", id),
-    supabase.from("profiles").select("*"),
-  ]);
+  const monthStart = `${p.year}-${String(p.month).padStart(2, "0")}-01`;
+  const monthEnd = `${p.year}-${String(p.month).padStart(2, "0")}-31`;
+  const [{ data: requirements }, { data: shifts }, { data: staff }, { data: timeOff }] =
+    await Promise.all([
+      supabase.from("shift_requirements").select("*").eq("period_id", id),
+      supabase.from("shifts").select("*").eq("period_id", id),
+      supabase.from("profiles").select("*"),
+      supabase
+        .from("time_off_requests")
+        .select("*")
+        .eq("status", "approved")
+        .gte("off_date", monthStart)
+        .lte("off_date", monthEnd),
+    ]);
 
   const staffList = (staff ?? []) as Profile[];
   const shiftList = (shifts ?? []) as Shift[];
+  const timeOffList = (timeOff ?? []) as TimeOffRequest[];
 
   // スタッフごとの合計時間
   const hours: Record<string, number> = {};
@@ -99,6 +110,7 @@ export default async function PeriodDetailPage({
             month={p.month}
             shifts={shiftList}
             staff={staffList}
+            timeOff={timeOffList}
           />
         ) : (
           <p className="text-sm text-gray-400">

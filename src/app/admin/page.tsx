@@ -7,7 +7,7 @@ import {
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import DashboardInsights from "@/components/DashboardInsights";
-import type { ShiftRequirement } from "@/lib/types";
+import type { ShiftRequirement, TimeOffRequest } from "@/lib/types";
 
 export default async function AdminDashboard() {
   const supabase = await createClient();
@@ -54,14 +54,23 @@ export default async function AdminDashboard() {
     latestShifts = shiftsByPeriod.get(latest.id) ?? [];
   }
 
-  // 表示中の期間の必要人数（人手不足アラート用）
+  // 表示中の期間の必要人数（人手不足アラート用）と承認済み休み
   let requirements: ShiftRequirement[] = [];
+  let timeOff: TimeOffRequest[] = [];
   if (latest) {
-    const { data: reqs } = await supabase
-      .from("shift_requirements")
-      .select("*")
-      .eq("period_id", latest.id);
+    const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
+    const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-31`;
+    const [{ data: reqs }, { data: offs }] = await Promise.all([
+      supabase.from("shift_requirements").select("*").eq("period_id", latest.id),
+      supabase
+        .from("time_off_requests")
+        .select("*")
+        .eq("status", "approved")
+        .gte("off_date", monthStart)
+        .lte("off_date", monthEnd),
+    ]);
     requirements = (reqs ?? []) as ShiftRequirement[];
+    timeOff = (offs ?? []) as TimeOffRequest[];
   }
 
   return (
@@ -136,6 +145,7 @@ export default async function AdminDashboard() {
                 month={latest.month}
                 shifts={latestShifts}
                 staff={staffList}
+                timeOff={timeOff}
               />
             ) : (
               <p className="help" style={{ marginTop: 0 }}>

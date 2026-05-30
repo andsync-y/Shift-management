@@ -76,6 +76,16 @@ export async function GET(
     shifts = data ?? [];
   }
 
+  // 承認済みの休み希望も「休」予定として配信
+  const { data: offData } = await supabase
+    .from("time_off_requests")
+    .select("id, off_date, start_time, end_time, reason")
+    .eq("staff_id", profile.id)
+    .eq("status", "approved")
+    .order("off_date");
+  const offs: { id: string; off_date: string; start_time: string | null; end_time: string | null; reason: string | null }[] =
+    offData ?? [];
+
   const now = new Date();
   const stamp =
     `${now.getUTCFullYear()}${pad(now.getUTCMonth() + 1)}${pad(now.getUTCDate())}T` +
@@ -100,6 +110,29 @@ export async function GET(
     lines.push(`DTEND;TZID=Asia/Tokyo:${dtLocal(s.work_date, s.end_time)}`);
     lines.push(fold("SUMMARY:" + escapeText(summary)));
     if (s.note) lines.push(fold("DESCRIPTION:" + escapeText(s.note)));
+    lines.push("END:VEVENT");
+  }
+
+  for (const o of offs) {
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:off-${o.id}@zenryoku-nagara`);
+    lines.push(`DTSTAMP:${stamp}`);
+    if (o.start_time && o.end_time) {
+      // 時間帯休み
+      lines.push(`DTSTART;TZID=Asia/Tokyo:${dtLocal(o.off_date, o.start_time)}`);
+      lines.push(`DTEND;TZID=Asia/Tokyo:${dtLocal(o.off_date, o.end_time)}`);
+      lines.push(fold("SUMMARY:" + escapeText(`休み ${o.start_time.slice(0, 5)}–${o.end_time.slice(0, 5)}`)));
+    } else {
+      // 終日休み
+      const d = o.off_date.replace(/-/g, "");
+      const next = new Date(o.off_date);
+      next.setDate(next.getDate() + 1);
+      const nd = `${next.getFullYear()}${pad(next.getMonth() + 1)}${pad(next.getDate())}`;
+      lines.push(`DTSTART;VALUE=DATE:${d}`);
+      lines.push(`DTEND;VALUE=DATE:${nd}`);
+      lines.push(fold("SUMMARY:" + escapeText("休み（終日）")));
+    }
+    if (o.reason) lines.push(fold("DESCRIPTION:" + escapeText(o.reason)));
     lines.push("END:VEVENT");
   }
 

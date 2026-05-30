@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { DAY_LABELS_JA, type Profile, type Shift } from "@/lib/types";
+import { DAY_LABELS_JA, type Profile, type Shift, type TimeOffRequest } from "@/lib/types";
 
 type ViewMode = "month" | "week";
 
@@ -40,12 +40,14 @@ export default function ShiftCalendarView({
   shifts,
   staff,
   highlightStaffId,
+  timeOff = [],
 }: {
   year: number;
   month: number;
   shifts: Shift[];
   staff: Profile[];
   highlightStaffId?: string;
+  timeOff?: TimeOffRequest[];
 }) {
   const [mode, setMode] = useState<ViewMode>("month");
   // 週ビューの基準日。既定は「最初にシフトがある日」を含む週。
@@ -89,9 +91,34 @@ export default function ShiftCalendarView({
     return m;
   }, [visibleShifts]);
 
-  // 月内でシフトのある日（モバイルのアジェンダ用）
+  // 承認済みの休み希望を日付ごとに索引化（スタッフ絞り込みを反映）
+  const offByDate = useMemo(() => {
+    const m: Record<string, TimeOffRequest[]> = {};
+    for (const t of timeOff) {
+      if (t.status !== "approved") continue;
+      if (selected.size > 0 && !selected.has(t.staff_id)) continue;
+      (m[t.off_date] ??= []).push(t);
+    }
+    return m;
+  }, [timeOff, selected]);
+
   function color(staffId: string) {
     return staffMap.get(staffId)?.display_color ?? "#8e897f";
+  }
+
+  // 休みチップ（承認済みの休み希望）
+  function OffEvt({ t }: { t: TimeOffRequest }) {
+    const p = staffMap.get(t.staff_id);
+    const label = t.start_time && t.end_time ? `${hm(t.start_time)}–${hm(t.end_time)}` : "終日";
+    return (
+      <div
+        className="evt off"
+        title={`${p ? p.full_name : "?"} 休み（${label}）`}
+      >
+        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+        <span className="mk off-mk">休</span>
+      </div>
+    );
   }
 
   // 苗字＋早/遅マーク＋時間のチップ
@@ -141,6 +168,7 @@ export default function ShiftCalendarView({
             if (!date) return <div key={i} className="cal-cell blank" />;
             const key = ymd(date);
             const evts = byDate[key] ?? [];
+            const offs = offByDate[key] ?? [];
             const dow = date.getDay();
             const cls =
               "cal-cell" +
@@ -161,6 +189,9 @@ export default function ShiftCalendarView({
                 <div className="cal-events">
                   {evts.map((s) => (
                     <Evt key={s.id} s={s} withTime={false} />
+                  ))}
+                  {offs.map((t) => (
+                    <OffEvt key={t.id} t={t} />
                   ))}
                 </div>
               </div>
@@ -201,6 +232,7 @@ export default function ShiftCalendarView({
         {days.map((date) => {
           const dow = date.getDay();
           const evts = byDate[ymd(date)] ?? [];
+          const offs = offByDate[ymd(date)] ?? [];
           return (
             <div key={ymd(date)} className="tl-row">
               <div className="tl-day">
@@ -218,7 +250,7 @@ export default function ShiftCalendarView({
                 </span>
                 <span className="w">（{DAY_LABELS_JA[dow]}）</span>
               </div>
-              {evts.length ? (
+              {evts.length || offs.length ? (
                 <div className="tl-lanes">
                   {evts.map((s) => {
                     const p = staffMap.get(s.staff_id);
@@ -247,6 +279,20 @@ export default function ShiftCalendarView({
                             {hm(s.start_time)}–{hm(s.end_time)}
                           </span>
                         </div>
+                      </div>
+                    );
+                  })}
+                  {offs.map((t) => {
+                    const p = staffMap.get(t.staff_id);
+                    const label =
+                      t.start_time && t.end_time
+                        ? `${hm(t.start_time)}–${hm(t.end_time)}`
+                        : "終日";
+                    return (
+                      <div className="tl-off" key={t.id}>
+                        <span className="mk off-mk">休</span>
+                        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+                        <span className="tm">{label}</span>
                       </div>
                     );
                   })}
