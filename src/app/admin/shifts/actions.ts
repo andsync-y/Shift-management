@@ -157,3 +157,63 @@ export async function setPeriodStatus(
   revalidatePath(`/admin/shifts/${periodId}`);
   revalidatePath("/admin/shifts");
 }
+
+// --- シフトの手動上書き（追加 / 時刻変更 / 削除） --------------------
+const shiftSchema = z.object({
+  staff_id: z.string().uuid("スタッフを選択してください"),
+  work_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付を確認してください"),
+  start_time: z.string().regex(/^\d{2}:\d{2}$/),
+  end_time: z.string().regex(/^\d{2}:\d{2}$/),
+  note: z.string().optional(),
+});
+
+export async function addShift(periodId: string, formData: FormData) {
+  await requireAdmin();
+  const parsed = shiftSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  if (parsed.data.start_time >= parsed.data.end_time) {
+    return { ok: false, message: "終了時刻は開始時刻より後にしてください。" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("shifts").insert({
+    period_id: periodId,
+    staff_id: parsed.data.staff_id,
+    work_date: parsed.data.work_date,
+    start_time: parsed.data.start_time,
+    end_time: parsed.data.end_time,
+    note: parsed.data.note || "手動追加",
+    ai_generated: false,
+  });
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return { ok: true, message: "シフトを追加しました。" };
+}
+
+export async function updateShift(
+  shiftId: string,
+  periodId: string,
+  startTime: string,
+  endTime: string
+) {
+  await requireAdmin();
+  if (startTime >= endTime) {
+    return { ok: false, message: "終了時刻は開始時刻より後にしてください。" };
+  }
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("shifts")
+    .update({ start_time: startTime, end_time: endTime, ai_generated: false })
+    .eq("id", shiftId);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return { ok: true, message: "更新しました。" };
+}
+
+export async function deleteShift(shiftId: string, periodId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("shifts").delete().eq("id", shiftId);
+  revalidatePath(`/admin/shifts/${periodId}`);
+}

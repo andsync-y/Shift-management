@@ -8,7 +8,7 @@
 // 実装時は SalonBoardClient を満たすクラスを作り、環境変数の認証情報で初期化する。
 // =====================================================================
 
-import type { Shift } from "@/lib/types";
+import type { Profile, Shift } from "@/lib/types";
 
 export interface SalonBoardClient {
   /** 確定シフトをサロンボードへ反映する */
@@ -35,7 +35,16 @@ export class NoopSalonBoardClient implements SalonBoardClient {
   }
 }
 
-export function getSalonBoardClient(): SalonBoardClient {
-  // 将来: 環境変数が揃っていれば実クライアントを返す
+// 認証情報(環境変数)が揃っていれば Playwright 連携クライアント、無ければ Noop を返す。
+export async function getSalonBoardClient(
+  staff: Profile[] = []
+): Promise<SalonBoardClient> {
+  const { loadConfigFromEnv, PlaywrightSalonBoardClient } = await import(
+    "./playwright-client"
+  );
+  const config = loadConfigFromEnv();
+  if (config) {
+    return new PlaywrightSalonBoardClient(config, staff);
+  }
   return new NoopSalonBoardClient();
 }

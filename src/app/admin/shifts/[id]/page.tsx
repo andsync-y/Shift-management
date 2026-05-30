@@ -11,6 +11,8 @@ import {
 import ShiftCalendar from "@/components/ShiftCalendar";
 import RequirementsEditor from "./RequirementsEditor";
 import GeneratePanel from "./GeneratePanel";
+import ShiftEditor from "./ShiftEditor";
+import SalonBoardPanel from "./SalonBoardPanel";
 
 const STATUS_STYLE: Record<string, string> = {
   draft: "bg-gray-100 text-gray-600",
@@ -101,6 +103,27 @@ export default async function PeriodDetailPage({
           </p>
         )}
       </div>
+
+      <div className="card">
+        <h2 className="mb-3 font-semibold">シフトの手動調整</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          AI生成の結果を個別に追加・時刻変更・削除できます。手動で調整したシフトは再生成すると失われるため、確定前に調整してください。
+        </p>
+        <ShiftEditor
+          periodId={id}
+          year={p.year}
+          month={p.month}
+          shifts={shiftList}
+          staff={staffList}
+        />
+      </div>
+
+      {p.status === "confirmed" && (
+        <div className="card">
+          <h2 className="mb-3 font-semibold">サロンボードへ反映</h2>
+          <SalonBoardPanel periodId={id} />
+        </div>
+      )}
 
       {Object.keys(hours).length > 0 && (
         <div className="card">
