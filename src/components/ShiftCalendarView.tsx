@@ -3,7 +3,7 @@
 import { useMemo, useState } from "react";
 import { DAY_LABELS_JA, type Profile, type Shift } from "@/lib/types";
 
-type ViewMode = "month" | "week" | "day";
+type ViewMode = "month" | "week";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -34,7 +34,7 @@ export default function ShiftCalendarView({
   highlightStaffId?: string;
 }) {
   const [mode, setMode] = useState<ViewMode>("month");
-  // 表示の基準日（週・日ビューで使用）。既定は対象月の1日。
+  // 週ビューの基準日。既定は対象月の1日を含む週。
   const [cursor, setCursor] = useState<Date>(new Date(year, month - 1, 1));
   // スタッフ絞り込み（空 = 全員表示）
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -71,28 +71,29 @@ export default function ShiftCalendarView({
     return m;
   }, [visibleShifts]);
 
-  function chip(s: Shift, opts?: { compact?: boolean }) {
+  // 縦積み用のシフト行
+  function ShiftRow({ s }: { s: Shift }) {
     const p = staffMap.get(s.staff_id);
     const mine = highlightStaffId && s.staff_id === highlightStaffId;
     return (
-      <span
-        key={s.id}
-        className={`inline-flex max-w-full items-center gap-1 truncate rounded px-1.5 py-0.5 text-xs ${
+      <div
+        className={`flex items-center gap-2 rounded px-2 py-1.5 text-sm ${
           mine ? "ring-2 ring-brand" : ""
         }`}
         style={{
           backgroundColor: (p?.display_color ?? "#999") + "22",
           color: p?.display_color ?? "#333",
         }}
-        title={`${p?.full_name ?? "?"} ${hm(s.start_time)}–${hm(s.end_time)}`}
       >
+        <span
+          className="inline-block h-2.5 w-2.5 shrink-0 rounded-full"
+          style={{ backgroundColor: p?.display_color ?? "#999" }}
+        />
         <span className="font-medium">{p?.full_name ?? "?"}</span>
-        {!opts?.compact && (
-          <span className="text-[10px] opacity-80">
-            {hm(s.start_time)}–{hm(s.end_time)}
-          </span>
-        )}
-      </span>
+        <span className="ml-auto text-xs opacity-80">
+          {hm(s.start_time)}–{hm(s.end_time)}
+        </span>
+      </div>
     );
   }
 
@@ -129,7 +130,7 @@ export default function ShiftCalendarView({
                 key={i}
                 onClick={() => {
                   setCursor(date);
-                  setMode("day");
+                  setMode("week");
                 }}
                 className="min-h-[84px] bg-white p-1 text-left align-top hover:bg-brand-light/40"
               >
@@ -175,93 +176,55 @@ export default function ShiftCalendarView({
     );
   }
 
-  // --- 週ビュー ------------------------------------------------------
+  // --- 週ビュー（1カラムで日ごとに縦積み）---------------------------
   function WeekView() {
     const weekStart = addDays(cursor, -cursor.getDay());
     const days = Array.from({ length: 7 }, (_, i) => addDays(weekStart, i));
     return (
-      <div className="overflow-x-auto">
-        <div className="grid min-w-[700px] grid-cols-7 gap-px rounded-md bg-gray-200">
-          {days.map((date) => {
-            const dow = date.getDay();
-            const inMonth = date.getMonth() === month - 1;
-            return (
+      <div className="space-y-2">
+        {days.map((date) => {
+          const dow = date.getDay();
+          const dayShifts = byDate[ymd(date)] ?? [];
+          const inMonth = date.getMonth() === month - 1;
+          const isToday = ymd(date) === ymd(new Date());
+          return (
+            <div
+              key={ymd(date)}
+              className={`rounded-md border ${
+                isToday ? "border-brand" : "border-gray-200"
+              } ${inMonth ? "" : "opacity-50"}`}
+            >
               <div
-                key={ymd(date)}
-                className={`bg-gray-50 py-1 text-center text-xs font-semibold ${
-                  dow === 0 ? "text-red-500" : dow === 6 ? "text-blue-500" : "text-gray-600"
-                } ${inMonth ? "" : "opacity-40"}`}
+                className={`flex items-center gap-2 rounded-t-md px-3 py-1.5 text-sm font-semibold ${
+                  dow === 0
+                    ? "bg-red-50 text-red-600"
+                    : dow === 6
+                    ? "bg-blue-50 text-blue-600"
+                    : "bg-gray-50 text-gray-700"
+                }`}
               >
-                {date.getMonth() + 1}/{date.getDate()}（{DAY_LABELS_JA[dow]}）
-              </div>
-            );
-          })}
-          {days.map((date) => {
-            const dayShifts = byDate[ymd(date)] ?? [];
-            const inMonth = date.getMonth() === month - 1;
-            return (
-              <div
-                key={"c" + ymd(date)}
-                className={`min-h-[180px] bg-white p-1.5 ${inMonth ? "" : "bg-gray-50/60"}`}
-              >
-                <div className="flex flex-col gap-1">
-                  {dayShifts.length === 0 && (
-                    <span className="text-[10px] text-gray-300">—</span>
-                  )}
-                  {dayShifts.map((s) => chip(s))}
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
-    );
-  }
-
-  // --- 日ビュー ------------------------------------------------------
-  function DayView() {
-    const key = ymd(cursor);
-    const dayShifts = byDate[key] ?? [];
-    const HOURS = Array.from({ length: 13 }, (_, i) => 10 + i); // 10〜22時
-    return (
-      <div className="space-y-3">
-        {dayShifts.length === 0 ? (
-          <p className="text-sm text-gray-400">この日のシフトはありません。</p>
-        ) : (
-          <ul className="space-y-1.5">
-            {dayShifts.map((s) => {
-              const p = staffMap.get(s.staff_id);
-              const startH = Number(s.start_time.slice(0, 2)) + Number(s.start_time.slice(3, 5)) / 60;
-              const endH = Number(s.end_time.slice(0, 2)) + Number(s.end_time.slice(3, 5)) / 60;
-              const left = ((startH - 10) / 12) * 100;
-              const width = ((endH - startH) / 12) * 100;
-              return (
-                <li key={s.id} className="flex items-center gap-2">
-                  <span className="w-24 shrink-0 truncate text-sm font-medium">
-                    {p?.full_name ?? "?"}
+                <span>
+                  {date.getMonth() + 1}/{date.getDate()}（{DAY_LABELS_JA[dow]}）
+                </span>
+                {isToday && (
+                  <span className="rounded-full bg-brand px-2 py-0.5 text-[10px] text-white">
+                    本日
                   </span>
-                  <div className="relative h-6 flex-1 rounded bg-gray-100">
-                    <div
-                      className="absolute top-0 flex h-6 items-center justify-center rounded px-1 text-[10px] text-white"
-                      style={{
-                        left: `${Math.max(0, left)}%`,
-                        width: `${Math.min(100, width)}%`,
-                        backgroundColor: p?.display_color ?? "#888",
-                      }}
-                    >
-                      {hm(s.start_time)}–{hm(s.end_time)}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-        <div className="flex justify-between px-24 text-[10px] text-gray-400">
-          {HOURS.filter((_, i) => i % 2 === 0).map((h) => (
-            <span key={h}>{h}時</span>
-          ))}
-        </div>
+                )}
+                <span className="ml-auto text-xs font-normal text-gray-400">
+                  {dayShifts.length}名
+                </span>
+              </div>
+              <div className="flex flex-col gap-1 p-2">
+                {dayShifts.length === 0 ? (
+                  <span className="px-1 py-1 text-xs text-gray-300">シフトなし</span>
+                ) : (
+                  dayShifts.map((s) => <ShiftRow key={s.id} s={s} />)
+                )}
+              </div>
+            </div>
+          );
+        })}
       </div>
     );
   }
@@ -269,22 +232,17 @@ export default function ShiftCalendarView({
   // --- ナビゲーション ------------------------------------------------
   function navLabel() {
     if (mode === "month") return `${year}年${month}月`;
-    if (mode === "week") {
-      const ws = addDays(cursor, -cursor.getDay());
-      const we = addDays(ws, 6);
-      return `${ws.getMonth() + 1}/${ws.getDate()} 〜 ${we.getMonth() + 1}/${we.getDate()}`;
-    }
-    return `${cursor.getMonth() + 1}/${cursor.getDate()}（${DAY_LABELS_JA[cursor.getDay()]}）`;
+    const ws = addDays(cursor, -cursor.getDay());
+    const we = addDays(ws, 6);
+    return `${ws.getMonth() + 1}/${ws.getDate()} 〜 ${we.getMonth() + 1}/${we.getDate()}`;
   }
   function nav(dir: -1 | 1) {
     if (mode === "week") setCursor(addDays(cursor, dir * 7));
-    else if (mode === "day") setCursor(addDays(cursor, dir));
   }
 
   const TABS: { id: ViewMode; label: string }[] = [
     { id: "month", label: "月" },
     { id: "week", label: "週" },
-    { id: "day", label: "日" },
   ];
 
   return (
@@ -365,13 +323,13 @@ export default function ShiftCalendarView({
         </div>
 
         <div className="flex items-center gap-2">
-          {mode !== "month" && (
+          {mode === "week" && (
             <button onClick={() => nav(-1)} className="btn-secondary px-2 py-1 text-xs">
               ←
             </button>
           )}
           <span className="min-w-[120px] text-center text-sm font-semibold">{navLabel()}</span>
-          {mode !== "month" && (
+          {mode === "week" && (
             <button onClick={() => nav(1)} className="btn-secondary px-2 py-1 text-xs">
               →
             </button>
@@ -379,9 +337,7 @@ export default function ShiftCalendarView({
         </div>
       </div>
 
-      {mode === "month" && <MonthView />}
-      {mode === "week" && <WeekView />}
-      {mode === "day" && <DayView />}
+      {mode === "month" ? <MonthView /> : <WeekView />}
     </div>
   );
 }
