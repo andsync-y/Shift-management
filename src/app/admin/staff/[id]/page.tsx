@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { createAdminClient, createClient } from "@/lib/supabase/server";
 import {
   EMPLOYMENT_LABELS_JA,
   ROLE_LABELS_JA,
@@ -10,6 +10,7 @@ import {
 } from "@/lib/types";
 import AvailabilityEditor from "@/components/AvailabilityEditor";
 import FixedShiftEditor from "@/components/FixedShiftEditor";
+import CredentialsEditor from "@/components/CredentialsEditor";
 
 export default async function StaffDetailPage({
   params,
@@ -39,6 +40,16 @@ export default async function StaffDetailPage({
     .select("*")
     .eq("staff_id", id)
     .order("day_of_week");
+
+  // ログインID(メール)は auth 側から取得
+  let currentEmail: string | null = null;
+  try {
+    const admin = createAdminClient();
+    const { data: authUser } = await admin.auth.admin.getUserById(id);
+    currentEmail = authUser?.user?.email ?? null;
+  } catch {
+    // service role 未設定などの場合は空表示で続行
+  }
 
   return (
     <div className="space-y-6">
@@ -78,6 +89,18 @@ export default async function StaffDetailPage({
             </dd>
           </div>
         </dl>
+      </div>
+
+      <div className="card">
+        <h2 className="mb-3 font-semibold">ログイン情報</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          このスタッフのログインID（メール）とパスワードを変更します。変更後の内容を本人へお伝えください。
+        </p>
+        <CredentialsEditor
+          staffId={p.id}
+          currentEmail={currentEmail}
+          currentPassword={p.initial_password}
+        />
       </div>
 
       <div className="card">

@@ -74,3 +74,55 @@ export async function toggleStaffActive(staffId: string, isActive: boolean) {
   await supabase.from("profiles").update({ is_active: isActive }).eq("id", staffId);
   revalidatePath("/admin/staff");
 }
+
+const credentialsSchema = z
+  .object({
+    email: z.string().email("メールアドレスの形式が正しくありません").optional().or(z.literal("")),
+    password: z
+      .string()
+      .min(8, "パスワードは8文字以上にしてください")
+      .optional()
+      .or(z.literal("")),
+  })
+  .refine((d) => d.email || d.password, {
+    message: "ログインIDかパスワードのどちらかを入力してください",
+  });
+
+// スタッフのログインID(メール)・パスワードを更新（オーナーのみ）
+export async function updateCredentials(
+  staffId: string,
+  _prev: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  await requireAdmin();
+
+  const parsed = credentialsSchema.safeParse({
+    email: formData.get("email") ?? "",
+    password: formData.get("password") ?? "",
+  });
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0].message };
+  }
+  const { email, password } = parsed.data;
+
+  const admin = createAdminClient();
+
+  // auth 側のメール/パスワードを更新
+  const attrs: { email?: string; password?: string } = {};
+  if (email) attrs.email = email;
+  if (password) attrs.password = password;
+  const { error: authError } = await admin.auth.admin.updateUserById(staffId, attrs);
+  if (authError) {
+    return { ok: false, message: `更新に失敗: ${authError.message}` };
+  }
+
+  // パスワードを変更したら配布用の初期PW表示も更新
+  if (password) {
+    await admin.from("profiles").update({ initial_password: password }).eq("id", staffId);
+  }
+
+  revalidatePath("/admin/staff");
+  revalidatePath(`/admin/staff/${staffId}`);
+  const what = [email && "ログインID", password && "パスワード"].filter(Boolean).join("・");
+  return { ok: true, message: `${what}を更新しました。` };
+}
