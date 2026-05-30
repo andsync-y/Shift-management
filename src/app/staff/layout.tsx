@@ -16,7 +16,7 @@ export default async function StaffLayout({
   return (
     <div className="min-h-screen">
       <NavBar profile={profile} items={NAV} />
-      <main className="mx-auto max-w-5xl px-4 py-6">{children}</main>
+      <main>{children}</main>
     </div>
   );
 }

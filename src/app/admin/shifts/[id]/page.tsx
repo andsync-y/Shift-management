@@ -14,11 +14,6 @@ import GeneratePanel from "./GeneratePanel";
 import ShiftEditor from "./ShiftEditor";
 import SalonBoardPanel from "./SalonBoardPanel";
 
-const STATUS_STYLE: Record<string, string> = {
-  draft: "bg-gray-100 text-gray-600",
-  published: "bg-blue-100 text-blue-700",
-  confirmed: "bg-green-100 text-green-700",
-};
 
 export default async function PeriodDetailPage({
   params,
@@ -56,18 +51,26 @@ export default async function PeriodDetailPage({
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-2 text-sm text-gray-500">
-        <Link href="/admin/shifts" className="hover:text-brand">シフト作成</Link>
-        <span>/</span>
-        <span>{p.year}年{p.month}月</span>
+    <div className="page space-y-6">
+      <div className="crumbs">
+        <Link href="/admin/shifts">シフト作成</Link>
+        <span className="sep">/</span>
+        <span>
+          {p.year}年{p.month}月
+        </span>
       </div>
 
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold">{p.year}年{p.month}月 のシフト</h1>
-        <span className={`badge ${STATUS_STYLE[p.status]}`}>
-          {PERIOD_STATUS_LABELS_JA[p.status]}
-        </span>
+      <div className="masthead" style={{ marginBottom: 8, display: "flex", alignItems: "baseline", gap: 14 }}>
+        <div>
+          <div className="eyebrow accent">Owner Console</div>
+          <h1 className="ttl en">
+            {p.year}.{String(p.month).padStart(2, "0")}
+          </h1>
+          <p className="sub">
+            {p.year}年{p.month}月 のシフト
+          </p>
+        </div>
+        <span className="tag">{PERIOD_STATUS_LABELS_JA[p.status]}</span>
       </div>
 
       <div className="card">

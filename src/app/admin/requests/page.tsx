@@ -23,8 +23,12 @@ export default async function AdminRequestsPage() {
   const pending = list.filter((r) => r.status === "pending");
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">休み希望の管理</h1>
+    <div className="page space-y-6">
+      <div className="masthead" style={{ marginBottom: 8 }}>
+        <div className="eyebrow accent">Owner Console</div>
+        <h1 className="ttl en">Requests</h1>
+        <p className="sub">休み希望の管理</p>
+      </div>
 
       <div className="card">
         <h2 className="mb-1 font-semibold">

@@ -15,8 +15,12 @@ export default async function StaffFixedShiftsPage() {
     .order("day_of_week");
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">固定シフト</h1>
+    <div className="page space-y-6">
+      <div className="masthead" style={{ marginBottom: 8 }}>
+        <div className="eyebrow accent">Owner Console</div>
+        <h1 className="ttl en">Fixed Shifts</h1>
+        <p className="sub">固定シフト</p>
+      </div>
       <div className="card">
         <p className="mb-4 text-sm text-gray-500">
           毎週固定で勤務する曜日・時間帯です。変更が必要な場合は店長にご相談ください。

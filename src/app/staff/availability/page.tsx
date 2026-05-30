@@ -15,8 +15,12 @@ export default async function StaffAvailabilityPage() {
     .order("day_of_week");
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">希望シフト</h1>
+    <div className="page space-y-6">
+      <div className="masthead" style={{ marginBottom: 8 }}>
+        <div className="eyebrow accent">Owner Console</div>
+        <h1 className="ttl en">Availability</h1>
+        <p className="sub">希望シフト</p>
+      </div>
       <div className="card">
         <p className="mb-4 text-sm text-gray-500">
           勤務できる曜日・時間帯を登録してください。「希望（優先）」にした時間帯はAIシフト生成で優先的に割り当てられます。

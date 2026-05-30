@@ -19,10 +19,12 @@ export default function CredentialsEditor({
   );
 
   return (
-    <form action={formAction} className="space-y-3">
-      <div className="grid gap-3 sm:grid-cols-2">
-        <div>
-          <label className="label">ログインID（メール）</label>
+    <form action={formAction}>
+      <div className="form-grid" style={{ margin: "0 0 26px" }}>
+        <div className="field">
+          <label>
+            Login ID <span className="jp-label">／ ログインID（メール）</span>
+          </label>
           <input
             name="email"
             type="email"
@@ -32,29 +34,37 @@ export default function CredentialsEditor({
             autoComplete="off"
           />
         </div>
-        <div>
-          <label className="label">新しいパスワード</label>
+        <div className="field">
+          <label>
+            New password <span className="jp-label">／ 新しいパスワード</span>
+          </label>
           <input
             name="password"
             type="text"
-            className="input font-mono"
+            className="input mono"
             defaultValue={currentPassword ?? ""}
             placeholder="8文字以上"
             autoComplete="new-password"
           />
-          <p className="mt-1 text-[11px] text-gray-400">
+          <p className="help" style={{ marginTop: 2 }}>
             空欄のままだとパスワードは変更しません。
           </p>
         </div>
       </div>
 
       {state && (
-        <p className={`text-sm ${state.ok ? "text-green-600" : "text-red-600"}`}>
+        <p
+          style={{
+            fontSize: 13,
+            marginBottom: 16,
+            color: state.ok ? "#3d6b4f" : "var(--accent-ink)",
+          }}
+        >
           {state.message}
         </p>
       )}
 
-      <button type="submit" className="btn-primary" disabled={pending}>
+      <button type="submit" className="btn-fill" disabled={pending}>
         {pending ? "更新中..." : "ログイン情報を更新"}
       </button>
     </form>
