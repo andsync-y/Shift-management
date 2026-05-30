@@ -10,7 +10,8 @@
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
     "seed": "node scripts/seed.mjs",
-    "seed:staff": "node scripts/seed-staff.mjs"
+    "seed:staff": "node scripts/seed-staff.mjs",
+    "seed:fixed": "node scripts/seed-fixed-shifts.mjs"
   },
   "dependencies": {
     "@supabase/ssr": "^0.5.2",
