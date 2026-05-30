@@ -1733,3 +1733,12 @@ body {
   .to-times { grid-template-columns:1fr; }
   .gap-row { grid-template-columns:1fr auto; }
 }
+
+/* totals — design handoff (tname / thours layout) */
+.total-item { display:grid; grid-template-columns:auto 1fr auto; align-items:center;
+  gap:12px; padding:13px 4px; border-bottom:1px solid var(--line); }
+.total-item:last-child { border-bottom:0; }
+.total-item .tname { font-size:14px; color:var(--ink); }
+.total-item .thours { font-family:"Archivo",sans-serif; font-weight:300; font-size:24px;
+  letter-spacing:-0.01em; color:var(--ink); }
+.total-item .thours small { font-size:13px; color:var(--ink-3); margin-left:2px; font-weight:400; }
