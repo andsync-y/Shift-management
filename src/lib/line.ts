@@ -14,6 +14,7 @@
 
 const LOGIN_AUTH_URL = "https://access.line.me/oauth2/v2.1/authorize";
 const LOGIN_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token";
+const LOGIN_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
 const PUSH_URL = "https://api.line.me/v2/bot/message/push";
 
 export function isLineLoginEnabled(): boolean {
@@ -52,9 +53,14 @@ export interface LineProfile {
 }
 
 // callback で受け取った code を ID トークンに交換し、本人情報を取り出す。
-// 注意: 本番導入時は id_token の署名・aud・nonce 検証を必ず追加すること。
-export async function exchangeLineCode(code: string): Promise<LineProfile> {
-  const res = await fetch(LOGIN_TOKEN_URL, {
+// id_token は LINE の検証エンドポイント(/oauth2/v2.1/verify)で
+// 署名・有効期限・aud(client_id一致)・nonce をサーバ側検証してから採用する。
+export async function exchangeLineCode(
+  code: string,
+  expectedNonce: string
+): Promise<LineProfile> {
+  // 1) code → id_token
+  const tokenRes = await fetch(LOGIN_TOKEN_URL, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -65,28 +71,48 @@ export async function exchangeLineCode(code: string): Promise<LineProfile> {
       client_secret: process.env.LINE_LOGIN_CHANNEL_SECRET!,
     }),
   });
-
-  if (!res.ok) {
-    throw new Error(`LINE token exchange failed: ${res.status}`);
+  if (!tokenRes.ok) {
+    throw new Error(`LINE token exchange failed: ${tokenRes.status}`);
   }
-  const json = (await res.json()) as { id_token?: string };
-  if (!json.id_token) throw new Error("LINE token response missing id_token");
+  const token = (await tokenRes.json()) as { id_token?: string };
+  if (!token.id_token) throw new Error("LINE token response missing id_token");
 
-  const claims = decodeJwtPayload(json.id_token);
+  // 2) id_token を LINE 側で検証（署名/exp/aud/nonce）。
+  //    nonce を渡すと、認可開始時に発行した値と一致するかも検証してくれる。
+  const verifyRes = await fetch(LOGIN_VERIFY_URL, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      id_token: token.id_token,
+      client_id: process.env.LINE_LOGIN_CHANNEL_ID!,
+      nonce: expectedNonce,
+    }),
+  });
+  if (!verifyRes.ok) {
+    throw new Error(`LINE id_token verification failed: ${verifyRes.status}`);
+  }
+  const claims = (await verifyRes.json()) as {
+    sub?: string;
+    name?: string;
+    picture?: string;
+    aud?: string;
+    nonce?: string;
+  };
+
+  // 念のためアプリ側でも aud / nonce を再確認（多層防御）。
+  if (claims.aud !== process.env.LINE_LOGIN_CHANNEL_ID) {
+    throw new Error("LINE id_token aud mismatch");
+  }
+  if (claims.nonce !== expectedNonce) {
+    throw new Error("LINE id_token nonce mismatch");
+  }
+  if (!claims.sub) throw new Error("LINE id_token missing sub");
+
   return {
-    lineUserId: String(claims.sub),
+    lineUserId: claims.sub,
     displayName: typeof claims.name === "string" ? claims.name : null,
     pictureUrl: typeof claims.picture === "string" ? claims.picture : null,
   };
-}
-
-// 署名検証なしの簡易デコード（payload 取り出し用）。
-// TODO(本番): jose 等で署名・iss・aud・exp・nonce を検証する。
-function decodeJwtPayload(token: string): Record<string, unknown> {
-  const parts = token.split(".");
-  if (parts.length !== 3) throw new Error("invalid jwt");
-  const payload = Buffer.from(parts[1], "base64url").toString("utf8");
-  return JSON.parse(payload) as Record<string, unknown>;
 }
 
 // ---------------------------------------------------------------------

@@ -25,14 +25,15 @@ export async function GET(req: NextRequest) {
   const state = url.searchParams.get("state");
   const cookieStore = await cookies();
   const savedState = cookieStore.get("line_oauth_state")?.value;
+  const savedNonce = cookieStore.get("line_oauth_nonce")?.value;
 
-  if (!code || !state || !savedState || state !== savedState) {
+  if (!code || !state || !savedState || state !== savedState || !savedNonce) {
     return fail(req, "state");
   }
 
   let lineUserId: string;
   try {
-    const profile = await exchangeLineCode(code);
+    const profile = await exchangeLineCode(code, savedNonce);
     lineUserId = profile.lineUserId;
   } catch {
     return fail(req, "exchange");

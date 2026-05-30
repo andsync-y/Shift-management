@@ -43,29 +43,29 @@
 | `NEXT_PUBLIC_SUPABASE_URL` | Supabase の Project URL |
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | anon キー |
 | `SUPABASE_SERVICE_ROLE_KEY` | service_role キー（秘密） |
-| `NEXT_PUBLIC_APP_URL` | 本番URL（例 `https://shift.example.com`） |
+| `NEXT_PUBLIC_APP_URL` | `https://shift.andsync.jp` |
 
 設定したら「Redeploy」。
 
-## 4. 独自ドメインを追加
+## 4. 独自ドメインを追加（`shift.andsync.jp`）
 
-### ドメインを持っていない場合
-- お名前.com / Cloudflare / Google Domains などで取得（年1,000〜2,000円程度）
+会社ドメイン **andsync.jp** をすでに保有しているので、その**サブドメイン
+`shift.andsync.jp`** を使う。本体サイトとは完全に独立して動くため、
+今後 andsync.jp 本体を作っても干渉しない。
 
 ### Vercel にドメインを追加
 1. Vercel → Project → Settings → Domains
-2. 使いたいドメインを入力
-   - 例1：サブドメイン `shift.example.com`（おすすめ・既存サイトと共存できる）
-   - 例2：ルート `example.com`
-3. Vercel が表示する DNS レコードを、ドメインの管理画面で設定：
-   - **サブドメイン**の場合 → `CNAME` レコード
-     `shift` → `cname.vercel-dns.com`
-   - **ルートドメイン**の場合 → `A` レコード（Vercel 指定のIP）
+2. `shift.andsync.jp` を入力して Add
+3. Vercel が表示する DNS レコードを、andsync.jp の DNS 管理画面で設定：
+   - **CNAME** レコードを1つ追加
+     ホスト名 `shift` → 値 `cname.vercel-dns.com`
+   - （andsync.jp を Cloudflare で管理している場合は、この CNAME の
+     プロキシを「DNS only / グレー雲」にしておくと確実）
 4. 反映まで数分〜最大48時間。Vercel の Domains 画面が「Valid」になれば完了
 5. HTTPS 証明書は Vercel が自動発行（追加作業なし）
 
-### ドメイン確定後にやること
-- `NEXT_PUBLIC_APP_URL` を確定したドメインに更新して Redeploy
+> andsync.jp の DNS がどこで管理されているか（取得したレジストラ or Cloudflare 等）が
+> わかれば、その画面での具体的な追加手順も案内できます。
 
 ---
 
@@ -78,12 +78,13 @@
 NEXT_PUBLIC_LINE_LOGIN=1
 LINE_LOGIN_CHANNEL_ID=...
 LINE_LOGIN_CHANNEL_SECRET=...
-LINE_LOGIN_REDIRECT_URI=https://<本番ドメイン>/auth/line/callback
+LINE_LOGIN_REDIRECT_URI=https://shift.andsync.jp/auth/line/callback
+# 通知（既存の店舗公式アカウントを Messaging API 化して流用）
 LINE_MESSAGING_CHANNEL_ACCESS_TOKEN=...
 ```
 
-LINE Developers 側の Callback URL にも
-`https://<本番ドメイン>/auth/line/callback` を登録する。
+LINE Developers 側（LINE Login チャネル）の Callback URL にも
+`https://shift.andsync.jp/auth/line/callback` を登録する。
 
 ---
 
