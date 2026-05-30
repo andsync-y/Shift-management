@@ -1,10 +1,11 @@
-import { requireUser } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { FixedShift } from "@/lib/types";
 import FixedShiftEditor from "@/components/FixedShiftEditor";
 
+// 固定シフトの編集はオーナーのみ（スタッフはアクセス不可）。
 export default async function StaffFixedShiftsPage() {
-  const me = await requireUser();
+  const me = await requireAdmin();
   const supabase = await createClient();
 
   const { data: fixedShifts } = await supabase
