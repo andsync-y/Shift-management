@@ -589,15 +589,13 @@ body {
 }
 
 .cal-scroll {
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  overflow: visible;
 }
 .cal-grid {
   border: 1px solid var(--line);
   border-radius: var(--radius);
   overflow: hidden;
   background: var(--card);
-  min-width: 760px;
 }
 .cal-dow {
   display: grid;
@@ -1482,5 +1480,57 @@ body {
   .totals-grid {
     grid-template-columns: 1fr;
     gap: 16px;
+  }
+}
+
+/* =========================================================
+   CALENDAR — Google-calendar-like compact month (mobile)
+   ========================================================= */
+@media (max-width: 760px) {
+  .cal-dow div {
+    padding: 6px 2px;
+    font-size: 9px;
+    letter-spacing: 0.04em;
+    text-align: center;
+  }
+  .cal-cell {
+    min-height: 78px;
+    padding: 4px 3px 6px;
+    gap: 3px;
+  }
+  .cal-daynum {
+    font-size: 11px;
+    text-align: center;
+  }
+  .cal-events {
+    gap: 2px;
+  }
+  .evt {
+    gap: 2px;
+    font-size: 9.5px;
+    line-height: 1.15;
+    padding: 2px 3px;
+    border-left-width: 2px;
+    border-radius: 2px;
+  }
+  .evt .tm {
+    display: none;
+  }
+  .mk {
+    font-size: 8px;
+    padding: 1px 2px;
+    border-radius: 1px;
+  }
+  .evt-more {
+    font-size: 8.5px;
+    padding-left: 3px;
+  }
+  /* week timeline stays scrollable but day col compact */
+  .tl-ruler-row,
+  .tl-row {
+    grid-template-columns: 44px 1fr;
+  }
+  .tl-day .d {
+    font-size: 16px;
   }
 }

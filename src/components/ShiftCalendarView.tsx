@@ -161,10 +161,10 @@ export default function ShiftCalendarView({
                 <div className="cal-daynum">{date.getDate()}</div>
                 <div className="cal-events">
                   {evts.slice(0, maxPerCell).map((s) => (
-                    <Evt key={s.id} s={s} />
+                    <Evt key={s.id} s={s} withTime={false} />
                   ))}
                   {evts.length > maxPerCell && (
-                    <div className="evt-more">+{evts.length - maxPerCell} 他</div>
+                    <div className="evt-more">+{evts.length - maxPerCell}</div>
                   )}
                 </div>
               </div>
