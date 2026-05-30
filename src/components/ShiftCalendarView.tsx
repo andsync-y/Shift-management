@@ -36,16 +36,40 @@ export default function ShiftCalendarView({
   const [mode, setMode] = useState<ViewMode>("month");
   // 表示の基準日（週・日ビューで使用）。既定は対象月の1日。
   const [cursor, setCursor] = useState<Date>(new Date(year, month - 1, 1));
+  // スタッフ絞り込み（空 = 全員表示）
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [filterOpen, setFilterOpen] = useState(false);
 
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
+
+  // この期間にシフトがあるスタッフのみ絞り込み候補に出す
+  const staffInShifts = useMemo(() => {
+    const ids = new Set(shifts.map((s) => s.staff_id));
+    return staff.filter((s) => ids.has(s.id));
+  }, [shifts, staff]);
+
+  const visibleShifts = useMemo(
+    () => (selected.size === 0 ? shifts : shifts.filter((s) => selected.has(s.staff_id))),
+    [shifts, selected]
+  );
+
+  function toggleStaff(id: string) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const byDate = useMemo(() => {
     const m: Record<string, Shift[]> = {};
-    for (const s of shifts) (m[s.work_date] ??= []).push(s);
+    for (const s of visibleShifts) (m[s.work_date] ??= []).push(s);
     for (const k of Object.keys(m)) {
       m[k].sort((a, b) => a.start_time.localeCompare(b.start_time));
     }
     return m;
-  }, [shifts]);
+  }, [visibleShifts]);
 
   function chip(s: Shift, opts?: { compact?: boolean }) {
     const p = staffMap.get(s.staff_id);
@@ -265,6 +289,66 @@ export default function ShiftCalendarView({
 
   return (
     <div className="space-y-3">
+      {/* スタッフ絞り込み（アコーディオン） */}
+      <div className="rounded-md border border-gray-200">
+        <button
+          onClick={() => setFilterOpen((o) => !o)}
+          className="flex w-full items-center justify-between px-3 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50"
+        >
+          <span>
+            スタッフで絞り込む
+            {selected.size > 0 && (
+              <span className="ml-2 rounded-full bg-brand px-2 py-0.5 text-xs text-white">
+                {selected.size}名選択中
+              </span>
+            )}
+          </span>
+          <span className="text-gray-400">{filterOpen ? "▲" : "▼"}</span>
+        </button>
+
+        {filterOpen && (
+          <div className="border-t border-gray-100 p-3">
+            <div className="mb-2 flex flex-wrap gap-2">
+              <button
+                onClick={() => setSelected(new Set())}
+                className={`rounded-full border px-3 py-1 text-xs ${
+                  selected.size === 0
+                    ? "border-brand bg-brand text-white"
+                    : "border-gray-300 bg-white text-gray-600 hover:bg-gray-50"
+                }`}
+              >
+                全員
+              </button>
+              {staffInShifts.map((s) => {
+                const on = selected.has(s.id);
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => toggleStaff(s.id)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
+                      on ? "border-transparent text-white" : "border-gray-300 bg-white text-gray-700 hover:bg-gray-50"
+                    }`}
+                    style={on ? { backgroundColor: s.display_color } : undefined}
+                  >
+                    <span
+                      className="inline-block h-2.5 w-2.5 rounded-full"
+                      style={{ backgroundColor: s.display_color }}
+                    />
+                    {s.full_name}
+                  </button>
+                );
+              })}
+              {staffInShifts.length === 0 && (
+                <span className="text-xs text-gray-400">表示できるスタッフがいません。</span>
+              )}
+            </div>
+            <p className="text-[11px] text-gray-400">
+              名前をタップで複数選択。「全員」で絞り込み解除。
+            </p>
+          </div>
+        )}
+      </div>
+
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="inline-flex overflow-hidden rounded-md border border-gray-300">
           {TABS.map((t) => (
