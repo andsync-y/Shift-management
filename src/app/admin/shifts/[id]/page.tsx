@@ -33,7 +33,9 @@ export default async function PeriodDetailPage({
   const p = period as ShiftPeriod;
 
   const monthStart = `${p.year}-${String(p.month).padStart(2, "0")}-01`;
-  const monthEnd = `${p.year}-${String(p.month).padStart(2, "0")}-31`;
+  const monthEnd = `${p.year}-${String(p.month).padStart(2, "0")}-${String(
+    new Date(p.year, p.month, 0).getDate()
+  ).padStart(2, "0")}`;
   const [{ data: requirements }, { data: shifts }, { data: staff }, { data: timeOff }] =
     await Promise.all([
       supabase.from("shift_requirements").select("*").eq("period_id", id),

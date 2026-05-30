@@ -59,7 +59,9 @@ export default async function AdminDashboard() {
   let timeOff: TimeOffRequest[] = [];
   if (latest) {
     const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
-    const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-31`;
+    const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-${String(
+      new Date(latest.year, latest.month, 0).getDate()
+    ).padStart(2, "0")}`;
     const [{ data: reqs }, { data: offs }] = await Promise.all([
       supabase.from("shift_requirements").select("*").eq("period_id", latest.id),
       supabase

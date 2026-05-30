@@ -46,7 +46,9 @@ export default async function StaffShiftsPage() {
   }
 
   const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
-  const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-31`;
+  const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-${String(
+    new Date(latest.year, latest.month, 0).getDate()
+  ).padStart(2, "0")}`;
   const [{ data: shifts }, { data: staff }, { data: timeOff }] = await Promise.all([
     supabase.from("shifts").select("*").eq("period_id", latest.id),
     supabase.from("profiles").select("*"),
