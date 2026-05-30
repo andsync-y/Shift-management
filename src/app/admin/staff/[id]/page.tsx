@@ -5,9 +5,11 @@ import {
   EMPLOYMENT_LABELS_JA,
   ROLE_LABELS_JA,
   type AvailabilityPreference,
+  type FixedShift,
   type Profile,
 } from "@/lib/types";
 import AvailabilityEditor from "@/components/AvailabilityEditor";
+import FixedShiftEditor from "@/components/FixedShiftEditor";
 
 export default async function StaffDetailPage({
   params,
@@ -28,6 +30,12 @@ export default async function StaffDetailPage({
 
   const { data: availability } = await supabase
     .from("availability_preferences")
+    .select("*")
+    .eq("staff_id", id)
+    .order("day_of_week");
+
+  const { data: fixedShifts } = await supabase
+    .from("fixed_shifts")
     .select("*")
     .eq("staff_id", id)
     .order("day_of_week");
@@ -81,6 +89,18 @@ export default async function StaffDetailPage({
         <AvailabilityEditor
           staffId={p.id}
           initial={(availability ?? []) as AvailabilityPreference[]}
+        />
+      </div>
+
+      <div className="card">
+        <h2 className="mb-3 font-semibold">固定シフト（週次の確定パターン）</h2>
+        <p className="mb-4 text-sm text-gray-500">
+          固定シフト制の運用向け。毎週この曜日はこの時間、というパターンを登録します。
+          シフト作成画面の「📌 固定シフトを展開」で、希望休を除いて今月分に一括反映できます。
+        </p>
+        <FixedShiftEditor
+          staffId={p.id}
+          initial={(fixedShifts ?? []) as FixedShift[]}
         />
       </div>
     </div>

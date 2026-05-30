@@ -4,6 +4,7 @@ import NavBar from "@/components/NavBar";
 const NAV = [
   { href: "/staff", label: "シフト確認" },
   { href: "/staff/availability", label: "希望シフト" },
+  { href: "/staff/fixed-shifts", label: "固定シフト" },
   { href: "/staff/requests", label: "お休み希望" },
 ];
 
