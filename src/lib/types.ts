@@ -21,6 +21,7 @@ export interface Profile {
   is_active: boolean;
   initial_password: string | null;
   calendar_token: string | null;
+  line_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
