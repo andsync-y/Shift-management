@@ -5,6 +5,7 @@ import {
   type Profile,
   type Shift,
   type ShiftPeriod,
+  type TimeOffRequest,
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import CalendarSubscribe from "@/components/CalendarSubscribe";
@@ -44,9 +45,17 @@ export default async function StaffShiftsPage() {
     );
   }
 
-  const [{ data: shifts }, { data: staff }] = await Promise.all([
+  const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
+  const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-31`;
+  const [{ data: shifts }, { data: staff }, { data: timeOff }] = await Promise.all([
     supabase.from("shifts").select("*").eq("period_id", latest.id),
     supabase.from("profiles").select("*"),
+    supabase
+      .from("time_off_requests")
+      .select("*")
+      .eq("status", "approved")
+      .gte("off_date", monthStart)
+      .lte("off_date", monthEnd),
   ]);
 
   const myShifts = (shifts as Shift[] | null)?.filter((s) => s.staff_id === me.id) ?? [];
@@ -100,6 +109,7 @@ export default async function StaffShiftsPage() {
             month={latest.month}
             shifts={(shifts ?? []) as Shift[]}
             staff={(staff ?? []) as Profile[]}
+            timeOff={(timeOff ?? []) as TimeOffRequest[]}
             highlightStaffId={me.id}
           />
         </div>
