@@ -83,7 +83,7 @@ export default function LoginPage() {
           {loading ? "ログイン中..." : "ログイン"}
         </button>
 
-        {process.env.NEXT_PUBLIC_LINE_LOGIN === "1" && (
+        {process.env.NEXT_PUBLIC_LINE_LOGIN?.trim() === "1" && (
           <a
             href="/auth/line"
             className="btn-outline"
