@@ -123,8 +123,8 @@ const STAFF = [
     ],
   },
   {
-    full_name: "川島",
-    email: "kawashima@zenryoku-nagara.example.com",
+    full_name: "川島 愛由",
+    email: "kawashima.ayu@zenryoku-nagara.example.com",
     employment_type: "part_time",
     min: 30, // 社保加入要件（週約30h）を満たす設計
     max: 40,
@@ -139,8 +139,8 @@ const STAFF = [
     ],
   },
   {
-    full_name: "紙坂",
-    email: "kamisaka@zenryoku-nagara.example.com",
+    full_name: "紙坂 香代",
+    email: "kamisaka.kayo@zenryoku-nagara.example.com",
     employment_type: "part_time",
     min: 24,
     max: 36,
