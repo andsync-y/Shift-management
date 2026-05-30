@@ -25,17 +25,31 @@ export default async function AdminDashboard() {
         .limit(5),
     ]);
 
-  // 最新のシフト期間のカレンダーをダッシュボードに表示
-  const latest = periods?.[0];
+  // シフトが実際に入っている最新の期間をダッシュボードに表示する。
+  // （直近の期間がまだ空＝下書きの場合は、その手前の入っている月を出す）
+  const periodList = periods ?? [];
+  let latest = periodList[0] ?? null;
   let latestShifts: Shift[] = [];
   let staffList: Profile[] = [];
-  if (latest) {
-    const [{ data: shifts }, { data: staff }] = await Promise.all([
-      supabase.from("shifts").select("*").eq("period_id", latest.id),
-      supabase.from("profiles").select("*"),
-    ]);
-    latestShifts = (shifts ?? []) as Shift[];
+
+  if (periodList.length > 0) {
+    const { data: staff } = await supabase.from("profiles").select("*");
     staffList = (staff ?? []) as Profile[];
+
+    // 候補期間のシフトをまとめて取得し、新しい順に「シフトがある月」を採用
+    const ids = periodList.map((p) => p.id);
+    const { data: allShifts } = await supabase
+      .from("shifts")
+      .select("*")
+      .in("period_id", ids);
+    const shiftsByPeriod = new Map<string, Shift[]>();
+    for (const s of (allShifts ?? []) as Shift[]) {
+      if (!shiftsByPeriod.has(s.period_id)) shiftsByPeriod.set(s.period_id, []);
+      shiftsByPeriod.get(s.period_id)!.push(s);
+    }
+    const withShifts = periodList.find((p) => (shiftsByPeriod.get(p.id)?.length ?? 0) > 0);
+    latest = withShifts ?? periodList[0];
+    latestShifts = shiftsByPeriod.get(latest.id) ?? [];
   }
 
   return (
