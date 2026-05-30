@@ -8,7 +8,7 @@ import {
   type ShiftPeriod,
   type ShiftRequirement,
 } from "@/lib/types";
-import ShiftCalendar from "@/components/ShiftCalendar";
+import ShiftCalendarView from "@/components/ShiftCalendarView";
 import RequirementsEditor from "./RequirementsEditor";
 import GeneratePanel from "./GeneratePanel";
 import ShiftEditor from "./ShiftEditor";
@@ -91,7 +91,7 @@ export default async function PeriodDetailPage({
           <h2 className="font-semibold">シフト表（{shiftList.length}件）</h2>
         </div>
         {shiftList.length > 0 ? (
-          <ShiftCalendar
+          <ShiftCalendarView
             year={p.year}
             month={p.month}
             shifts={shiftList}
