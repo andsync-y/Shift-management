@@ -29,54 +29,62 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center px-4">
-      <div className="card w-full max-w-md">
-        <div className="mb-6 text-center">
-          <h1 className="text-xl font-bold text-brand">全力ストレッチ岐阜長良店</h1>
-          <p className="mt-1 text-sm text-gray-500">シフト管理システム</p>
+    <div className="login-wrap">
+      <form className="login-card" onSubmit={handleLogin}>
+        <div className="eyebrow accent">ZENRYOKU STRETCH · 岐阜長良</div>
+        <div className="login-mark" style={{ marginTop: 14 }}>
+          全力ストレッチ岐阜長良店
+        </div>
+        <h1 className="login-title en">Sign in</h1>
+        <p className="login-sub">シフト管理システム</p>
+
+        <div className="field" style={{ marginBottom: 22 }}>
+          <label htmlFor="email">
+            Email <span className="jp-label">／ メールアドレス</span>
+          </label>
+          <input
+            id="email"
+            type="email"
+            className="input"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="username"
+            placeholder="you@example.com"
+          />
         </div>
 
-        <form onSubmit={handleLogin} className="space-y-4">
-          <div>
-            <label className="label" htmlFor="email">
-              メールアドレス
-            </label>
-            <input
-              id="email"
-              type="email"
-              className="input"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              autoComplete="email"
-            />
-          </div>
-          <div>
-            <label className="label" htmlFor="password">
-              パスワード
-            </label>
-            <input
-              id="password"
-              type="password"
-              className="input"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              autoComplete="current-password"
-            />
-          </div>
+        <div className="field" style={{ marginBottom: 32 }}>
+          <label htmlFor="password">
+            Password <span className="jp-label">／ パスワード</span>
+          </label>
+          <input
+            id="password"
+            type="password"
+            className="input"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            placeholder="••••••••"
+          />
+        </div>
 
-          {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && (
+          <p style={{ color: "var(--accent-ink)", fontSize: 13, marginBottom: 16 }}>{error}</p>
+        )}
 
-          <button type="submit" className="btn-primary w-full" disabled={loading}>
-            {loading ? "ログイン中..." : "ログイン"}
-          </button>
-        </form>
+        <button
+          type="submit"
+          className="btn-fill"
+          style={{ width: "100%", justifyContent: "center" }}
+          disabled={loading}
+        >
+          {loading ? "ログイン中..." : "ログイン"}
+        </button>
 
-        <p className="mt-4 text-center text-xs text-gray-400">
-          アカウントは管理者が発行します
-        </p>
-      </div>
+        <p className="login-foot">アカウントは管理者が発行します</p>
+      </form>
     </div>
   );
 }

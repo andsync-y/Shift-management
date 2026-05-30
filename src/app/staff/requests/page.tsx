@@ -15,8 +15,12 @@ export default async function StaffRequestsPage() {
     .order("off_date", { ascending: false });
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">お休み希望</h1>
+    <div className="page space-y-6">
+      <div className="masthead" style={{ marginBottom: 8 }}>
+        <div className="eyebrow accent">Staff</div>
+        <h1 className="ttl en">Time Off</h1>
+        <p className="sub">お休み希望</p>
+      </div>
 
       <div className="card">
         <h2 className="mb-4 font-semibold">新規申請</h2>

@@ -10,63 +10,113 @@ export default function StaffForm() {
   );
 
   return (
-    <form action={formAction} className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="label">氏名 *</label>
-          <input name="full_name" className="input" required />
+    <form action={formAction}>
+      <p className="help" style={{ marginTop: 18 }}>
+        登録するとログインID（メール）と初期パスワードが発行されます。内容は本人へ配布してください。
+      </p>
+      <div className="form-grid">
+        <div className="field">
+          <label>
+            Name <span className="jp-label">／ 氏名</span>
+          </label>
+          <input name="full_name" className="input" placeholder="山田 花子" required />
         </div>
-        <div>
-          <label className="label">権限</label>
-          <select name="role" className="input" defaultValue="staff">
+        <div className="field">
+          <label>
+            Role <span className="jp-label">／ 権限</span>
+          </label>
+          <select name="role" className="select" defaultValue="staff">
             <option value="staff">スタッフ</option>
-            <option value="super_admin">管理者</option>
+            <option value="super_admin">オーナー</option>
           </select>
         </div>
-        <div>
-          <label className="label">メールアドレス *</label>
-          <input name="email" type="email" className="input" required />
+        <div className="field full">
+          <label>
+            Login ID <span className="jp-label">／ ログインID（メール）</span>
+          </label>
+          <input name="email" type="email" className="input" placeholder="name@example.com" required />
         </div>
-        <div>
-          <label className="label">初期パスワード *（8文字以上）</label>
+        <div className="field">
+          <label>
+            Password <span className="jp-label">／ 初期パスワード（8文字以上）</span>
+          </label>
           <input name="password" type="text" className="input" required minLength={8} />
         </div>
-        <div>
-          <label className="label">雇用形態</label>
-          <select name="employment_type" className="input" defaultValue="part_time">
+        <div className="field">
+          <label>
+            Employment <span className="jp-label">／ 雇用形態</span>
+          </label>
+          <select name="employment_type" className="select" defaultValue="part_time">
             <option value="part_time">アルバイト</option>
             <option value="full_time">正社員</option>
           </select>
         </div>
-        <div>
-          <label className="label">電話番号</label>
+        <div className="field">
+          <label>
+            Phone <span className="jp-label">／ 電話番号</span>
+          </label>
           <input name="phone" className="input" />
         </div>
-        <div>
-          <label className="label">時給（円）</label>
+        <div className="field">
+          <label>
+            Wage <span className="jp-label">／ 時給（円）</span>
+          </label>
           <input name="hourly_wage" type="number" min={0} className="input" />
         </div>
-        <div>
-          <label className="label">表示色</label>
-          <input name="display_color" type="color" defaultValue="#e8380d" className="input h-10" />
+        <div className="field">
+          <label>
+            Weekly hours <span className="jp-label">／ 週の最低・最大時間</span>
+          </label>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <input
+              name="min_hours_per_week"
+              type="number"
+              min={0}
+              defaultValue={0}
+              className="input"
+              style={{ width: 90 }}
+            />
+            <span className="muted en">/</span>
+            <input
+              name="max_hours_per_week"
+              type="number"
+              min={1}
+              defaultValue={40}
+              className="input"
+              style={{ width: 90 }}
+            />
+            <span className="muted" style={{ fontSize: 13 }}>
+              時間
+            </span>
+          </div>
         </div>
-        <div>
-          <label className="label">週の最低希望時間</label>
-          <input name="min_hours_per_week" type="number" min={0} defaultValue={0} className="input" />
-        </div>
-        <div>
-          <label className="label">週の最大勤務時間</label>
-          <input name="max_hours_per_week" type="number" min={1} defaultValue={40} className="input" />
+        <div className="field">
+          <label>
+            Color <span className="jp-label">／ 表示色</span>
+          </label>
+          <input
+            name="display_color"
+            type="color"
+            defaultValue="#1f4be0"
+            className="input"
+            style={{ height: 48, padding: 6 }}
+          />
         </div>
       </div>
 
       {state && (
-        <p className={`text-sm ${state.ok ? "text-green-600" : "text-red-600"}`}>
+        <p
+          style={{
+            fontSize: 13,
+            marginBottom: 16,
+            color: state.ok ? "#3d6b4f" : "var(--accent-ink)",
+          }}
+        >
           {state.message}
         </p>
       )}
 
-      <button type="submit" className="btn-primary" disabled={pending}>
+      <button type="submit" className="btn-fill" disabled={pending}>
         {pending ? "登録中..." : "スタッフを登録"}
       </button>
     </form>

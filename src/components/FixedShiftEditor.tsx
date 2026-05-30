@@ -26,11 +26,13 @@ export default function FixedShiftEditor({
   for (const f of initial) (byDay[f.day_of_week] ??= []).push(f);
 
   return (
-    <div className="space-y-4">
-      <form action={handleAdd} className="flex flex-wrap items-end gap-3">
-        <div>
-          <label className="label">曜日</label>
-          <select name="day_of_week" className="input w-24" defaultValue="1">
+    <div>
+      <form action={handleAdd} className="add-row" style={{ marginTop: 22 }}>
+        <div className="field">
+          <label>
+            Day <span className="jp-label">／ 曜日</span>
+          </label>
+          <select name="day_of_week" className="select" style={{ width: 110 }} defaultValue="1">
             {DAY_LABELS_JA.map((d, i) => (
               <option key={i} value={i}>
                 {d}
@@ -38,57 +40,83 @@ export default function FixedShiftEditor({
             ))}
           </select>
         </div>
-        <div>
-          <label className="label">開始</label>
-          <input name="start_time" type="time" className="input w-32" defaultValue="10:00" required />
+        <div className="field">
+          <label>
+            Start <span className="jp-label">／ 開始</span>
+          </label>
+          <input
+            name="start_time"
+            type="time"
+            className="input"
+            style={{ width: 130 }}
+            defaultValue="10:00"
+            required
+          />
         </div>
-        <div>
-          <label className="label">終了</label>
-          <input name="end_time" type="time" className="input w-32" defaultValue="19:00" required />
+        <div className="field">
+          <label>
+            End <span className="jp-label">／ 終了</span>
+          </label>
+          <input
+            name="end_time"
+            type="time"
+            className="input"
+            style={{ width: 130 }}
+            defaultValue="19:00"
+            required
+          />
         </div>
-        <div>
-          <label className="label">区分(任意)</label>
-          <input name="shift_type" className="input w-28" placeholder="早番 など" />
+        <div className="field grow">
+          <label>
+            Label <span className="jp-label">／ 区分（任意）</span>
+          </label>
+          <input name="shift_type" className="input" placeholder="早番 など" />
         </div>
-        <button type="submit" className="btn-primary" disabled={pending}>
+        <button type="submit" className="btn-fill" style={{ padding: "13px 22px" }} disabled={pending}>
           追加
         </button>
       </form>
 
-      {message && <p className="text-sm text-gray-600">{message}</p>}
+      {message && (
+        <p className="help" style={{ marginTop: 12 }}>
+          {message}
+        </p>
+      )}
 
-      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-        {DAY_LABELS_JA.map((label, dow) => (
-          <div key={dow} className="rounded-md border border-gray-200 p-3">
-            <p className="mb-2 text-sm font-semibold text-gray-700">{label}曜日</p>
-            <ul className="space-y-1">
-              {(byDay[dow] ?? []).length === 0 && (
-                <li className="text-xs text-gray-400">未登録</li>
-              )}
-              {(byDay[dow] ?? [])
-                .sort((a, b) => a.start_time.localeCompare(b.start_time))
-                .map((f) => (
-                  <li key={f.id} className="flex items-center justify-between gap-2 text-xs">
-                    <span>
+      <div className="day-grid">
+        {DAY_LABELS_JA.map((label, dow) => {
+          const slots = (byDay[dow] ?? []).sort((a, b) =>
+            a.start_time.localeCompare(b.start_time)
+          );
+          return (
+            <div className="day-card" key={dow}>
+              <div className="dh">{label}曜日</div>
+              {slots.length === 0 ? (
+                <div className="empty">未登録</div>
+              ) : (
+                slots.map((f) => (
+                  <div className="slot" key={f.id}>
+                    <span className="tm">
                       {f.start_time.slice(0, 5)}–{f.end_time.slice(0, 5)}
-                      {f.shift_type && (
-                        <span className="ml-1 text-gray-400">({f.shift_type})</span>
-                      )}
                     </span>
+                    {f.shift_type && (
+                      <span className="tag" style={{ marginLeft: 2 }}>
+                        {f.shift_type}
+                      </span>
+                    )}
                     <button
-                      onClick={() =>
-                        startTransition(() => deleteFixedShift(f.id, staffId))
-                      }
-                      className="text-gray-400 hover:text-red-500"
+                      className="x"
                       aria-label="削除"
+                      onClick={() => startTransition(() => deleteFixedShift(f.id, staffId))}
                     >
                       ×
                     </button>
-                  </li>
-                ))}
-            </ul>
-          </div>
-        ))}
+                  </div>
+                ))
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

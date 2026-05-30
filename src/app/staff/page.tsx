@@ -24,10 +24,20 @@ export default async function StaffShiftsPage() {
 
   if (!latest) {
     return (
-      <div className="space-y-4">
-        <h1 className="text-2xl font-bold">シフト確認</h1>
-        <div className="card text-center text-gray-400">
-          公開中のシフトはまだありません。
+      <div className="page">
+        <div className="page-head">
+          <div className="masthead">
+            <div className="eyebrow accent">Staff</div>
+            <h1 className="ttl en">My Shifts</h1>
+            <p className="sub">シフト確認</p>
+          </div>
+        </div>
+        <div className="section">
+          <div className="section-body">
+            <p className="help" style={{ marginTop: 0 }}>
+              公開中のシフトはまだありません。
+            </p>
+          </div>
         </div>
       </div>
     );
@@ -48,33 +58,49 @@ export default async function StaffShiftsPage() {
   }, 0);
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-3">
-        <h1 className="text-2xl font-bold">
-          {latest.year}年{latest.month}月 のシフト
-        </h1>
-        <span className="badge bg-blue-100 text-blue-700">
-          {PERIOD_STATUS_LABELS_JA[latest.status]}
-        </span>
+    <div className="page">
+      <div className="page-head">
+        <div className="masthead">
+          <div className="eyebrow accent">Staff</div>
+          <h1 className="ttl en">My Shifts</h1>
+          <p className="sub">
+            シフト確認 — {latest.year}年{latest.month}月（
+            {PERIOD_STATUS_LABELS_JA[latest.status]}）
+          </p>
+        </div>
       </div>
 
-      <div className="card">
-        <p className="text-sm text-gray-500">あなたの今月の勤務</p>
-        <p className="mt-1 text-2xl font-bold">
-          {myShifts.length}<span className="ml-1 text-base font-normal text-gray-400">日</span>
-          <span className="ml-3">{myHours.toFixed(1)}<span className="ml-1 text-base font-normal text-gray-400">時間</span></span>
-        </p>
+      <div className="summary-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
+        <div className="stat">
+          <div className="eyebrow">Work Days</div>
+          <div className="big en">
+            {myShifts.length}
+            <small>日</small>
+          </div>
+        </div>
+        <div className="stat">
+          <div className="eyebrow">Total Hours</div>
+          <div className="big en">
+            {myHours.toFixed(1)}
+            <small>時間</small>
+          </div>
+        </div>
       </div>
 
-      <div className="card">
-        <h2 className="mb-3 font-semibold">シフト表（あなたの勤務を強調表示）</h2>
-        <ShiftCalendarView
-          year={latest.year}
-          month={latest.month}
-          shifts={(shifts ?? []) as Shift[]}
-          staff={(staff ?? []) as Profile[]}
-          highlightStaffId={me.id}
-        />
+      <div className="section">
+        <div className="section-head">
+          <h2>シフト表</h2>
+          <span className="eyebrow">あなたの勤務を強調</span>
+        </div>
+        <div className="section-body">
+          <ShiftCalendarView
+            year={latest.year}
+            month={latest.month}
+            shifts={(shifts ?? []) as Shift[]}
+            staff={(staff ?? []) as Profile[]}
+            highlightStaffId={me.id}
+          />
+        </div>
       </div>
     </div>
   );
