@@ -2,8 +2,9 @@
 // Claude API による店舗ルール参照シフト生成
 // =====================================================================
 // 店舗ルール(getStoreRules) + スタッフ条件/希望休 をプロンプト化し、
-// Claude に submit_shifts ツール（構造化出力）でシフト割当を返させる。
-// 返ってきた割当は厳密に検証し、不正なものは除外する。
+// Claude に「指定JSON形式のみ」でシフトを返させる（shift-prompt のテンプレート準拠）。
+// 返ってきた schedule[].entries[] を厳密に検証し、不正・off は除外して
+// アプリの割当(GeneratedAssignment)へ変換する。
 // =====================================================================
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -34,38 +35,27 @@ export interface ClaudeGenerateResult {
   rejected: number; // 検証で除外した件数
 }
 
-const SUBMIT_TOOL: Anthropic.Tool = {
-  name: "submit_shifts",
-  description: "生成した月次シフトの割当一覧を提出する。",
-  input_schema: {
-    type: "object",
-    properties: {
-      shifts: {
-        type: "array",
-        description: "シフト割当の配列",
-        items: {
-          type: "object",
-          properties: {
-            staff_id: { type: "string", description: "スタッフのUUID（提供リストのidを正確に使う）" },
-            work_date: { type: "string", description: "勤務日 YYYY-MM-DD" },
-            start_time: { type: "string", description: "開始時刻 HH:MM(24h)" },
-            end_time: { type: "string", description: "終了時刻 HH:MM(24h)" },
-            shift_type_id: { type: "string", description: "シフト種別id (early/late/short_5h/short_6h)" },
-            note: { type: "string", description: "備考(任意)" },
-          },
-          required: ["staff_id", "work_date", "start_time", "end_time"],
-        },
-      },
-      summary: { type: "string", description: "生成方針の要約(2〜3文)" },
-      warnings: {
-        type: "array",
-        items: { type: "string" },
-        description: "人手不足や制約上の注意点",
-      },
-    },
-    required: ["shifts"],
-  },
-};
+// Claude が返す JSON の想定型（必要な部分のみ）
+interface ScheduleEntry {
+  date?: string;
+  shift_type?: string;
+  start_time?: string;
+  end_time?: string;
+}
+interface ScheduleStaff {
+  staff_id?: string;
+  staff_name?: string;
+  entries?: ScheduleEntry[];
+}
+interface ScheduleJson {
+  schedule?: ScheduleStaff[];
+  warnings?: string[];
+  insurance_summary?: {
+    enrolled?: string[];
+    optional?: string[];
+    estimated_monthly_cost?: number;
+  };
+}
 
 const TIME_RE = /^\d{2}:\d{2}$/;
 
@@ -73,6 +63,22 @@ function durationHours(start: string, end: string): number {
   const [sh, sm] = start.split(":").map(Number);
   const [eh, em] = end.split(":").map(Number);
   return (eh * 60 + em - (sh * 60 + sm)) / 60;
+}
+
+// テキストから JSON オブジェクトを抽出する（コードフェンスや前後文を許容）。
+function extractJson(text: string): ScheduleJson | null {
+  let t = text.trim();
+  // ```json ... ``` のフェンスを除去
+  const fence = t.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  if (fence) t = fence[1].trim();
+  const start = t.indexOf("{");
+  const end = t.lastIndexOf("}");
+  if (start === -1 || end === -1 || end <= start) return null;
+  try {
+    return JSON.parse(t.slice(start, end + 1)) as ScheduleJson;
+  } catch {
+    return null;
+  }
 }
 
 export async function generateShiftsWithClaude(
@@ -104,28 +110,27 @@ export async function generateShiftsWithClaude(
   try {
     message = await client.messages.create({
       model,
-      max_tokens: 8000,
+      max_tokens: 16000,
       system,
-      tools: [SUBMIT_TOOL],
-      tool_choice: { type: "tool", name: "submit_shifts" },
       messages: [{ role: "user", content: userContent }],
     });
   } catch (e) {
     return empty(`Claude API 呼び出しに失敗: ${e instanceof Error ? e.message : String(e)}`);
   }
 
-  const toolUse = message.content.find(
-    (b): b is Anthropic.ToolUseBlock => b.type === "tool_use" && b.name === "submit_shifts"
-  );
-  if (!toolUse) {
-    return empty("Claude が構造化シフトを返しませんでした。再試行してください。");
-  }
+  const text = message.content
+    .filter((b): b is Anthropic.TextBlock => b.type === "text")
+    .map((b) => b.text)
+    .join("");
 
-  const data = toolUse.input as {
-    shifts?: Array<Record<string, unknown>>;
-    summary?: string;
-    warnings?: string[];
-  };
+  const parsed = extractJson(text);
+  if (!parsed || !Array.isArray(parsed.schedule)) {
+    return empty(
+      message.stop_reason === "max_tokens"
+        ? "出力が長すぎて途中で切れました。対象期間を短くするか、再試行してください。"
+        : "Claude の出力をJSONとして解釈できませんでした。再試行してください。"
+    );
+  }
 
   // --- 検証 ---
   const validIds = new Set(input.staff.filter((s) => s.is_active).map((s) => s.id));
@@ -136,42 +141,65 @@ export async function generateShiftsWithClaude(
   const staffHours: Record<string, number> = {};
   let rejected = 0;
 
-  for (const raw of data.shifts ?? []) {
-    const staff_id = String(raw.staff_id ?? "");
-    const work_date = String(raw.work_date ?? "");
-    const start_time = String(raw.start_time ?? "");
-    const end_time = String(raw.end_time ?? "");
-    const note = raw.note ? String(raw.note) : null;
+  for (const member of parsed.schedule) {
+    const staff_id = String(member.staff_id ?? "");
+    for (const entry of member.entries ?? []) {
+      const shiftType = String(entry.shift_type ?? "");
+      if (shiftType === "off") continue; // 休みは保存しない
 
-    const day = Number(work_date.slice(8, 10));
-    const valid =
-      validIds.has(staff_id) &&
-      work_date.startsWith(monthPrefix) &&
-      day >= 1 &&
-      day <= lastDay &&
-      TIME_RE.test(start_time) &&
-      TIME_RE.test(end_time) &&
-      start_time < end_time;
+      const work_date = String(entry.date ?? "");
+      const start_time = String(entry.start_time ?? "");
+      const end_time = String(entry.end_time ?? "");
+      const day = Number(work_date.slice(8, 10));
 
-    if (!valid) {
-      rejected++;
-      continue;
+      const valid =
+        validIds.has(staff_id) &&
+        work_date.startsWith(monthPrefix) &&
+        day >= 1 &&
+        day <= lastDay &&
+        TIME_RE.test(start_time) &&
+        TIME_RE.test(end_time) &&
+        start_time < end_time;
+
+      if (!valid) {
+        rejected++;
+        continue;
+      }
+
+      assignments.push({
+        staff_id,
+        work_date,
+        start_time,
+        end_time,
+        note: shiftType || null,
+      });
+      staffHours[staff_id] = (staffHours[staff_id] ?? 0) + durationHours(start_time, end_time);
     }
-
-    assignments.push({ staff_id, work_date, start_time, end_time, note });
-    staffHours[staff_id] = (staffHours[staff_id] ?? 0) + durationHours(start_time, end_time);
   }
 
-  const warnings = Array.isArray(data.warnings) ? data.warnings.slice() : [];
+  const warnings = Array.isArray(parsed.warnings) ? parsed.warnings.slice() : [];
   if (rejected > 0) {
-    warnings.push(`${rejected} 件の割当が検証で除外されました（不正なIDや日付・時刻）。`);
+    warnings.push(`${rejected} 件の割当が検証で除外されました（不正なID・日付・時刻）。`);
+  }
+
+  // 社保サマリーを要約に整形
+  const ins = parsed.insurance_summary;
+  let summary = "";
+  if (ins) {
+    const parts: string[] = [];
+    if (ins.enrolled?.length) parts.push(`社保加入: ${ins.enrolled.join("、")}`);
+    if (ins.optional?.length) parts.push(`任意: ${ins.optional.join("、")}`);
+    if (typeof ins.estimated_monthly_cost === "number") {
+      parts.push(`事業主負担概算: 約${ins.estimated_monthly_cost.toLocaleString()}円/月`);
+    }
+    summary = parts.join(" ／ ");
   }
 
   return {
     ok: assignments.length > 0,
     assignments,
     staffHours,
-    summary: data.summary ?? "",
+    summary,
     warnings,
     model,
     rejected,

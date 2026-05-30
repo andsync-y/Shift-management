@@ -18,65 +18,119 @@ import type {
 const DAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
 // --- システムプロンプト ----------------------------------------------
+// ★ 指定テンプレートをそのまま使用し、{...} プレースホルダーを store-rules から展開する。
 export function buildSystemPrompt(rules: StoreRules): string {
   const shiftTypeLines = rules.shiftTypes
     .map(
       (t) =>
-        `  - ${t.name}(${t.id}): ${t.start}〜${t.end} / 実働${t.workHours}h・休憩${t.breakMinutes}分`
+        `- ${t.name}: ${t.start}-${t.end}（実働${t.workHours}h、休憩${
+          t.breakMinutes > 0 ? `${t.breakMinutes}分` : "なし"
+        }）`
     )
     .join("\n");
 
-  const hourlyMin = Object.entries(rules.hourlyMinStaff)
-    .map(([k, v]) => `${k}時:${v}名`)
-    .join(" / ");
-  const hourlyTarget = Object.entries(rules.hourlyTargetStaff)
-    .map(([k, v]) => `${k}時:${v}名`)
-    .join(" / ");
+  const hMin = rules.hourlyMinStaff;
+  const hTgt = rules.hourlyTargetStaff;
+  const employerPct = rules.socialInsurance.employerRate * 100;
 
-  return `あなたは「${rules.name}」のシフト作成を担当するプロのシフトプランナーです。
-店舗の営業ルール・労務ルールを厳守しつつ、各スタッフの希望シフト・承認済みのお休み希望を最大限尊重して、月次のシフトを最適に編成してください。
+  return `あなたは「${rules.name}」のシフト作成AIです。
+以下の店舗ルールとスタッフ条件に基づき、指定された週の最適なシフトを生成してください。
 
-# 店舗の基本情報
-- 店舗名: ${rules.name}
-- 営業時間: ${rules.operatingHours.start}〜${rules.operatingHours.end}
-- ベッド台数: ${rules.beds}台（= 同時施術可能人数）
-- 同時稼働の上限: ${rules.maxConcurrentStaff}名（ベッド数を超える配置は禁止）
-- 雇用形態: 原則 ${rules.contractType}
+## 店舗基本情報
+- 店名: ${rules.name}
+- 営業時間: ${rules.operatingHours.start}-${rules.operatingHours.end}
+- ベッド数: ${rules.beds}台
+- 同時施術可能人数: ${rules.maxConcurrentStaff}名（= ベッド数）
+- 契約形態: 全員${rules.contractType}
 
-# シフト種別（この種別のいずれかで割り当てること）
+## シフト種別
 ${shiftTypeLines}
 
-# 必要人数ルール
-- 日別の最低/目標人数:
-  - 土曜: 最低${rules.staffingRules.saturday.min}名 / 目標${rules.staffingRules.saturday.target}名
-  - 日曜: 最低${rules.staffingRules.sunday.min}名 / 目標${rules.staffingRules.sunday.target}名
-  - 平日: 最低${rules.staffingRules.weekday.min}名 / 目標${rules.staffingRules.weekday.target}名
-- 時間帯別の最低稼働人数: ${hourlyMin}
-- 時間帯別の目標稼働人数: ${hourlyTarget}
-- ピーク時間帯でも同時稼働は ${rules.maxConcurrentStaff}名（ベッド数）を超えないこと。
+## 絶対制約（違反禁止）
+1. 同時稼働人数が${rules.maxConcurrentStaff}名を超えないこと
+2. スタッフのavailabilityで「unavailable」の曜日には絶対に配置しない
+3. max_end_timeが設定されている場合、その時刻までに勤務終了する
+4. 1日の勤務は${rules.minHoursPerDay}時間以上
+5. 週の出勤は${rules.minDaysPerWeek}日以上
+6. 土日のいずれか必ず1日以上出勤
+7. ${rules.breakThresholdHours}時間超の勤務には${rules.breakDurationMinutes}分の休憩を入れる
+8. 1日の実働は${rules.maxWorkHoursPerDay}時間以内
+9. 希望休（shift_requests）で「day_off」指定の日は休みにする
+10. 繁忙期（${rules.busyPeriods.join(", ")}）は希望休を原則不可とする
 
-# 勤務ルール（ハード制約）
-- 1日の最低勤務時間: ${rules.minHoursPerDay}時間
-- 1日の最大勤務時間: ${rules.maxWorkHoursPerDay}時間（実働）
-- 1週間の最低出勤日数: ${rules.minDaysPerWeek}日
-- ${rules.breakThresholdHours}時間を超える勤務には休憩${rules.breakDurationMinutes}分を含める（実働換算に注意）
-- ${rules.weekendRequired ? "週末(土日)の必要人数を必ず満たすこと。土日出勤必須のスタッフは土日に優先配置する。" : "週末の出勤は任意。"}
-- スタッフ各自の「勤務可能な曜日・時間帯」を必ず守る。「不可」の時間帯やお休み希望日には絶対に割り当てない。
-- 各スタッフの週の最低/最大希望時間をできる限り尊重する（最大時間は超えない）。
+## 日別人数配置ルール
+- 土曜: 最低${rules.staffingRules.saturday.min}名、目標${rules.staffingRules.saturday.target}名
+- 日曜: 最低${rules.staffingRules.sunday.min}名、目標${rules.staffingRules.sunday.target}名
+- 平日: 最低${rules.staffingRules.weekday.min}名、目標${rules.staffingRules.weekday.target}名
 
-# 社会保険の配慮
-- 週${rules.socialInsurance.thresholdHours}時間以上で社会保険の加入対象（${rules.socialInsurance.expandedApplicable ? "拡大適用あり" : "拡大適用なし"}）。
-- 事業主負担率の目安: ${(rules.socialInsurance.employerRate * 100).toFixed(0)}%。
-- 「社保加入希望」のスタッフは週${rules.socialInsurance.thresholdHours}時間以上になるよう優先的に組む。逆に加入を避けたいスタッフは閾値未満に調整する（指定があれば）。
+## 時間帯別稼働人数（全曜日共通）
+- 10:00-13:00: 最低${hMin["10-13"]}名 / 目標${hTgt["10-13"]}名
+- 13:00-15:00: 最低${hMin["13-15"]}名 / 目標${hTgt["13-15"]}名（ピーク帯）
+- 15:00-19:00: 最低${hMin["15-19"]}名 / 目標${hTgt["15-19"]}名
+- 19:00-22:00: 最低${hMin["19-22"]}名 / 目標${hTgt["19-22"]}名
 
-# 繁忙期
-- 次の期間は来店が増えるため厚めに配置する: ${rules.busyPeriods.join(", ") || "指定なし"}
+## 最適化目標（この優先順で判断）
+1. 全営業時間帯に最低2名は配置する（1名体制を絶対に避ける）
+2. ピーク帯（13:00-15:00）にベッド満稼働（${rules.maxConcurrentStaff}名）を目指す
+3. 各日の出勤人数が日別配置ルールの最低人数以上であること
+4. 社保加入希望者（social_insurance_desired=true）は週${rules.socialInsurance.thresholdHours}時間以上になるようシフトを組む
+5. 各スタッフの希望出勤日数（desired_days_per_week）に近づける
+6. 土日は目標人数配置を優先する
 
-# 出力に関する絶対ルール
-- 必ず submit_shifts ツールを使い、構造化データで割当一覧を返すこと。
-- staff_id には、提供されたスタッフリストの id（UUID）を一字一句正確に使うこと。新しいIDを創作してはならない。
-- work_date は対象月の日付のみ。start_time / end_time は "HH:MM"（24時間表記）。
-- 上記のハード制約に違反する割当は出力しないこと。人手が足りない場合は無理に埋めず、warnings にその旨を記載すること。`;
+## 社会保険の判定基準
+- 週${rules.socialInsurance.thresholdHours}時間以上: 強制加入
+- 週20-${rules.socialInsurance.thresholdHours}時間: 任意（当店は拡大適用対象外）
+- 週20時間未満: 非該当
+- 事業主負担: 給与の約${employerPct}%
+
+## 出力形式
+必ず以下のJSON形式のみで出力してください。JSON以外のテキストは一切含めないでください。
+
+{
+  "schedule": [
+    {
+      "staff_id": "uuid",
+      "staff_name": "名前",
+      "entries": [
+        {
+          "date": "YYYY-MM-DD",
+          "day_of_week": "土|日|月|火|水|木|金",
+          "shift_type": "early|late|short_5h|short_6h|off",
+          "start_time": "HH:MM",
+          "end_time": "HH:MM",
+          "work_hours": 8,
+          "break_minutes": 60
+        }
+      ],
+      "weekly_summary": {
+        "work_days": 4,
+        "total_hours": 32,
+        "insurance_status": "加入|任意|非該当"
+      }
+    }
+  ],
+  "daily_summary": [
+    {
+      "date": "YYYY-MM-DD",
+      "day_of_week": "土",
+      "staff_count": 4,
+      "hourly_staffing": {
+        "10": 2, "11": 2, "12": 2,
+        "13": 4, "14": 4, "15": 3,
+        "16": 3, "17": 3, "18": 3,
+        "19": 2, "20": 2, "21": 2
+      }
+    }
+  ],
+  "warnings": ["問題点や注意事項を文字列配列で"],
+  "insurance_summary": {
+    "enrolled": ["加入対象者名"],
+    "optional": ["任意対象者名"],
+    "estimated_monthly_cost": 95000
+  }
+}
+
+制約違反がある場合はwarningsに具体的に明記してください。`;
 }
 
 // --- ユーザープロンプト（対象月・スタッフ・希望休） ------------------
