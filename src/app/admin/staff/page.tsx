@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import {
   EMPLOYMENT_LABELS_JA,
   ROLE_LABELS_JA,
@@ -14,6 +14,18 @@ export default async function StaffPage() {
     .select("*")
     .order("created_at", { ascending: true });
 
+  // ログインID(メール)は auth 側にあるため、admin API でまとめて取得
+  const emailById = new Map<string, string>();
+  try {
+    const admin = createAdminClient();
+    const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
+    for (const u of list?.users ?? []) {
+      if (u.email) emailById.set(u.id, u.email);
+    }
+  } catch {
+    // service role 未設定などの場合はメール非表示で続行
+  }
+
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold">スタッフ管理</h1>
@@ -25,14 +37,19 @@ export default async function StaffPage() {
 
       <div className="card">
         <h2 className="mb-4 font-semibold">登録済みスタッフ（{staff?.length ?? 0}名）</h2>
+        <p className="mb-3 text-xs text-gray-400">
+          ※ ログインID・初期パスワードは本人へ配布用です。本人がパスワードを変更しても、ここの初期PW表示は変わりません。
+        </p>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-200 text-left text-gray-500">
                 <th className="py-2 pr-4">氏名</th>
                 <th className="py-2 pr-4">権限</th>
+                <th className="py-2 pr-4">ログインID</th>
+                <th className="py-2 pr-4">初期PW</th>
                 <th className="py-2 pr-4">雇用形態</th>
-                <th className="py-2 pr-4">週時間(最低/最大)</th>
+                <th className="py-2 pr-4">週時間</th>
                 <th className="py-2 pr-4">状態</th>
                 <th className="py-2 pr-4">希望シフト</th>
               </tr>
@@ -50,6 +67,12 @@ export default async function StaffPage() {
                     </span>
                   </td>
                   <td className="py-2 pr-4">{ROLE_LABELS_JA[s.role]}</td>
+                  <td className="py-2 pr-4">
+                    <span className="font-mono text-xs">{emailById.get(s.id) ?? "—"}</span>
+                  </td>
+                  <td className="py-2 pr-4">
+                    <span className="font-mono text-xs">{s.initial_password ?? "—"}</span>
+                  </td>
                   <td className="py-2 pr-4">{EMPLOYMENT_LABELS_JA[s.employment_type]}</td>
                   <td className="py-2 pr-4">
                     {s.min_hours_per_week} / {s.max_hours_per_week}h
@@ -70,7 +93,7 @@ export default async function StaffPage() {
               ))}
               {(!staff || staff.length === 0) && (
                 <tr>
-                  <td colSpan={6} className="py-4 text-center text-gray-400">
+                  <td colSpan={8} className="py-4 text-center text-gray-400">
                     まだスタッフが登録されていません。
                   </td>
                 </tr>

@@ -110,6 +110,7 @@ async function upsertStaff(s) {
     min_hours_per_week: s.min,
     max_hours_per_week: s.max,
     display_color: s.display_color,
+    initial_password: s.password,
   });
 
   return userId;

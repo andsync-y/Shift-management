@@ -117,9 +117,30 @@ export default function ShiftCalendarView({
                   {date.getDate()}
                 </div>
                 <div className="flex flex-col gap-0.5">
-                  {dayShifts.slice(0, 4).map((s) => chip(s, { compact: true }))}
-                  {dayShifts.length > 4 && (
-                    <span className="text-[10px] text-gray-400">＋{dayShifts.length - 4}</span>
+                  {dayShifts.slice(0, 5).map((s) => {
+                    const p = staffMap.get(s.staff_id);
+                    const mine = highlightStaffId && s.staff_id === highlightStaffId;
+                    return (
+                      <span
+                        key={s.id}
+                        className={`block truncate rounded px-1 py-0.5 text-[11px] leading-tight ${
+                          mine ? "ring-1 ring-brand" : ""
+                        }`}
+                        style={{
+                          backgroundColor: (p?.display_color ?? "#999") + "22",
+                          color: p?.display_color ?? "#333",
+                        }}
+                        title={`${p?.full_name ?? "?"} ${hm(s.start_time)}–${hm(s.end_time)}`}
+                      >
+                        <span className="font-medium">{p?.full_name ?? "?"}</span>
+                        <span className="ml-1 opacity-75">
+                          {hm(s.start_time)}–{hm(s.end_time)}
+                        </span>
+                      </span>
+                    );
+                  })}
+                  {dayShifts.length > 5 && (
+                    <span className="text-[10px] text-gray-400">＋{dayShifts.length - 5}</span>
                   )}
                 </div>
               </button>
