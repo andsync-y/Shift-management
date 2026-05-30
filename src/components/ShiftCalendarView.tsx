@@ -124,7 +124,6 @@ export default function ShiftCalendarView({
     for (let i = 0; i < startDow; i++) cells.push(null);
     for (let d = 1; d <= daysInMonth; d++) cells.push(new Date(year, month - 1, d));
     while (cells.length % 7 !== 0) cells.push(null);
-    const maxPerCell = 4;
     const today = ymd(new Date());
 
     return (
@@ -160,12 +159,9 @@ export default function ShiftCalendarView({
               >
                 <div className="cal-daynum">{date.getDate()}</div>
                 <div className="cal-events">
-                  {evts.slice(0, maxPerCell).map((s) => (
+                  {evts.map((s) => (
                     <Evt key={s.id} s={s} withTime={false} />
                   ))}
-                  {evts.length > maxPerCell && (
-                    <div className="evt-more">+{evts.length - maxPerCell}</div>
-                  )}
                 </div>
               </div>
             );
@@ -196,7 +192,7 @@ export default function ShiftCalendarView({
                   : "translateX(-50%)";
               return (
                 <span className="tick en" key={h} style={{ left: left + "%", transform: tf }}>
-                  {h}:00
+                  {h}
                 </span>
               );
             })}

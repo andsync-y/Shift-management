@@ -7,6 +7,7 @@ import {
   type ShiftPeriod,
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
+import CalendarSubscribe from "@/components/CalendarSubscribe";
 
 export default async function StaffShiftsPage() {
   const me = await requireUser();
@@ -67,6 +68,7 @@ export default async function StaffShiftsPage() {
             シフト確認 — {latest.year}年{latest.month}月（
             {PERIOD_STATUS_LABELS_JA[latest.status]}）
           </p>
+          <CalendarSubscribe token={me.calendar_token} />
         </div>
       </div>
 
