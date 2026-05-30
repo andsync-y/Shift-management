@@ -1,0 +1,109 @@
+# 全力ストレッチ岐阜長良店 シフト管理サービス
+
+スタッフのプロフィール・希望シフトをもとに、AIが月次シフト表を自動作成し、スタッフが
+お休み希望を申請できるシフト管理 Web アプリです。
+
+## 主な機能
+
+| 機能 | 説明 | 状態 |
+| --- | --- | --- |
+| スタッフ管理 | 管理者(super_admin)がプロフィール・希望シフトを登録 | ✅ |
+| AIシフト自動作成 | 希望シフト・必要人数・お休み希望をもとに月次シフトを自動生成（制約ソルバー + Claude API 補助） | ✅ |
+| シフト公開・確認 | 確定したシフト表をスタッフが個別ログインで閲覧 | ✅ |
+| お休み希望申請 | スタッフが終日／時間帯のお休みを申請、管理者が承認 | ✅ |
+| サロンボード連携 | ホットペッパービューティーへ確定シフトを自動入力 | 🚧 将来対応（抽象IFのみ） |
+
+## 技術スタック
+
+- **フロント / API**: Next.js 15 (App Router, TypeScript, React Server Components)
+- **認証 / DB**: Supabase (Auth + PostgreSQL + Row Level Security)
+- **スタイル**: Tailwind CSS
+- **AIシフト生成**: TypeScript 製の制約ベース貪欲ソルバー + Claude API による講評・調整提案
+- **デプロイ想定**: Vercel
+
+## ロールと権限
+
+- `super_admin`（管理者）: スタッフ登録、必要人数設定、シフト生成・公開・確定、休み希望承認
+- `staff`（スタッフ）: 自分のシフト閲覧、希望シフト登録、お休み希望申請
+
+権限は Supabase の Row Level Security で DB レベルでも強制しています。
+
+## セットアップ
+
+### 1. 依存インストール
+
+```bash
+npm install
+```
+
+### 2. Supabase プロジェクト作成 & マイグレーション適用
+
+[Supabase](https://app.supabase.com) でプロジェクトを作成し、SQL Editor で
+`supabase/migrations/0001_init.sql` を実行します（テーブル・RLS・トリガーを作成）。
+
+### 3. 環境変数
+
+`.env.example` を `.env.local` にコピーして値を設定します。
+
+```bash
+cp .env.example .env.local
+```
+
+- `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY`: Supabase の API 設定から
+- `SUPABASE_SERVICE_ROLE_KEY`: スタッフアカウント作成に使用（サーバー専用・秘匿）
+- `ANTHROPIC_API_KEY`: 任意。設定するとAIシフト生成時に Claude による講評が付きます
+
+### 4. 最初の管理者アカウント作成
+
+Supabase の Authentication → Users から手動でユーザーを1人作成し、SQL Editor で
+ロールを `super_admin` に更新します。
+
+```sql
+update profiles set role = 'super_admin' where id = '<作成したユーザーのUUID>';
+```
+
+以降は管理画面の「スタッフ管理」から他スタッフを登録できます。
+
+### 5. 開発サーバー起動
+
+```bash
+npm run dev
+# http://localhost:3000
+```
+
+## 使い方の流れ
+
+1. 管理者がスタッフを登録し、各スタッフの希望シフト（週次の勤務可能時間帯）を入力
+2. スタッフは自分のアカウントで希望シフトの追加・お休み希望の申請が可能
+3. 管理者が対象月の「シフト期間」を作成 → 曜日ごとの必要人数を設定
+4. 「AIでシフトを自動生成」を実行 → ソルバーが割当、Claude が講評
+5. 内容を確認して「スタッフに公開」 → スタッフが各自のシフトを閲覧
+6. 問題なければ「シフトを確定」
+
+## ディレクトリ構成
+
+```
+src/
+├── app/
+│   ├── login/                ログイン
+│   ├── admin/                管理者画面（スタッフ・シフト・休み希望）
+│   ├── staff/                スタッフ画面（シフト確認・希望シフト・お休み）
+│   └── auth/actions.ts       ログアウト
+├── components/               共通UI（NavBar / ShiftCalendar / AvailabilityEditor）
+├── lib/
+│   ├── supabase/             Supabase クライアント（ブラウザ/サーバー/管理）
+│   ├── shift-generator/      シフト生成エンジン（solver + LLM 補助）
+│   ├── salonboard/           サロンボード連携 抽象IF（将来用）
+│   ├── auth.ts               ロールガード
+│   └── types.ts              ドメイン型
+└── middleware.ts             セッション更新・未ログインリダイレクト
+supabase/migrations/          DBスキーマ + RLS
+```
+
+## サロンボード連携について
+
+ホットペッパービューティーのサロンボードには公開 API が無いため、自動入力は
+ブラウザ自動操作（RPA / Playwright 等）での実装が必要です。本リポジトリでは
+`src/lib/salonboard/` に差し替え可能な抽象インターフェースのみ用意しています。
+実装フェーズでは `SalonBoardClient` を満たすクラスを追加してください。
+（規約・2段階認証・画面変更の影響を受けるため運用には注意が必要です）
