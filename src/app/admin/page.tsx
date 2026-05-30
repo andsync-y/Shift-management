@@ -6,6 +6,8 @@ import {
   type Shift,
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
+import DashboardInsights from "@/components/DashboardInsights";
+import type { ShiftRequirement } from "@/lib/types";
 
 export default async function AdminDashboard() {
   const supabase = await createClient();
@@ -52,6 +54,16 @@ export default async function AdminDashboard() {
     latestShifts = shiftsByPeriod.get(latest.id) ?? [];
   }
 
+  // 表示中の期間の必要人数（人手不足アラート用）
+  let requirements: ShiftRequirement[] = [];
+  if (latest) {
+    const { data: reqs } = await supabase
+      .from("shift_requirements")
+      .select("*")
+      .eq("period_id", latest.id);
+    requirements = (reqs ?? []) as ShiftRequirement[];
+  }
+
   return (
     <div className="page">
       <div className="page-head">
@@ -67,48 +79,44 @@ export default async function AdminDashboard() {
         </Link>
       </div>
 
-      {/* summary */}
-      <div className="summary-grid">
-        <div className="stat">
+      {/* summary (compact quick links) */}
+      <div className="summary-grid" style={{ gridTemplateColumns: "repeat(2,1fr)", marginBottom: 24 }}>
+        <div className="stat" style={{ minHeight: 0, padding: "22px 24px" }}>
           <div className="eyebrow">Active Staff</div>
-          <div className="big en">
+          <div className="big en" style={{ fontSize: 40, margin: "14px 0 0" }}>
             {staffCount ?? 0}
             <small>名</small>
           </div>
-          <div className="act">
+          <div className="act" style={{ marginTop: 14 }}>
             <Link href="/admin/staff" className="btn-link">
               スタッフ管理 <span className="arrow">→</span>
             </Link>
           </div>
         </div>
 
-        <div className="stat">
+        <div className="stat" style={{ minHeight: 0, padding: "22px 24px" }}>
           <div className="eyebrow">Pending Time-off</div>
-          <div className="big en">
+          <div className="big en" style={{ fontSize: 40, margin: "14px 0 0" }}>
             {pendingCount ?? 0}
             <small>件</small>
           </div>
-          <div className="act">
+          <div className="act" style={{ marginTop: 14 }}>
             <Link href="/admin/requests" className="btn-link">
               休み希望を確認 <span className="arrow">→</span>
             </Link>
           </div>
         </div>
-
-        <div className="stat">
-          <div className="eyebrow">Schedule</div>
-          <div className="lede">
-            AIで月次シフトを
-            <br />
-            自動生成します。
-          </div>
-          <div className="act">
-            <Link href="/admin/shifts" className="btn-link">
-              シフト作成へ <span className="arrow">→</span>
-            </Link>
-          </div>
-        </div>
       </div>
+
+      {/* insights: 今日明日の出勤者 / 人手不足 / 勤務状況 / 集計 */}
+      {latest && (
+        <DashboardInsights
+          periodId={latest.id}
+          shifts={latestShifts}
+          staff={staffList}
+          requirements={requirements}
+        />
+      )}
 
       {/* calendar */}
       {latest && (
