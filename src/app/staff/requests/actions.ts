@@ -7,6 +7,7 @@ import { createClient } from "@/lib/supabase/server";
 
 const schema = z.object({
   off_dates: z.string().min(1, "日付を選択してください"), // カンマ区切りの複数日
+  request_type: z.enum(["off", "time_change"]).default("off"),
   all_day: z.string().optional(),
   start_time: z.string().optional(),
   end_time: z.string().optional(),
@@ -19,7 +20,7 @@ export async function submitTimeOff(_prev: unknown, formData: FormData) {
   if (!parsed.success) {
     return { ok: false, message: parsed.error.issues[0].message };
   }
-  const { off_dates, all_day, start_time, end_time, reason } = parsed.data;
+  const { off_dates, request_type, all_day, start_time, end_time, reason } = parsed.data;
 
   const dates = Array.from(
     new Set(off_dates.split(",").map((d) => d.trim()).filter((d) => /^\d{4}-\d{2}-\d{2}$/.test(d)))
@@ -28,9 +29,20 @@ export async function submitTimeOff(_prev: unknown, formData: FormData) {
     return { ok: false, message: "日付を選択してください。" };
   }
 
-  const isAllDay = all_day === "on";
-  if (!isAllDay && (!start_time || !end_time)) {
-    return { ok: false, message: "時間帯休みの場合は開始・終了時刻を入力してください。" };
+  const isTimeChange = request_type === "time_change";
+  const isAllDay = !isTimeChange && all_day === "on";
+
+  // 時間変更は「希望する新しい勤務時間」、時間帯休みは「休む時間帯」が必須
+  if ((isTimeChange || !isAllDay) && (!start_time || !end_time)) {
+    return {
+      ok: false,
+      message: isTimeChange
+        ? "希望する勤務時間（開始・終了）を入力してください。"
+        : "時間帯休みの場合は開始・終了時刻を入力してください。",
+    };
+  }
+  if (start_time && end_time && start_time >= end_time) {
+    return { ok: false, message: "終了時刻は開始時刻より後にしてください。" };
   }
 
   const supabase = await createClient();
@@ -57,6 +69,7 @@ export async function submitTimeOff(_prev: unknown, formData: FormData) {
       staff_id: me.id,
       period_id: periodByMonth.get(`${y}-${m}`) ?? null,
       off_date,
+      request_type,
       start_time: isAllDay ? null : start_time,
       end_time: isAllDay ? null : end_time,
       reason: reason || null,
@@ -69,7 +82,7 @@ export async function submitTimeOff(_prev: unknown, formData: FormData) {
   revalidatePath("/staff/requests");
   return {
     ok: true,
-    message: `お休み希望を${rows.length}件申請しました。`,
+    message: `${isTimeChange ? "時間変更希望" : "お休み希望"}を${rows.length}件申請しました。`,
   };
 }
 

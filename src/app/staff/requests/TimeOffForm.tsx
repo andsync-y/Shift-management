@@ -5,9 +5,13 @@ import { submitTimeOff } from "./actions";
 
 export default function TimeOffForm() {
   const [state, formAction, pending] = useActionState(submitTimeOff, null);
+  const [reqType, setReqType] = useState<"off" | "time_change">("off");
   const [allDay, setAllDay] = useState(true);
   const [dates, setDates] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+
+  const isTimeChange = reqType === "time_change";
+  const showTimes = isTimeChange || !allDay;
 
   function addDate() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft)) return;
@@ -23,10 +27,30 @@ export default function TimeOffForm() {
   return (
     <form action={formAction} className="space-y-4">
       <input type="hidden" name="off_dates" value={dates.join(",")} />
+      <input type="hidden" name="request_type" value={reqType} />
+
+      <div className="seg" role="tablist" style={{ display: "inline-flex" }}>
+        <button
+          type="button"
+          className={reqType === "off" ? "on" : ""}
+          onClick={() => setReqType("off")}
+        >
+          欠勤（休み）
+        </button>
+        <button
+          type="button"
+          className={reqType === "time_change" ? "on" : ""}
+          onClick={() => setReqType("time_change")}
+        >
+          時間変更
+        </button>
+      </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <div>
-          <label className="label">休み希望日 *（複数追加できます）</label>
+          <label className="label">
+            {isTimeChange ? "対象日 *（複数追加できます）" : "休み希望日 *（複数追加できます）"}
+          </label>
           <div style={{ display: "flex", gap: 8 }}>
             <input
               type="date"
@@ -44,36 +68,49 @@ export default function TimeOffForm() {
             </button>
           </div>
         </div>
-        <div className="flex items-end">
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              name="all_day"
-              checked={allDay}
-              onChange={(e) => setAllDay(e.target.checked)}
-            />
-            終日休み
-          </label>
-        </div>
 
-        {!allDay && (
+        {!isTimeChange && (
+          <div className="flex items-end">
+            <label className="flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                name="all_day"
+                checked={allDay}
+                onChange={(e) => setAllDay(e.target.checked)}
+              />
+              終日休み
+            </label>
+          </div>
+        )}
+
+        {showTimes && (
           <>
             <div>
-              <label className="label">開始時刻</label>
-              <input name="start_time" type="time" className="input" />
+              <label className="label">{isTimeChange ? "希望開始時刻 *" : "開始時刻"}</label>
+              <input name="start_time" type="time" className="input" defaultValue="10:00" />
             </div>
             <div>
-              <label className="label">終了時刻</label>
-              <input name="end_time" type="time" className="input" />
+              <label className="label">{isTimeChange ? "希望終了時刻 *" : "終了時刻"}</label>
+              <input name="end_time" type="time" className="input" defaultValue="19:00" />
             </div>
           </>
         )}
 
         <div className="sm:col-span-2">
           <label className="label">理由（任意）</label>
-          <input name="reason" className="input" placeholder="私用 など" />
+          <input
+            name="reason"
+            className="input"
+            placeholder={isTimeChange ? "通院のため など" : "私用 など"}
+          />
         </div>
       </div>
+
+      {isTimeChange && (
+        <p className="help" style={{ marginTop: 0 }}>
+          ※ 時間変更は「希望する新しい勤務時間」を入力してください。承認されるとカレンダーに変更希望として表示されます。
+        </p>
+      )}
 
       {/* 選択済みの日付チップ */}
       {dates.length > 0 && (
@@ -114,7 +151,11 @@ export default function TimeOffForm() {
       )}
 
       <button type="submit" className="btn-primary" disabled={pending || dates.length === 0}>
-        {pending ? "申請中..." : `お休みを申請${dates.length > 0 ? `（${dates.length}日）` : ""}`}
+        {pending
+          ? "申請中..."
+          : `${isTimeChange ? "時間変更を申請" : "お休みを申請"}${
+              dates.length > 0 ? `（${dates.length}日）` : ""
+            }`}
       </button>
     </form>
   );
