@@ -38,5 +38,9 @@ export async function reviewRequest(
     );
   }
 
+  // 承認/却下はカレンダー各所の表示にも影響するので、関連ページもまとめて再検証する
   revalidatePath("/admin/requests");
+  revalidatePath("/admin");
+  revalidatePath("/admin/shifts", "layout");
+  revalidatePath("/staff");
 }

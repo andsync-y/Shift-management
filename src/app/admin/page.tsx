@@ -135,14 +135,21 @@ export default async function AdminDashboard() {
             </Link>
           </div>
           <div className="section-body">
-            {latestShifts.length > 0 ? (
-              <ShiftCalendarView
-                year={latest.year}
-                month={latest.month}
-                shifts={latestShifts}
-                staff={staffList}
-                timeOff={timeOff}
-              />
+            {latestShifts.length > 0 || timeOff.length > 0 ? (
+              <>
+                {latestShifts.length === 0 && (
+                  <p className="help" style={{ marginTop: 0, marginBottom: 16 }}>
+                    まだシフトはありません（承認済みのお休みのみ表示中）。シフト作成画面で生成してください。
+                  </p>
+                )}
+                <ShiftCalendarView
+                  year={latest.year}
+                  month={latest.month}
+                  shifts={latestShifts}
+                  staff={staffList}
+                  timeOff={timeOff}
+                />
+              </>
             ) : (
               <p className="help" style={{ marginTop: 0 }}>
                 このシフト期間にはまだシフトがありません。シフト作成画面で生成してください。

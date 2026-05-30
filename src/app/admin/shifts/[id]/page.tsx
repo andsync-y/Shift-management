@@ -134,14 +134,21 @@ export default async function PeriodDetailPage({
           <span className="eyebrow">Calendar</span>
         </div>
         <div className="section-body">
-          {shiftList.length > 0 ? (
-            <ShiftCalendarView
-              year={p.year}
-              month={p.month}
-              shifts={shiftList}
-              staff={staffList}
-              timeOff={timeOffList}
-            />
+          {shiftList.length > 0 || timeOffList.length > 0 ? (
+            <>
+              {shiftList.length === 0 && (
+                <p className="help" style={{ marginTop: 0, marginBottom: 16 }}>
+                  まだシフトはありません（承認済みのお休みのみ表示中）。上の「AIシフト生成」を実行してください。
+                </p>
+              )}
+              <ShiftCalendarView
+                year={p.year}
+                month={p.month}
+                shifts={shiftList}
+                staff={staffList}
+                timeOff={timeOffList}
+              />
+            </>
           ) : (
             <p className="help" style={{ margin: 0 }}>
               まだシフトがありません。上の「AIでシフトを自動生成」を実行してください。
