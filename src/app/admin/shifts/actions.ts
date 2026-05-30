@@ -6,6 +6,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { generateShifts } from "@/lib/shift-generator/solver";
 import { reviewShiftPlan } from "@/lib/shift-generator/llm";
+import { generateShiftsWithClaude } from "@/lib/shift-generator/claude-generator";
 import type {
   AvailabilityPreference,
   Profile,
@@ -14,6 +15,7 @@ import type {
 } from "@/lib/types";
 import type { LlmReview } from "@/lib/shift-generator/llm";
 import type { GenerateResult } from "@/lib/shift-generator/types";
+import type { ClaudeGenerateResult } from "@/lib/shift-generator/claude-generator";
 
 // --- シフト期間の作成 -------------------------------------------------
 export async function createPeriod(_prev: unknown, formData: FormData) {
@@ -140,6 +142,70 @@ export async function generatePeriodShifts(
     message: `${result.assignments.length} 件のシフトを生成しました。`,
     result,
     review,
+  };
+}
+
+// --- Claude API による店舗ルール参照シフト生成 -----------------------
+export interface ClaudeGenerateActionResult {
+  ok: boolean;
+  message: string;
+  result?: ClaudeGenerateResult;
+}
+
+export async function generatePeriodShiftsWithClaude(
+  periodId: string
+): Promise<ClaudeGenerateActionResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: period } = await supabase
+    .from("shift_periods")
+    .select("*")
+    .eq("id", periodId)
+    .single();
+  if (!period) return { ok: false, message: "期間が見つかりません。" };
+
+  const [{ data: staff }, { data: availability }, { data: timeOff }] = await Promise.all([
+    supabase.from("profiles").select("*").eq("is_active", true),
+    supabase.from("availability_preferences").select("*"),
+    supabase
+      .from("time_off_requests")
+      .select("*")
+      .eq("status", "approved")
+      .eq("period_id", periodId),
+  ]);
+
+  const result = await generateShiftsWithClaude({
+    year: period.year,
+    month: period.month,
+    staff: (staff ?? []) as Profile[],
+    availability: (availability ?? []) as AvailabilityPreference[],
+    timeOff: (timeOff ?? []) as TimeOffRequest[],
+  });
+
+  if (!result.ok) {
+    return { ok: false, message: result.summary || "生成に失敗しました。", result };
+  }
+
+  // 既存シフトを置き換えて保存
+  await supabase.from("shifts").delete().eq("period_id", periodId);
+  const rows = result.assignments.map((a) => ({
+    period_id: periodId,
+    staff_id: a.staff_id,
+    work_date: a.work_date,
+    start_time: a.start_time,
+    end_time: a.end_time,
+    note: a.note,
+    ai_generated: true,
+  }));
+  const { error } = await supabase.from("shifts").insert(rows);
+  if (error) return { ok: false, message: `保存に失敗: ${error.message}`, result };
+
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return {
+    ok: true,
+    message: `Claude(${result.model})が ${result.assignments.length} 件のシフトを生成しました。`,
+    result,
   };
 }
 

@@ -4,8 +4,10 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import {
   generatePeriodShifts,
+  generatePeriodShiftsWithClaude,
   setPeriodStatus,
   type GenerateActionResult,
+  type ClaudeGenerateActionResult,
 } from "../actions";
 import type { PeriodStatus } from "@/lib/types";
 
@@ -19,11 +21,22 @@ export default function GeneratePanel({
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [res, setRes] = useState<GenerateActionResult | null>(null);
+  const [claudeRes, setClaudeRes] = useState<ClaudeGenerateActionResult | null>(null);
 
   function handleGenerate() {
     startTransition(async () => {
       const r = await generatePeriodShifts(periodId);
       setRes(r);
+      setClaudeRes(null);
+      router.refresh();
+    });
+  }
+
+  function handleGenerateWithClaude() {
+    startTransition(async () => {
+      const r = await generatePeriodShiftsWithClaude(periodId);
+      setClaudeRes(r);
+      setRes(null);
       router.refresh();
     });
   }
@@ -39,7 +52,11 @@ export default function GeneratePanel({
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3">
         <button onClick={handleGenerate} className="btn-primary" disabled={pending}>
-          {pending ? "生成中..." : "🤖 AIでシフトを自動生成"}
+          {pending ? "生成中..." : "🤖 ソルバーで自動生成"}
+        </button>
+
+        <button onClick={handleGenerateWithClaude} className="btn-primary" disabled={pending}>
+          {pending ? "生成中..." : "🧠 Claudeで生成（店舗ルール参照）"}
         </button>
 
         {status === "draft" && (
@@ -123,6 +140,26 @@ export default function GeneratePanel({
                 </ul>
               )}
             </div>
+          )}
+        </div>
+      )}
+
+      {claudeRes && (
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm">
+          <p className={claudeRes.ok ? "text-green-700" : "text-red-600"}>
+            🧠 {claudeRes.message}
+          </p>
+
+          {claudeRes.result?.summary && (
+            <p className="mt-2 text-gray-700">{claudeRes.result.summary}</p>
+          )}
+
+          {claudeRes.result && claudeRes.result.warnings.length > 0 && (
+            <ul className="mt-2 list-disc pl-5 text-amber-700">
+              {claudeRes.result.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
+            </ul>
           )}
         </div>
       )}
