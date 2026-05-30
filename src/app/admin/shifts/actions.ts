@@ -209,6 +209,125 @@ export async function generatePeriodShiftsWithClaude(
   };
 }
 
+// --- 固定シフトの月次一括展開 ---------------------------------------
+export interface ExpandFixedActionResult {
+  ok: boolean;
+  message: string;
+  created?: number;
+  skippedOff?: number;
+}
+
+export async function expandFixedShifts(
+  periodId: string
+): Promise<ExpandFixedActionResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: period } = await supabase
+    .from("shift_periods")
+    .select("*")
+    .eq("id", periodId)
+    .single();
+  if (!period) return { ok: false, message: "期間が見つかりません。" };
+
+  const pad = (n: number) => String(n).padStart(2, "0");
+  const lastDay = new Date(period.year, period.month, 0).getDate();
+  const monthStart = `${period.year}-${pad(period.month)}-01`;
+  const monthEnd = `${period.year}-${pad(period.month)}-${pad(lastDay)}`;
+
+  const [{ data: staff }, { data: fixed }, { data: timeOff }] = await Promise.all([
+    supabase.from("profiles").select("id,is_active").eq("is_active", true),
+    supabase.from("fixed_shifts").select("*"),
+    supabase
+      .from("time_off_requests")
+      .select("*")
+      .eq("status", "approved")
+      .gte("off_date", monthStart)
+      .lte("off_date", monthEnd),
+  ]);
+
+  const activeIds = new Set((staff ?? []).map((s) => s.id));
+  const fixedList = (fixed ?? []).filter((f) => activeIds.has(f.staff_id));
+  if (fixedList.length === 0) {
+    return { ok: false, message: "固定シフトが未登録です。スタッフ詳細で登録してください。" };
+  }
+
+  // 承認済みお休みを (staff_id, date) で索引化
+  const offIndex = new Map<string, { start: string | null; end: string | null }[]>();
+  for (const o of timeOff ?? []) {
+    const key = `${o.staff_id}|${o.off_date}`;
+    if (!offIndex.has(key)) offIndex.set(key, []);
+    offIndex.get(key)!.push({ start: o.start_time, end: o.end_time });
+  }
+  const toMin = (t: string) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const overlaps = (s1: string, e1: string, s2: string, e2: string) =>
+    toMin(s1) < toMin(e2) && toMin(s2) < toMin(e1);
+
+  const rows: {
+    period_id: string;
+    staff_id: string;
+    work_date: string;
+    start_time: string;
+    end_time: string;
+    note: string | null;
+    ai_generated: boolean;
+  }[] = [];
+  let skippedOff = 0;
+
+  for (let d = 1; d <= lastDay; d++) {
+    const date = `${period.year}-${pad(period.month)}-${pad(d)}`;
+    const dow = new Date(period.year, period.month - 1, d).getDay();
+    for (const f of fixedList) {
+      if (f.day_of_week !== dow) continue;
+
+      // 希望休チェック（終日 or 時間帯重複）
+      const offs = offIndex.get(`${f.staff_id}|${date}`);
+      let isOff = false;
+      if (offs) {
+        for (const o of offs) {
+          if (o.start === null || o.end === null) {
+            isOff = true;
+            break;
+          }
+          if (overlaps(o.start, o.end, f.start_time, f.end_time)) {
+            isOff = true;
+            break;
+          }
+        }
+      }
+      if (isOff) {
+        skippedOff++;
+        continue;
+      }
+
+      rows.push({
+        period_id: periodId,
+        staff_id: f.staff_id,
+        work_date: date,
+        start_time: f.start_time,
+        end_time: f.end_time,
+        note: f.shift_type ? `固定(${f.shift_type})` : "固定シフト",
+        ai_generated: false,
+      });
+    }
+  }
+
+  // 既存シフトを置き換え
+  await supabase.from("shifts").delete().eq("period_id", periodId);
+  if (rows.length > 0) {
+    const { error } = await supabase.from("shifts").insert(rows);
+    if (error) return { ok: false, message: `保存に失敗: ${error.message}` };
+  }
+
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return {
+    ok: true,
+    message: `固定シフトを展開しました（${rows.length}件作成 / 希望休で${skippedOff}件除外）。`,
+    created: rows.length,
+    skippedOff,
+  };
+}
+
 // --- 公開 / 確定 ------------------------------------------------------
 export async function setPeriodStatus(
   periodId: string,

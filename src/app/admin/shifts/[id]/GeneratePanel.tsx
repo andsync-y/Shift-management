@@ -5,9 +5,11 @@ import { useRouter } from "next/navigation";
 import {
   generatePeriodShifts,
   generatePeriodShiftsWithClaude,
+  expandFixedShifts,
   setPeriodStatus,
   type GenerateActionResult,
   type ClaudeGenerateActionResult,
+  type ExpandFixedActionResult,
 } from "../actions";
 import type { PeriodStatus } from "@/lib/types";
 
@@ -22,12 +24,14 @@ export default function GeneratePanel({
   const [pending, startTransition] = useTransition();
   const [res, setRes] = useState<GenerateActionResult | null>(null);
   const [claudeRes, setClaudeRes] = useState<ClaudeGenerateActionResult | null>(null);
+  const [fixedRes, setFixedRes] = useState<ExpandFixedActionResult | null>(null);
 
   function handleGenerate() {
     startTransition(async () => {
       const r = await generatePeriodShifts(periodId);
       setRes(r);
       setClaudeRes(null);
+      setFixedRes(null);
       router.refresh();
     });
   }
@@ -37,6 +41,17 @@ export default function GeneratePanel({
       const r = await generatePeriodShiftsWithClaude(periodId);
       setClaudeRes(r);
       setRes(null);
+      setFixedRes(null);
+      router.refresh();
+    });
+  }
+
+  function handleExpandFixed() {
+    startTransition(async () => {
+      const r = await expandFixedShifts(periodId);
+      setFixedRes(r);
+      setRes(null);
+      setClaudeRes(null);
       router.refresh();
     });
   }
@@ -51,11 +66,15 @@ export default function GeneratePanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-3">
-        <button onClick={handleGenerate} className="btn-primary" disabled={pending}>
+        <button onClick={handleExpandFixed} className="btn-primary" disabled={pending}>
+          {pending ? "処理中..." : "📌 固定シフトを展開"}
+        </button>
+
+        <button onClick={handleGenerate} className="btn-secondary" disabled={pending}>
           {pending ? "生成中..." : "🤖 ソルバーで自動生成"}
         </button>
 
-        <button onClick={handleGenerateWithClaude} className="btn-primary" disabled={pending}>
+        <button onClick={handleGenerateWithClaude} className="btn-secondary" disabled={pending}>
           {pending ? "生成中..." : "🧠 Claudeで生成（店舗ルール参照）"}
         </button>
 
@@ -141,6 +160,14 @@ export default function GeneratePanel({
               )}
             </div>
           )}
+        </div>
+      )}
+
+      {fixedRes && (
+        <div className="rounded-md border border-gray-200 bg-gray-50 p-4 text-sm">
+          <p className={fixedRes.ok ? "text-green-700" : "text-red-600"}>
+            📌 {fixedRes.message}
+          </p>
         </div>
       )}
 

@@ -32,6 +32,16 @@ export interface AvailabilityPreference {
   created_at: string;
 }
 
+export interface FixedShift {
+  id: string;
+  staff_id: string;
+  day_of_week: number; // 0=日 .. 6=土
+  start_time: string; // "HH:MM"
+  end_time: string;
+  shift_type: string | null;
+  created_at: string;
+}
+
 export interface ShiftPeriod {
   id: string;
   year: number;
