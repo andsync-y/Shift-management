@@ -3,10 +3,11 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { loginIdToEmail } from "@/lib/login-id";
 
 export default function LoginPage() {
   const router = useRouter();
-  const [email, setEmail] = useState("");
+  const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -17,10 +18,13 @@ export default function LoginPage() {
     setError(null);
 
     const supabase = createClient();
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    const { error } = await supabase.auth.signInWithPassword({
+      email: loginIdToEmail(loginId),
+      password,
+    });
 
     if (error) {
-      setError("メールアドレスまたはパスワードが正しくありません。");
+      setError("ログインIDまたはパスワードが正しくありません。");
       setLoading(false);
       return;
     }
@@ -39,18 +43,20 @@ export default function LoginPage() {
         <p className="login-sub">シフト管理システム</p>
 
         <div className="field" style={{ marginBottom: 22 }}>
-          <label htmlFor="email">
-            Email <span className="jp-label">／ メールアドレス</span>
+          <label htmlFor="loginId">
+            Login ID <span className="jp-label">／ ログインID</span>
           </label>
           <input
-            id="email"
-            type="email"
+            id="loginId"
+            type="text"
             className="input"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            value={loginId}
+            onChange={(e) => setLoginId(e.target.value)}
             required
             autoComplete="username"
-            placeholder="you@example.com"
+            autoCapitalize="none"
+            spellCheck={false}
+            placeholder="例: fukuda"
           />
         </div>
 

@@ -44,3 +44,16 @@ export async function reviewRequest(
   revalidatePath("/admin/shifts", "layout");
   revalidatePath("/staff");
 }
+
+// 申請そのものを削除（オーナー用）。テストや誤申請を一覧・カレンダーから完全に消す。
+export async function deleteRequest(requestId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("time_off_requests").delete().eq("id", requestId);
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/admin/requests");
+  revalidatePath("/admin");
+  revalidatePath("/admin/shifts", "layout");
+  revalidatePath("/staff");
+}

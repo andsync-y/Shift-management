@@ -11,6 +11,7 @@ import {
 import AvailabilityEditor from "@/components/AvailabilityEditor";
 import FixedShiftEditor from "@/components/FixedShiftEditor";
 import CredentialsEditor from "@/components/CredentialsEditor";
+import { emailToLoginId } from "@/lib/login-id";
 
 export default async function StaffDetailPage({
   params,
@@ -46,7 +47,7 @@ export default async function StaffDetailPage({
   try {
     const admin = createAdminClient();
     const { data: authUser } = await admin.auth.admin.getUserById(id);
-    currentEmail = authUser?.user?.email ?? null;
+    currentEmail = emailToLoginId(authUser?.user?.email ?? null) || null;
   } catch {
     // service role 未設定などの場合は空表示で続行
   }

@@ -4,9 +4,13 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requireAdmin } from "@/lib/auth";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
+import { loginIdToEmail, isValidLoginId } from "@/lib/login-id";
 
 const createStaffSchema = z.object({
-  email: z.string().email("メールアドレスの形式が正しくありません"),
+  email: z
+    .string()
+    .trim()
+    .refine(isValidLoginId, "ログインIDは半角英数字（. _ -）またはメール形式で入力してください"),
   password: z.string().min(8, "パスワードは8文字以上にしてください"),
   full_name: z.string().min(1, "氏名を入力してください"),
   role: z.enum(["super_admin", "staff"]),
@@ -36,7 +40,7 @@ export async function createStaff(
 
   // 1) auth ユーザー作成（メール確認はスキップして即利用可に）
   const { data: created, error: authError } = await admin.auth.admin.createUser({
-    email: input.email,
+    email: loginIdToEmail(input.email),
     password: input.password,
     email_confirm: true,
     user_metadata: { full_name: input.full_name, role: input.role },
@@ -77,7 +81,12 @@ export async function toggleStaffActive(staffId: string, isActive: boolean) {
 
 const credentialsSchema = z
   .object({
-    email: z.string().email("メールアドレスの形式が正しくありません").optional().or(z.literal("")),
+    email: z
+      .string()
+      .trim()
+      .refine((v) => v === "" || isValidLoginId(v), "ログインIDの形式が正しくありません")
+      .optional()
+      .or(z.literal("")),
     password: z
       .string()
       .min(8, "パスワードは8文字以上にしてください")
@@ -109,7 +118,7 @@ export async function updateCredentials(
 
   // auth 側のメール/パスワードを更新
   const attrs: { email?: string; password?: string } = {};
-  if (email) attrs.email = email;
+  if (email) attrs.email = loginIdToEmail(email);
   if (password) attrs.password = password;
   const { error: authError } = await admin.auth.admin.updateUserById(staffId, attrs);
   if (authError) {

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { reviewRequest } from "./actions";
+import { reviewRequest, deleteRequest } from "./actions";
 import type { RequestStatus } from "@/lib/types";
 
 // 承認/却下/取消ボタン（テーブル行・モバイルカード共用）
@@ -16,11 +16,11 @@ export default function RequestActions({
   const router = useRouter();
   const [busy, setBusy] = useState(false);
 
-  async function act(next: "approved" | "rejected") {
+  async function run(fn: () => Promise<void>) {
     if (busy) return;
     setBusy(true);
     try {
-      await reviewRequest(id, next);
+      await fn();
       router.refresh();
     } catch {
       // サーバーアクションが失敗（古いタブのキャッシュ等）したら気づけるように
@@ -30,26 +30,38 @@ export default function RequestActions({
     }
   }
 
+  const del = () => {
+    if (confirm("この申請を削除します。よろしいですか？")) run(() => deleteRequest(id));
+  };
+
   if (status === "pending") {
     return (
       <span style={{ display: "inline-flex", gap: 16, alignItems: "center" }}>
-        <button className="btn-link" onClick={() => act("approved")} disabled={busy}>
+        <button className="btn-link" onClick={() => run(() => reviewRequest(id, "approved"))} disabled={busy}>
           {busy ? "処理中…" : "承認"}
         </button>
-        <button className="btn-link ink" onClick={() => act("rejected")} disabled={busy}>
+        <button className="btn-link ink" onClick={() => run(() => reviewRequest(id, "rejected"))} disabled={busy}>
           却下
+        </button>
+        <button className="btn-link ink" onClick={del} disabled={busy} title="申請を削除">
+          削除
         </button>
       </span>
     );
   }
-  // すでに承認/却下済み：反対の状態へ切り替えられる（誤承認の取り消し用）
+  // すでに承認/却下済み：反対状態への切替（誤承認の取消）＋ 完全削除
   return (
-    <button
-      className="btn-link ink"
-      onClick={() => act(status === "approved" ? "rejected" : "approved")}
-      disabled={busy}
-    >
-      {busy ? "処理中…" : status === "approved" ? "承認を取消" : "承認する"}
-    </button>
+    <span style={{ display: "inline-flex", gap: 16, alignItems: "center" }}>
+      <button
+        className="btn-link ink"
+        onClick={() => run(() => reviewRequest(id, status === "approved" ? "rejected" : "approved"))}
+        disabled={busy}
+      >
+        {busy ? "処理中…" : status === "approved" ? "承認を取消" : "承認する"}
+      </button>
+      <button className="btn-link ink" onClick={del} disabled={busy} title="申請を削除">
+        削除
+      </button>
+    </span>
   );
 }
