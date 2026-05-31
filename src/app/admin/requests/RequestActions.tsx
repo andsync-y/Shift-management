@@ -1,11 +1,11 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { reviewRequest } from "./actions";
 import type { RequestStatus } from "@/lib/types";
 
-// 承認/却下/変更ボタン（テーブル行・モバイルカード共用）
+// 承認/却下/取消ボタン（テーブル行・モバイルカード共用）
 export default function RequestActions({
   id,
   status,
@@ -14,22 +14,29 @@ export default function RequestActions({
   status: RequestStatus;
 }) {
   const router = useRouter();
-  const [pending, startTransition] = useTransition();
+  const [busy, setBusy] = useState(false);
 
-  function act(next: "approved" | "rejected") {
-    startTransition(async () => {
+  async function act(next: "approved" | "rejected") {
+    if (busy) return;
+    setBusy(true);
+    try {
       await reviewRequest(id, next);
       router.refresh();
-    });
+    } catch {
+      // サーバーアクションが失敗（古いタブのキャッシュ等）したら気づけるように
+      alert("更新に失敗しました。ページを再読み込み（更新）してから、もう一度お試しください。");
+    } finally {
+      setBusy(false);
+    }
   }
 
   if (status === "pending") {
     return (
       <span style={{ display: "inline-flex", gap: 16, alignItems: "center" }}>
-        <button className="btn-link" onClick={() => act("approved")} disabled={pending}>
-          承認
+        <button className="btn-link" onClick={() => act("approved")} disabled={busy}>
+          {busy ? "処理中…" : "承認"}
         </button>
-        <button className="btn-link ink" onClick={() => act("rejected")} disabled={pending}>
+        <button className="btn-link ink" onClick={() => act("rejected")} disabled={busy}>
           却下
         </button>
       </span>
@@ -40,9 +47,9 @@ export default function RequestActions({
     <button
       className="btn-link ink"
       onClick={() => act(status === "approved" ? "rejected" : "approved")}
-      disabled={pending}
+      disabled={busy}
     >
-      {status === "approved" ? "承認を取消" : "承認する"}
+      {busy ? "処理中…" : status === "approved" ? "承認を取消" : "承認する"}
     </button>
   );
 }
