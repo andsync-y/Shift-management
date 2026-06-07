@@ -34,7 +34,7 @@ export default async function TimeCardsPage({
       .gte("work_date", start)
       .lte("work_date", end)
       .order("clock_in", { ascending: false }),
-    supabase.from("profiles").select("*").eq("role", "staff").order("full_name"),
+    supabase.from("profiles").select("*").order("full_name"),
   ]);
 
   const staff = (staffRaw as Profile[] | null) ?? [];
