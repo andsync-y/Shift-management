@@ -2,6 +2,8 @@ import { type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyLineSignature, replyLineMessage, locationQuickReply } from "@/lib/line";
 import { distanceMeters, storeGeofence, locationRequired } from "@/lib/geo";
+import { emailToLoginId } from "@/lib/login-id";
+import { appUrl } from "@/lib/app-url";
 import type { TimeRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -106,7 +108,7 @@ export async function POST(req: NextRequest) {
     // LINEユーザー → スタッフ照合
     const { data: staff } = await admin
       .from("profiles")
-      .select("id, full_name")
+      .select("id, full_name, initial_password")
       .eq("line_user_id", lineUserId)
       .maybeSingle();
 
@@ -142,16 +144,36 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    // テキストメッセージ → キーワードで打刻
+    // テキストメッセージ → キーワードで打刻 / ログイン情報照会
     if (msg.type === "text" && msg.text) {
       const t = msg.text;
+      const lc = t.toLowerCase();
+
+      // ログイン情報の問い合わせ（本人にのみ自分のID/PWを返す）
+      const wantsCred =
+        ["パスワード", "ぱすわーど", "ログイン", "ろぐいん", "アカウント", "あかうんと"].some((w) =>
+          t.includes(w)
+        ) ||
+        lc.includes("id") ||
+        lc.includes("pw");
+      if (wantsCred) {
+        const { data: authUser } = await admin.auth.admin.getUserById(staff.id);
+        const loginId = emailToLoginId(authUser.user?.email ?? "");
+        const pw = staff.initial_password;
+        const reply = pw
+          ? `${staff.full_name}さんのログイン情報です。\nID：${loginId}\nパスワード：${pw}\n${appUrl("/login")}\n※他の人に教えないでください。`
+          : `ID：${loginId}\nパスワードは管理者にお問い合わせください。\n${appUrl("/login")}`;
+        await replyLineMessage(ev.replyToken, reply);
+        continue;
+      }
+
       const isIn = IN_WORDS.some((w) => t.includes(w));
       const isOut = OUT_WORDS.some((w) => t.includes(w));
 
       if (!isIn && !isOut) {
         await replyLineMessage(
           ev.replyToken,
-          "「おはようございます」で出勤、「お疲れ様です」で退勤を記録します。"
+          "「おはようございます」で出勤、「お疲れ様です」で退勤を記録します。ログイン情報は「ID」または「パスワード」と送ってください。"
         );
         continue;
       }
