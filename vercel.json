@@ -1,5 +1,5 @@
 {
-  "regions": ["icn1"],
+  "regions": ["hnd1"],
   "crons": [
     {
       "path": "/api/cron/shift-reminder",
