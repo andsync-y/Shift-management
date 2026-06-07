@@ -94,6 +94,20 @@ export interface TimeOffRequest {
   created_at: string;
 }
 
+export interface TimeRecord {
+  id: string;
+  staff_id: string;
+  work_date: string; // "YYYY-MM-DD"（JST出勤日）
+  clock_in: string | null; // ISO timestamptz
+  clock_out: string | null;
+  source: string; // "line" | "manual"
+  in_lat: number | null;
+  in_lng: number | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export const ROLE_LABELS_JA: Record<UserRole, string> = {

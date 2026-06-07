@@ -1769,3 +1769,14 @@ body {
   box-shadow: 0 0 8px var(--accent);
   transition: width 0.2s ease;
 }
+
+/* 勤怠（タイムカード）の編集行 */
+.tc-row {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
+  padding: 12px 2px; border-bottom: 1px solid var(--line);
+}
+.tc-row:last-child { border-bottom: 0; }
+.tc-name { min-width: 110px; font-size: 14px; }
+.tc-input { width: 200px; max-width: 46vw; }
+.tc-sep { color: var(--ink-3); }
+.tc-actions { margin-left: auto; display: inline-flex; gap: 14px; }

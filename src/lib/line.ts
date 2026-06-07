@@ -16,6 +16,7 @@ const LOGIN_AUTH_URL = "https://access.line.me/oauth2/v2.1/authorize";
 const LOGIN_TOKEN_URL = "https://api.line.me/oauth2/v2.1/token";
 const LOGIN_VERIFY_URL = "https://api.line.me/oauth2/v2.1/verify";
 const PUSH_URL = "https://api.line.me/v2/bot/message/push";
+const REPLY_URL = "https://api.line.me/v2/bot/message/reply";
 
 export function isLineLoginEnabled(): boolean {
   return Boolean(
@@ -152,3 +153,56 @@ export async function pushLineToMany(
   const results = await Promise.all(lineUserIds.map((id) => pushLineMessage(id, text)));
   return results.filter(Boolean).length;
 }
+
+// ---------------------------------------------------------------------
+// LINE Webhook（受信）: 署名検証 + 返信
+// ---------------------------------------------------------------------
+
+// Webhook の署名検証。X-Line-Signature = base64(HMAC-SHA256(channelSecret, rawBody))。
+export async function verifyLineSignature(rawBody: string, signature: string | null): Promise<boolean> {
+  const secret = process.env.LINE_MESSAGING_CHANNEL_SECRET;
+  if (!secret || !signature) return false;
+  const { createHmac, timingSafeEqual } = await import("crypto");
+  const expected = createHmac("sha256", secret).update(rawBody).digest("base64");
+  try {
+    const a = Buffer.from(expected);
+    const b = Buffer.from(signature);
+    return a.length === b.length && timingSafeEqual(a, b);
+  } catch {
+    return false;
+  }
+}
+
+// replyToken を使って返信する。quickReply に位置情報ボタン等を付けられる。
+export async function replyLineMessage(
+  replyToken: string,
+  text: string,
+  quickReply?: unknown
+): Promise<boolean> {
+  if (!isLineNotifyEnabled()) return false;
+  try {
+    const message: Record<string, unknown> = { type: "text", text };
+    if (quickReply) message.quickReply = quickReply;
+    const res = await fetch(REPLY_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({ replyToken, messages: [message] }),
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+// 位置情報を求めるクイックリプライ（LINEの「位置情報を送る」ボタン）。
+export const locationQuickReply = {
+  items: [
+    {
+      type: "action",
+      action: { type: "location", label: "現在地を送る" },
+    },
+  ],
+};

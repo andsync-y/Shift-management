@@ -6,6 +6,7 @@ const NAV = [
   { href: "/admin/staff", label: "スタッフ管理" },
   { href: "/admin/shifts", label: "シフト作成" },
   { href: "/admin/requests", label: "休み希望" },
+  { href: "/admin/timecards", label: "勤怠・給与" },
 ];
 
 export default async function AdminLayout({
