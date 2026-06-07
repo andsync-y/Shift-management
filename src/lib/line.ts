@@ -116,6 +116,26 @@ export async function exchangeLineCode(
   };
 }
 
+// LIFF から受け取った id_token を検証し、LINEユーザーID(sub)を返す。
+// LIFFは LINEログインチャネル配下なので aud は LINE_LOGIN_CHANNEL_ID。
+export async function verifyLineIdToken(idToken: string): Promise<string | null> {
+  const clientId = process.env.LINE_LOGIN_CHANNEL_ID;
+  if (!clientId || !idToken) return null;
+  try {
+    const res = await fetch(LOGIN_VERIFY_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({ id_token: idToken, client_id: clientId }),
+    });
+    if (!res.ok) return null;
+    const claims = (await res.json()) as { sub?: string; aud?: string };
+    if (claims.aud !== clientId || !claims.sub) return null;
+    return claims.sub;
+  } catch {
+    return null;
+  }
+}
+
 // ---------------------------------------------------------------------
 // LINE 通知（Messaging API push）
 // ---------------------------------------------------------------------
