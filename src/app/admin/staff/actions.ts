@@ -79,6 +79,48 @@ export async function toggleStaffActive(staffId: string, isActive: boolean) {
   revalidatePath("/admin/staff");
 }
 
+// 雇用形態・電話・時給・週時間の更新（オーナー専用）
+const profileSchema = z.object({
+  employment_type: z.enum(["full_time", "part_time"]),
+  phone: z.string().trim().optional().or(z.literal("")),
+  hourly_wage: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
+  min_hours_per_week: z.coerce.number().int().nonnegative(),
+  max_hours_per_week: z.coerce.number().int().positive(),
+});
+
+export async function updateStaffProfile(
+  staffId: string,
+  _prev: ActionResult | null,
+  formData: FormData
+): Promise<ActionResult> {
+  await requireAdmin();
+  const parsed = profileSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) {
+    return { ok: false, message: parsed.error.issues[0].message };
+  }
+  const d = parsed.data;
+  if (d.max_hours_per_week < d.min_hours_per_week) {
+    return { ok: false, message: "最大時間は最低時間以上にしてください。" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("profiles")
+    .update({
+      employment_type: d.employment_type,
+      phone: d.phone ? d.phone : null,
+      hourly_wage: d.hourly_wage === "" || d.hourly_wage === undefined ? null : d.hourly_wage,
+      min_hours_per_week: d.min_hours_per_week,
+      max_hours_per_week: d.max_hours_per_week,
+    })
+    .eq("id", staffId);
+  if (error) return { ok: false, message: `更新に失敗: ${error.message}` };
+
+  revalidatePath(`/admin/staff/${staffId}`);
+  revalidatePath("/admin/staff");
+  return { ok: true, message: "プロフィールを更新しました。" };
+}
+
 const credentialsSchema = z
   .object({
     email: z

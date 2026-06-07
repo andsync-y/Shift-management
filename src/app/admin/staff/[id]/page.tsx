@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createAdminClient, createClient } from "@/lib/supabase/server";
 import {
-  EMPLOYMENT_LABELS_JA,
   ROLE_LABELS_JA,
   type AvailabilityPreference,
   type FixedShift,
@@ -11,6 +10,7 @@ import {
 import AvailabilityEditor from "@/components/AvailabilityEditor";
 import FixedShiftEditor from "@/components/FixedShiftEditor";
 import CredentialsEditor from "@/components/CredentialsEditor";
+import ProfileEditor from "./ProfileEditor";
 import { emailToLoginId } from "@/lib/login-id";
 
 export default async function StaffDetailPage({
@@ -79,41 +79,17 @@ export default async function StaffDetailPage({
         </Link>
       </div>
 
-      {/* profile */}
+      {/* profile（オーナーのみ編集可） */}
       <div className="section">
         <div className="section-head">
           <h2>プロフィール</h2>
           <span className="eyebrow">Profile</span>
         </div>
         <div className="section-body">
-          <div className="profile-grid">
-            <div className="profile-item">
-              <div className="k">権限</div>
-              <div className="v">{ROLE_LABELS_JA[p.role]}</div>
-            </div>
-            <div className="profile-item">
-              <div className="k">雇用形態</div>
-              <div className="v">{EMPLOYMENT_LABELS_JA[p.employment_type]}</div>
-            </div>
-            <div className="profile-item">
-              <div className="k">電話</div>
-              <div className="v mono">{p.phone ?? "—"}</div>
-            </div>
-            <div className="profile-item">
-              <div className="k">時給</div>
-              <div className="v mono">{p.hourly_wage ? `${p.hourly_wage}円` : "—"}</div>
-            </div>
-            <div className="profile-item">
-              <div className="k">週の最低 / 最大時間</div>
-              <div className="v mono">
-                {p.min_hours_per_week} / {p.max_hours_per_week}h
-              </div>
-            </div>
-            <div className="profile-item">
-              <div className="k">ログインID</div>
-              <div className="v mono">{currentEmail ?? "—"}</div>
-            </div>
-          </div>
+          <p className="help" style={{ marginTop: 0, marginBottom: 20 }}>
+            雇用形態・電話・時給・週の勤務時間はオーナーのみ変更できます。
+          </p>
+          <ProfileEditor profile={p} loginId={currentEmail} />
         </div>
       </div>
 
