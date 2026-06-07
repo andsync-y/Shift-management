@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // LINE内で開くワンタップ打刻ページ（LIFF）。
-// 出勤/退勤ボタンを押すと、自動でGPSを取得して打刻APIへ送る。
-// 必要な環境変数: NEXT_PUBLIC_LIFF_ID（LINEログインチャネルで発行したLIFF ID）
+// リッチメニューから ?action=in / ?action=out で開くと、その動作を自動実行する。
+// パラメータが無い場合は出勤/退勤ボタンを表示する。
+// 必要な環境変数: NEXT_PUBLIC_LIFF_ID
 
 declare global {
   interface Window {
@@ -24,8 +25,13 @@ export default function LiffPunchPage() {
   const [msg, setMsg] = useState<string>("");
   const [busy, setBusy] = useState(false);
   const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const autoDone = useRef(false);
 
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
+  const autoAction =
+    typeof window !== "undefined"
+      ? new URLSearchParams(window.location.search).get("action")
+      : null;
 
   useEffect(() => {
     if (!liffId) {
@@ -66,8 +72,7 @@ export default function LiffPunchPage() {
     });
   }
 
-  async function punch(action: "in" | "out") {
-    if (busy) return;
+  const punch = useCallback(async (action: "in" | "out") => {
     setBusy(true);
     setResult(null);
     try {
@@ -89,13 +94,23 @@ export default function LiffPunchPage() {
     } finally {
       setBusy(false);
     }
-  }
+  }, []);
+
+  // リッチメニューから ?action 付きで開かれたら自動で打刻
+  useEffect(() => {
+    if (status === "ready" && !autoDone.current && (autoAction === "in" || autoAction === "out")) {
+      autoDone.current = true;
+      punch(autoAction);
+    }
+  }, [status, autoAction, punch]);
+
+  const label = autoAction === "in" ? "出勤" : autoAction === "out" ? "退勤" : null;
 
   return (
     <div className="liff-wrap">
       <div className="liff-card">
         <div className="eyebrow accent" style={{ textAlign: "center" }}>TIME CARD</div>
-        <h1 className="liff-title">勤怠打刻</h1>
+        <h1 className="liff-title">{label ? `${label}打刻` : "勤怠打刻"}</h1>
 
         {status === "loading" && (
           <div className="route-loading" style={{ minHeight: 160 }}>
@@ -108,16 +123,33 @@ export default function LiffPunchPage() {
 
         {status === "ready" && (
           <>
-            <p className="liff-help">店舗で「出勤」「退勤」を押してください。位置情報の確認があります。</p>
-            <div className="liff-btns">
-              <button className="liff-btn in" onClick={() => punch("in")} disabled={busy}>
-                {busy ? "処理中…" : "出勤"}
-              </button>
-              <button className="liff-btn out" onClick={() => punch("out")} disabled={busy}>
-                {busy ? "処理中…" : "退勤"}
-              </button>
-            </div>
-            {result && <p className={"liff-msg " + (result.ok ? "ok" : "err")}>{result.text}</p>}
+            {busy && (
+              <div className="route-loading" style={{ minHeight: 120 }}>
+                <span className="spinner" />
+                <span className="route-loading-text">{label ?? ""}を記録中…</span>
+              </div>
+            )}
+
+            {!busy && result && (
+              <p className={"liff-msg " + (result.ok ? "ok" : "err")}>{result.text}</p>
+            )}
+
+            {/* action指定なし、または結果が出た後の再操作用ボタン */}
+            {!busy && (!autoAction || result) && (
+              <>
+                {!autoAction && !result && (
+                  <p className="liff-help">店舗で「出勤」「退勤」を押してください。位置情報の確認があります。</p>
+                )}
+                <div className="liff-btns" style={{ marginTop: result ? 22 : 0 }}>
+                  <button className="liff-btn in" onClick={() => punch("in")} disabled={busy}>
+                    出勤
+                  </button>
+                  <button className="liff-btn out" onClick={() => punch("out")} disabled={busy}>
+                    退勤
+                  </button>
+                </div>
+              </>
+            )}
           </>
         )}
       </div>
