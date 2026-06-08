@@ -1,16 +1,28 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loginIdToEmail } from "@/lib/login-id";
+
+const REMEMBER_KEY = "shift.rememberedLoginId";
 
 export default function LoginPage() {
   const router = useRouter();
   const [loginId, setLoginId] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberId, setRememberId] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  // 保存済みのログインIDがあれば初期表示する
+  useEffect(() => {
+    const saved = localStorage.getItem(REMEMBER_KEY);
+    if (saved) {
+      setLoginId(saved);
+      setRememberId(true);
+    }
+  }, []);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -27,6 +39,12 @@ export default function LoginPage() {
       setError("ログインIDまたはパスワードが正しくありません。");
       setLoading(false);
       return;
+    }
+    // チェック時のみログインIDを記憶（パスワードは保存しない）
+    if (rememberId) {
+      localStorage.setItem(REMEMBER_KEY, loginId);
+    } else {
+      localStorage.removeItem(REMEMBER_KEY);
     }
     router.push("/");
     router.refresh();
@@ -75,6 +93,28 @@ export default function LoginPage() {
             placeholder="••••••••"
           />
         </div>
+
+        <label
+          htmlFor="rememberId"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 8,
+            marginBottom: 24,
+            fontSize: 14,
+            cursor: "pointer",
+            userSelect: "none",
+          }}
+        >
+          <input
+            id="rememberId"
+            type="checkbox"
+            checked={rememberId}
+            onChange={(e) => setRememberId(e.target.checked)}
+            style={{ width: 16, height: 16, cursor: "pointer" }}
+          />
+          ログインIDを記憶する
+        </label>
 
         {error && (
           <p style={{ color: "var(--accent-ink)", fontSize: 13, marginBottom: 16 }}>{error}</p>
