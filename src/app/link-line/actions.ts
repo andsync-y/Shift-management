@@ -4,9 +4,10 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { loginIdToEmail } from "@/lib/login-id";
 
 const schema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1),
   password: z.string().min(1),
 });
 
@@ -25,9 +26,13 @@ export async function linkLineAccount(
   if (!parsed.success) return { ok: false, message: "入力を確認してください。" };
   const { email, password } = parsed.data;
 
-  // 通常ログイン（cookie にセッションが乗る）
+  // 通常ログイン（cookie にセッションが乗る）。
+  // 入力はログインID（例 fukuda）でもメールでも可。loginIdToEmail で内部メールへ変換する。
   const supabase = await createClient();
-  const { data: signin, error } = await supabase.auth.signInWithPassword({ email, password });
+  const { data: signin, error } = await supabase.auth.signInWithPassword({
+    email: loginIdToEmail(email),
+    password,
+  });
   if (error || !signin.user) {
     return { ok: false, message: "ログインIDまたはパスワードが正しくありません。" };
   }

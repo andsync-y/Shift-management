@@ -12,7 +12,16 @@ export default function LinkLineForm() {
         <label htmlFor="email">
           ログインID <span className="jp-label">／ 登録メール</span>
         </label>
-        <input id="email" name="email" type="email" className="input" required autoComplete="username" />
+        <input
+          id="email"
+          name="email"
+          type="text"
+          inputMode="text"
+          autoCapitalize="none"
+          className="input"
+          required
+          autoComplete="username"
+        />
       </div>
       <div className="field" style={{ marginBottom: 24 }}>
         <label htmlFor="password">
