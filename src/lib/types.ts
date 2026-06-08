@@ -94,6 +94,38 @@ export interface TimeOffRequest {
   created_at: string;
 }
 
+export type OfferStatus = "open" | "filled" | "failed" | "canceled";
+export type OfferCandidateStatus =
+  | "queued"
+  | "asked"
+  | "accepted"
+  | "declined"
+  | "skipped";
+
+export interface ShiftOffer {
+  id: string;
+  off_date: string; // "YYYY-MM-DD"
+  period_id: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  needed: number; // 残り必要人数
+  origin_request_id: string | null;
+  status: OfferStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftOfferCandidate {
+  id: string;
+  offer_id: string;
+  staff_id: string;
+  position: number;
+  status: OfferCandidateStatus;
+  asked_at: string | null;
+  responded_at: string | null;
+  created_at: string;
+}
+
 export interface TimeRecord {
   id: string;
   staff_id: string;

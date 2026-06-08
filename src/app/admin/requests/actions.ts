@@ -2,8 +2,9 @@
 
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { pushLineMessage } from "@/lib/line";
+import { startOfferForApprovedRequest } from "@/lib/offers/engine";
 
 export async function reviewRequest(
   requestId: string,
@@ -19,7 +20,7 @@ export async function reviewRequest(
       reviewed_at: new Date().toISOString(),
     })
     .eq("id", requestId)
-    .select("staff_id, off_date, request_type")
+    .select("id, staff_id, off_date, request_type")
     .maybeSingle();
 
   // 申請者へ LINE 通知（連携済みのみ・未設定なら no-op）
@@ -36,6 +37,16 @@ export async function reviewRequest(
       staff?.line_user_id ?? null,
       `${Number(m)}/${Number(d)} の${kind}が【${verb}】されました。`
     );
+
+    // 承認時: 人員が不足していれば他スタッフへ自動で出勤打診を開始する。
+    if (status === "approved") {
+      await startOfferForApprovedRequest(createAdminClient(), {
+        id: updated.id,
+        staff_id: updated.staff_id,
+        off_date: updated.off_date,
+        request_type: updated.request_type,
+      });
+    }
   }
 
   // 承認/却下はカレンダー各所の表示にも影響するので、関連ページもまとめて再検証する

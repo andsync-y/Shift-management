@@ -141,12 +141,16 @@ export async function verifyLineIdToken(idToken: string): Promise<string | null>
 // ---------------------------------------------------------------------
 
 // 1人に push。未設定・未連携・失敗は false を返し、呼び出し側の処理は止めない。
+// quickReply を渡すと「入れます/むり」等のボタン付きで送れる。
 export async function pushLineMessage(
   lineUserId: string | null | undefined,
-  text: string
+  text: string,
+  quickReply?: unknown
 ): Promise<boolean> {
   if (!isLineNotifyEnabled() || !lineUserId) return false;
   try {
+    const message: Record<string, unknown> = { type: "text", text };
+    if (quickReply) message.quickReply = quickReply;
     const res = await fetch(PUSH_URL, {
       method: "POST",
       headers: {
@@ -155,7 +159,7 @@ export async function pushLineMessage(
       },
       body: JSON.stringify({
         to: lineUserId,
-        messages: [{ type: "text", text }],
+        messages: [message],
       }),
     });
     return res.ok;

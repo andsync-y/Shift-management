@@ -1,6 +1,7 @@
 import { type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyLineSignature, replyLineMessage, locationQuickReply } from "@/lib/line";
+import { handleOfferPostback } from "@/lib/offers/engine";
 import { distanceMeters, storeGeofence, locationRequired } from "@/lib/geo";
 import { emailToLoginId } from "@/lib/login-id";
 import { appUrl } from "@/lib/app-url";
@@ -98,12 +99,22 @@ export async function POST(req: NextRequest) {
     replyToken?: string;
     source?: { userId?: string };
     message?: { type: string; text?: string; latitude?: number; longitude?: number };
+    postback?: { data?: string };
   }>;
 
   for (const ev of events) {
-    if (ev.type !== "message" || !ev.replyToken) continue;
+    if (!ev.replyToken) continue;
     const lineUserId = ev.source?.userId;
     if (!lineUserId) continue;
+
+    // 出勤打診の回答（クイックリプライの postback）
+    if (ev.type === "postback") {
+      const reply = await handleOfferPostback(admin, lineUserId, ev.postback?.data ?? "");
+      if (reply) await replyLineMessage(ev.replyToken, reply);
+      continue;
+    }
+
+    if (ev.type !== "message") continue;
 
     // LINEユーザー → スタッフ照合
     const { data: staff } = await admin
