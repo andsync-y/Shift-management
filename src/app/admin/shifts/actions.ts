@@ -9,6 +9,7 @@ import { appUrl } from "@/lib/app-url";
 import { generateShifts } from "@/lib/shift-generator/solver";
 import { reviewShiftPlan } from "@/lib/shift-generator/llm";
 import { generateShiftsWithClaude } from "@/lib/shift-generator/claude-generator";
+import { getStoreRules } from "@/lib/store-rules";
 import type {
   AvailabilityPreference,
   Profile,
@@ -30,9 +31,11 @@ export async function createPeriod(_prev: unknown, formData: FormData) {
   if (!parsed.success) return { ok: false, message: "年月を確認してください。" };
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data: created, error } = await supabase
     .from("shift_periods")
-    .insert({ year: parsed.data.year, month: parsed.data.month });
+    .insert({ year: parsed.data.year, month: parsed.data.month })
+    .select("id")
+    .single();
 
   if (error) {
     return {
@@ -40,8 +43,12 @@ export async function createPeriod(_prev: unknown, formData: FormData) {
       message: error.code === "23505" ? "その年月の期間は既に存在します。" : error.message,
     };
   }
+
+  // 新しい月は基本パターン（早番2名・遅番2名 × 全曜日）を自動で入れておく。
+  await supabase.from("shift_requirements").insert(defaultRequirementRows(created.id));
+
   revalidatePath("/admin/shifts");
-  return { ok: true, message: "シフト期間を作成しました。" };
+  return { ok: true, message: "シフト期間を作成しました（基本の必要人数も設定済み）。" };
 }
 
 // --- 必要人数の追加 ---------------------------------------------------
@@ -69,6 +76,41 @@ export async function deleteRequirement(id: string, periodId: string) {
   const supabase = await createClient();
   await supabase.from("shift_requirements").delete().eq("id", id);
   revalidatePath(`/admin/shifts/${periodId}`);
+}
+
+// 基本パターン（全曜日: 早番2名・遅番2名）の必要人数を組み立てる。
+// 時間帯は店舗ルールの早番/遅番（既定 10:00–19:00 / 13:00–22:00）を使う。
+function defaultRequirementRows(periodId: string) {
+  const rules = getStoreRules();
+  const early = rules.shiftTypes.find((t) => t.id === "early") ?? { start: "10:00", end: "19:00" };
+  const late = rules.shiftTypes.find((t) => t.id === "late") ?? { start: "13:00", end: "22:00" };
+  const slots = [
+    { start: early.start, end: early.end, required: 2 }, // 早番 2名
+    { start: late.start, end: late.end, required: 2 }, // 遅番 2名
+  ];
+  const rows = [];
+  for (let dow = 0; dow < 7; dow++) {
+    for (const s of slots) {
+      rows.push({
+        period_id: periodId,
+        day_of_week: dow,
+        start_time: s.start,
+        end_time: s.end,
+        required_staff: s.required,
+      });
+    }
+  }
+  return rows;
+}
+
+// 基本パターンを適用（既存の必要人数を置き換える）。
+export async function applyDefaultRequirements(periodId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("shift_requirements").delete().eq("period_id", periodId);
+  await supabase.from("shift_requirements").insert(defaultRequirementRows(periodId));
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return { ok: true, message: "基本パターン（早番2名・遅番2名 × 全曜日）を設定しました。" };
 }
 
 // --- AIシフト生成 -----------------------------------------------------
