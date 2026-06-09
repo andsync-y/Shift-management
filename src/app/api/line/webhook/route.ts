@@ -5,6 +5,7 @@ import { handleOfferPostback } from "@/lib/offers/engine";
 import { distanceMeters, storeGeofence, locationRequired } from "@/lib/geo";
 import { emailToLoginId } from "@/lib/login-id";
 import { appUrl } from "@/lib/app-url";
+import { isSesameEnabled, sesameLock, sesameUnlock } from "@/lib/sesame";
 import type { TimeRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -80,6 +81,8 @@ async function punchOut(admin: Admin, staffId: string): Promise<string> {
 
 const IN_WORDS = ["おはよう", "出勤", "おはよ"];
 const OUT_WORDS = ["お疲れ", "おつかれ", "退勤", "おつ"];
+const LOCK_WORDS = ["施錠", "しじょう", "鍵閉め", "閉錠"];
+const UNLOCK_WORDS = ["解錠", "開錠", "開場", "かいじょう", "鍵開け"];
 
 export async function POST(req: NextRequest) {
   const raw = await req.text();
@@ -119,7 +122,7 @@ export async function POST(req: NextRequest) {
     // LINEユーザー → スタッフ照合
     const { data: staff } = await admin
       .from("profiles")
-      .select("id, full_name, initial_password")
+      .select("id, full_name, initial_password, role")
       .eq("line_user_id", lineUserId)
       .maybeSingle();
 
@@ -175,6 +178,31 @@ export async function POST(req: NextRequest) {
           ? `${staff.full_name}さんのログイン情報です。\nID：${loginId}\nパスワード：${pw}\n${appUrl("/login")}\n※他の人に教えないでください。`
           : `ID：${loginId}\nパスワードは管理者にお問い合わせください。\n${appUrl("/login")}`;
         await replyLineMessage(ev.replyToken, reply);
+        continue;
+      }
+
+      // 入口スマートロック（施錠/解錠）
+      const isLock = LOCK_WORDS.some((w) => t.includes(w));
+      const isUnlock = UNLOCK_WORDS.some((w) => t.includes(w));
+      if (isSesameEnabled() && (isLock || isUnlock)) {
+        // 一般スタッフはジオフェンス判定が必要なため、位置を取得できるメニューのボタンへ誘導。
+        // オーナー(super_admin)は位置制限なしのためテキストから直接操作できる。
+        if (staff.role !== "super_admin") {
+          await replyLineMessage(
+            ev.replyToken,
+            "施錠/解錠はメニューの「🔓解錠」「🔒施錠」ボタンから行ってください（店舗周辺でのみ操作できます）。"
+          );
+          continue;
+        }
+        const ok = isLock ? await sesameLock(staff.full_name) : await sesameUnlock(staff.full_name);
+        await replyLineMessage(
+          ev.replyToken,
+          ok
+            ? isLock
+              ? "🔒 施錠しました。"
+              : "🔓 解錠しました。"
+            : "ロックの操作に失敗しました。少し時間をおいて、もう一度お試しください。"
+        );
         continue;
       }
 
