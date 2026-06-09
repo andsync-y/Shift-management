@@ -110,9 +110,44 @@ export async function POST(req: NextRequest) {
     const lineUserId = ev.source?.userId;
     if (!lineUserId) continue;
 
-    // 出勤打診の回答（クイックリプライの postback）
+    // postback（リッチメニューのボタン等）
     if (ev.type === "postback") {
-      const reply = await handleOfferPostback(admin, lineUserId, ev.postback?.data ?? "");
+      const data = ev.postback?.data ?? "";
+      const params = new URLSearchParams(data);
+
+      // 打刻（リッチメニュー postback: t=punch&action=in/out）→ 画面を出さずチャットで完結
+      if (params.get("t") === "punch") {
+        const { data: staff } = await admin
+          .from("profiles")
+          .select("id, full_name")
+          .eq("line_user_id", lineUserId)
+          .maybeSingle();
+        if (!staff) {
+          await replyLineMessage(
+            ev.replyToken,
+            "打刻にはLINE連携が必要です。アプリで「LINEでログイン」して連携してください。"
+          );
+          continue;
+        }
+        // 位置必須モードなら、現在地を送ってもらってから打刻
+        if (locationRequired()) {
+          await replyLineMessage(
+            ev.replyToken,
+            "打刻するには、店舗で現在地を送ってください（下のボタン）。",
+            locationQuickReply
+          );
+          continue;
+        }
+        const reply =
+          params.get("action") === "out"
+            ? await punchOut(admin, staff.id)
+            : await punchIn(admin, staff.id);
+        await replyLineMessage(ev.replyToken, reply);
+        continue;
+      }
+
+      // 出勤打診の回答（クイックリプライの postback）
+      const reply = await handleOfferPostback(admin, lineUserId, data);
       if (reply) await replyLineMessage(ev.replyToken, reply);
       continue;
     }
