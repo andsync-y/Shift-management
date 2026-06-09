@@ -14,6 +14,7 @@ declare global {
       isLoggedIn: () => boolean;
       login: () => void;
       getIDToken: () => string | null;
+      closeWindow: () => void;
     };
   }
 }
@@ -104,6 +105,20 @@ export default function LiffPunchPage() {
     }
   }, [status, autoAction, punch]);
 
+  // リッチメニュー経由で打刻が成功したら、結果を一瞬見せてから自動で画面を閉じる
+  useEffect(() => {
+    if (result?.ok && (autoAction === "in" || autoAction === "out")) {
+      const t = setTimeout(() => {
+        try {
+          window.liff?.closeWindow();
+        } catch {
+          /* closeWindow非対応時はそのまま（ボタンは非表示なので誤操作はしない） */
+        }
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [result, autoAction]);
+
   const label = autoAction === "in" ? "出勤" : autoAction === "out" ? "退勤" : null;
 
   return (
@@ -134,8 +149,8 @@ export default function LiffPunchPage() {
               <p className={"liff-msg " + (result.ok ? "ok" : "err")}>{result.text}</p>
             )}
 
-            {/* action指定なし、または結果が出た後の再操作用ボタン */}
-            {!busy && (!autoAction || result) && (
+            {/* 手動表示、または自動打刻が失敗した時のみボタンを出す（成功時は自動で閉じる） */}
+            {!busy && (!autoAction || (result && !result.ok)) && (
               <>
                 {!autoAction && !result && (
                   <p className="liff-help">店舗で「出勤」「退勤」を押してください。位置情報の確認があります。</p>
