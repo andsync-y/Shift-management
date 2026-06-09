@@ -6,11 +6,17 @@
 // （LINE連携と同じ段階移行設計。キー未設定の環境でも既存機能は壊れない）。
 //
 // 必要な環境変数:
-//   SESAME_API_KEY      … CANDY HOUSE で発行する Web API キー
-//   SESAME_DEVICE_UUID  … セサミ5のデバイスUUID
+//   SESAME_API_KEY      … CANDY HOUSE で発行する Web API キー（アカウント共通・1つ）
+//   SESAME_DEVICE_UUID  … セサミのデバイスUUID
 //   SESAME_SECRET_KEY   … デバイスの secret key（16バイト=32桁の16進）
 //
-// 前提: セサミ5に Wi-Fiモジュール2 / Hub3 をペアリングし、
+// 鍵が複数ある場合（1枚のドアに錠が2つ等）は、連番で複数台ぶん指定できる:
+//   SESAME_DEVICE_UUID_1 / SESAME_SECRET_KEY_1
+//   SESAME_DEVICE_UUID_2 / SESAME_SECRET_KEY_2 …
+//   → 施錠/解錠は登録された全デバイスへまとめて送る（API キーは共通の1つ）。
+//   ※ 単一指定（_番号なし）と連番指定は併用可。1台だけなら従来どおり動く。
+//
+// 前提: セサミ5/6に Wi-Fiモジュール2 / Hub3 をペアリングし、
 //       アプリの「設定 → 連携 → API」を ON にしておくこと。
 //       （Bluetoothのみの本体単体ではクラウド経由の操作は不可）
 // =====================================================================
@@ -24,10 +30,31 @@ const STATUS_URL = (uuid: string) => `https://app.candyhouse.co/api/sesame2/${uu
 const CMD_LOCK = 82;
 const CMD_UNLOCK = 83;
 
+interface SesameDevice {
+  uuid: string;
+  secret: string;
+}
+
+// 環境変数から操作対象デバイス一覧を組み立てる（単一指定 + 連番指定 _1.._8、重複UUIDは除外）。
+function getSesameDevices(): SesameDevice[] {
+  const devices: SesameDevice[] = [];
+  const push = (uuid?: string, secret?: string) => {
+    if (uuid && secret) devices.push({ uuid, secret });
+  };
+  push(process.env.SESAME_DEVICE_UUID, process.env.SESAME_SECRET_KEY);
+  for (let i = 1; i <= 8; i++) {
+    push(process.env[`SESAME_DEVICE_UUID_${i}`], process.env[`SESAME_SECRET_KEY_${i}`]);
+  }
+  const seen = new Set<string>();
+  return devices.filter((d) => {
+    if (seen.has(d.uuid)) return false;
+    seen.add(d.uuid);
+    return true;
+  });
+}
+
 export function isSesameEnabled(): boolean {
-  return Boolean(
-    process.env.SESAME_API_KEY && process.env.SESAME_DEVICE_UUID && process.env.SESAME_SECRET_KEY
-  );
+  return Boolean(process.env.SESAME_API_KEY) && getSesameDevices().length > 0;
 }
 
 // ---------------------------------------------------------------------
@@ -104,26 +131,38 @@ function sesameSign(secretHex: string): string {
 // 施錠 / 解錠
 // ---------------------------------------------------------------------
 
-async function sendCmd(cmd: number, operatorName: string): Promise<boolean> {
-  if (!isSesameEnabled()) return false;
-  const uuid = process.env.SESAME_DEVICE_UUID!;
-  const secret = process.env.SESAME_SECRET_KEY!;
-  const apiKey = process.env.SESAME_API_KEY!;
+async function sendCmdToDevice(
+  device: SesameDevice,
+  cmd: number,
+  apiKey: string,
+  operatorName: string
+): Promise<boolean> {
   try {
-    const res = await fetch(CMD_URL(uuid), {
+    const res = await fetch(CMD_URL(device.uuid), {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-api-key": apiKey },
       body: JSON.stringify({
         cmd,
         // history は操作者名。アプリの履歴に「誰が操作したか」として残る（base64）。
         history: Buffer.from(operatorName).toString("base64"),
-        sign: sesameSign(secret),
+        sign: sesameSign(device.secret),
       }),
     });
     return res.ok;
   } catch {
     return false;
   }
+}
+
+// 登録済みの全デバイスへ同じコマンドを送る。全台成功で true。
+async function sendCmd(cmd: number, operatorName: string): Promise<boolean> {
+  const apiKey = process.env.SESAME_API_KEY;
+  const devices = getSesameDevices();
+  if (!apiKey || devices.length === 0) return false;
+  const results = await Promise.all(
+    devices.map((d) => sendCmdToDevice(d, cmd, apiKey, operatorName))
+  );
+  return results.length > 0 && results.every(Boolean);
 }
 
 // 施錠。成功で true。operatorName は操作履歴に残る表示名。
@@ -136,11 +175,10 @@ export async function sesameUnlock(operatorName: string): Promise<boolean> {
   return sendCmd(CMD_UNLOCK, operatorName);
 }
 
-// 現在の施錠状態を取得（"locked" / "unlocked" / null）。
-export async function sesameStatus(): Promise<"locked" | "unlocked" | null> {
-  if (!isSesameEnabled()) return null;
-  const uuid = process.env.SESAME_DEVICE_UUID!;
-  const apiKey = process.env.SESAME_API_KEY!;
+async function deviceStatus(
+  uuid: string,
+  apiKey: string
+): Promise<"locked" | "unlocked" | null> {
   try {
     const res = await fetch(STATUS_URL(uuid), { headers: { "x-api-key": apiKey } });
     if (!res.ok) return null;
@@ -151,4 +189,16 @@ export async function sesameStatus(): Promise<"locked" | "unlocked" | null> {
   } catch {
     return null;
   }
+}
+
+// 現在の施錠状態を取得（複数台のときは集約: 全台 locked→"locked" / 全台 unlocked→"unlocked" /
+// 混在・不明→null）。複数の鍵が片方だけ開いている等は null（=不明）として扱う。
+export async function sesameStatus(): Promise<"locked" | "unlocked" | null> {
+  const apiKey = process.env.SESAME_API_KEY;
+  const devices = getSesameDevices();
+  if (!apiKey || devices.length === 0) return null;
+  const states = await Promise.all(devices.map((d) => deviceStatus(d.uuid, apiKey)));
+  if (states.every((s) => s === "locked")) return "locked";
+  if (states.every((s) => s === "unlocked")) return "unlocked";
+  return null;
 }
