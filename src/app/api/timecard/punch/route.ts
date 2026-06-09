@@ -43,7 +43,11 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (!staff) {
     return NextResponse.json(
-      { ok: false, message: "スタッフ連携がされていません。アプリで「LINEでログイン」して連携してください。" },
+      {
+        ok: false,
+        needLink: true,
+        message: "打刻にはLINE連携が必要です。下のボタンから初回のひも付けをしてください（ID・パスワードの入力は最初の1回だけです）。",
+      },
       { status: 403 }
     );
   }

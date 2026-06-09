@@ -25,7 +25,7 @@ export default function LiffPunchPage() {
   const [status, setStatus] = useState<Status>("loading");
   const [msg, setMsg] = useState<string>("");
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+  const [result, setResult] = useState<{ ok: boolean; text: string; needLink?: boolean } | null>(null);
   const autoDone = useRef(false);
 
   const liffId = process.env.NEXT_PUBLIC_LIFF_ID;
@@ -88,8 +88,8 @@ export default function LiffPunchPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ idToken, action, lat: pos?.lat, lng: pos?.lng }),
       });
-      const data = (await res.json()) as { ok: boolean; message: string };
-      setResult({ ok: data.ok, text: data.message });
+      const data = (await res.json()) as { ok: boolean; message: string; needLink?: boolean };
+      setResult({ ok: data.ok, text: data.message, needLink: data.needLink });
     } catch {
       setResult({ ok: false, text: "通信に失敗しました。もう一度お試しください。" });
     } finally {
@@ -149,8 +149,19 @@ export default function LiffPunchPage() {
               <p className={"liff-msg " + (result.ok ? "ok" : "err")}>{result.text}</p>
             )}
 
-            {/* 手動表示、または自動打刻が失敗した時のみボタンを出す（成功時は自動で閉じる） */}
-            {!busy && (!autoAction || (result && !result.ok)) && (
+            {/* 未連携：その場で初回ひも付けへ誘導（LINE認証→ID/PW1回） */}
+            {!busy && result?.needLink && (
+              <a
+                href="/auth/line"
+                className="liff-btn in"
+                style={{ display: "block", textAlign: "center", textDecoration: "none", marginTop: 18 }}
+              >
+                アカウントを連携する
+              </a>
+            )}
+
+            {/* 手動表示、または自動打刻が失敗した時のみボタンを出す（成功時は自動で閉じる。未連携時は連携ボタンのみ） */}
+            {!busy && !result?.needLink && (!autoAction || (result && !result.ok)) && (
               <>
                 {!autoAction && !result && (
                   <p className="liff-help">店舗で「出勤」「退勤」を押してください。位置情報の確認があります。</p>
