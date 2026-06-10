@@ -96,9 +96,9 @@ export default async function StaffPage() {
                   <td className="soft">{ROLE_LABELS_JA[s.role]}</td>
                   <td className="staff-id">{emailById.get(s.id) ?? "—"}</td>
                   <td className="mono soft">{s.initial_password ?? "—"}</td>
-                  <td className="soft">{EMPLOYMENT_LABELS_JA[s.employment_type]}</td>
+                  <td className="soft">{s.role === "super_admin" ? "—" : EMPLOYMENT_LABELS_JA[s.employment_type]}</td>
                   <td className="mono soft">
-                    {s.min_hours_per_week} / {s.max_hours_per_week}h
+                    {s.role === "super_admin" ? "—" : `${s.min_hours_per_week} / ${s.max_hours_per_week}h`}
                   </td>
                   <td>
                     {s.is_active ? (
@@ -153,12 +153,12 @@ export default async function StaffPage() {
                   </div>
                   <div className="r">
                     <span className="k">雇用形態</span>
-                    <span className="v">{EMPLOYMENT_LABELS_JA[s.employment_type]}</span>
+                    <span className="v">{s.role === "super_admin" ? "—" : EMPLOYMENT_LABELS_JA[s.employment_type]}</span>
                   </div>
                   <div className="r">
                     <span className="k">週時間</span>
                     <span className="v mono">
-                      {s.min_hours_per_week} / {s.max_hours_per_week}h
+                      {s.role === "super_admin" ? "—" : `${s.min_hours_per_week} / ${s.max_hours_per_week}h`}
                     </span>
                   </div>
                   <div className="r">

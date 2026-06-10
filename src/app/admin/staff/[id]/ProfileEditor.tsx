@@ -30,6 +30,10 @@ export default function ProfileEditor({
 
         {/* 編集可能（オーナーのみ） */}
         <div className="field">
+          <label>氏名</label>
+          <input name="full_name" type="text" className="input" defaultValue={profile.full_name} placeholder="例: 多和田 雄仁" required />
+        </div>
+        <div className="field">
           <label>雇用形態</label>
           <select name="employment_type" className="select" defaultValue={profile.employment_type}>
             <option value="part_time">{EMPLOYMENT_LABELS_JA.part_time}</option>
