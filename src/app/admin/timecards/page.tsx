@@ -76,6 +76,7 @@ export default async function TimeCardsPage({
         </div>
       </div>
 
+      <div className="tc-grid">
       {/* 給与集計 */}
       <div className="section">
         <div className="section-head">
@@ -135,6 +136,7 @@ export default async function TimeCardsPage({
             month={month}
           />
         </div>
+      </div>
       </div>
     </div>
   );

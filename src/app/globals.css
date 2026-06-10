@@ -1781,6 +1781,21 @@ body {
 .tc-sep { color: var(--ink-3); }
 .tc-actions { margin-left: auto; display: inline-flex; gap: 14px; }
 
+/* 勤怠ページ：左右2カラム＋1画面コンパクト */
+.tc-grid { display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; }
+.tc-grid > .section { margin: 0; }
+@media (min-width: 1100px) {
+  .tc-grid { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+}
+/* 一覧だけを内部スクロールさせ、ページ全体は1画面に収める */
+.tc-scroll { max-height: 56vh; overflow-y: auto; padding-right: 6px; }
+/* 右カラム（打刻記録）は行を詰めて表示 */
+.tc-compact .tc-row { padding: 7px 2px; gap: 7px; }
+.tc-compact .tc-name { min-width: 80px; font-size: 13px; }
+.tc-compact .tc-input { width: 150px; max-width: 44vw; font-size: 12px; padding: 6px 8px; }
+.tc-compact .add-row { flex-wrap: wrap; gap: 10px 12px; }
+.tc-compact .tc-actions { gap: 10px; }
+
 /* LIFF 打刻ページ */
 .liff-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }
 .liff-card { width: 100%; max-width: 420px; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 32px 26px 30px; }

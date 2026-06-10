@@ -123,7 +123,7 @@ export default function TimeCardManager({
   }
 
   return (
-    <div>
+    <div className="tc-compact">
       {/* 手動追加（打刻漏れの補正用） */}
       <form action={addAction} className="add-row" style={{ alignItems: "flex-end", marginBottom: 18 }}>
         <div className="field">
@@ -198,7 +198,7 @@ export default function TimeCardManager({
         </p>
       ) : (
         <>
-          <div className="history-list">
+          <div className="history-list tc-scroll">
             {groups.map((g) => (
               <div key={g.date} style={{ marginBottom: 6 }}>
                 <div
