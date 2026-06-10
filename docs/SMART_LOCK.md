@@ -71,24 +71,28 @@ LIFF / ジオフェンス（他機能と共用）:
 |---|---|
 | LIFFアプリ名 | 打刻（打刻・鍵で共用） |
 | LIFF ID | `2010239587-jevvSZzb`（= `NEXT_PUBLIC_LIFF_ID`） |
-| エンドポイントURL | **`https://shift.andsync.jp/`（サイトのルート）であること** |
+| エンドポイントURL | **`https://shift.andsync.jp/liff`（統合ページ）** |
 
-> ⚠️ **エンドポイントURLは必ずルート**にする。LIFFは「エンドポイントURL + 後ろのパス」を
-> 開くため、`…/liff/punch` にしていると鍵リンクが `…/liff/punch/liff/lock` になり 404。
-> ルートにすれば `/liff/punch` も `/liff/lock` も1つのIDで開ける。
+> ⚠️ **エンドポイントは実ページ `/liff` に固定し、ボタンは「パスなし・クエリだけ」**で開く。
+> ルート `/` をエンドポイントにすると、LIFF起動時にまず `/` が読まれ→未ログインだと
+> `src/app/page.tsx` が `/login` へリダイレクトしてしまい、操作ページに到達できない。
+> またパス連結（`liff.line.me/{id}/liff/lock`）はエンドポイントの末尾と二重パスになり
+> やすく不安定。クエリ（`?action=...`）はLIFFが常に保持するため最も壊れにくい。
 
 リッチメニュー各ボタンに設定するURL（タイプ＝**リンク**。`{LIFF_ID}` は上記ID）:
 
 | ボタン | URL |
 |---|---|
-| 出勤 | `https://liff.line.me/{LIFF_ID}/liff/punch?action=in` |
-| 退勤 | `https://liff.line.me/{LIFF_ID}/liff/punch?action=out` |
-| 🔓 解錠 | `https://liff.line.me/{LIFF_ID}/liff/lock?action=unlock` |
-| 🔒 施錠 | `https://liff.line.me/{LIFF_ID}/liff/lock?action=lock` |
+| 出勤 | `https://liff.line.me/{LIFF_ID}?action=in` |
+| 退勤 | `https://liff.line.me/{LIFF_ID}?action=out` |
+| 🔓 解錠 | `https://liff.line.me/{LIFF_ID}?action=unlock` |
+| 🔒 施錠 | `https://liff.line.me/{LIFF_ID}?action=lock` |
 
-> 必ず `liff.line.me/...` 形式で。直に `https://本番ドメイン/liff/lock` を貼ると
-> idToken が取れず認証エラーになる。打刻は `/liff/punch`、鍵は `/liff/lock`、
-> 違いは末尾パスと `action` の値（`in/out/unlock/lock`）だけ。
+`/liff`（`src/app/liff/page.tsx`）が `action` を見て、in/out→打刻、unlock/lock→施錠/解錠に
+振り分ける。シフト管理（Web本体）へ行くボタンだけは通常URL `https://shift.andsync.jp/`。
+
+> 必ず `liff.line.me/...` 形式で。直に `https://本番ドメイン/liff` を貼ると
+> idToken が取れず認証エラーになる。
 
 手順（LINE公式アカウントマネージャー manager.line.biz）:
 1. 対象アカウント →「トークルーム管理」→「リッチメニュー」→「作成」
@@ -117,5 +121,7 @@ LIFF / ジオフェンス（他機能と共用）:
 |---|---|
 | `src/lib/sesame.ts` | セサミ Web API ラッパ（署名・施錠/解錠/状態取得） |
 | `src/app/api/lock/control/route.ts` | LIFFからの操作API（本人確認・権限/ジオフェンス判定） |
-| `src/app/liff/lock/page.tsx` | LINE内で開く操作画面（`?action=` で自動実行） |
+| `src/app/liff/page.tsx` | **統合LIFFページ（エンドポイント）。`?action=in/out/unlock/lock` を振り分け** |
+| `src/app/liff/lock/page.tsx` | 旧・鍵専用ページ（`/liff` に統合済み。後方互換で残置） |
+| `src/app/liff/punch/page.tsx` | 旧・打刻専用ページ（同上） |
 | `src/app/api/line/webhook/route.ts` | テキスト「解錠/施錠」等のキーワード処理 |
