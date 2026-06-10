@@ -64,15 +64,31 @@ LIFF / ジオフェンス（他機能と共用）:
 
 ## LINE側の設定（リッチメニュー）
 
-ボタンに設定するURL（`{LIFF_ID}` を実IDに置換）:
+打刻も鍵も **1つのLIFFアプリ（＝1つのLIFF ID）** で動く。新しいLIFFアプリは不要。
+現状のLIFFアプリ：
+
+| 項目 | 値 |
+|---|---|
+| LIFFアプリ名 | 打刻（打刻・鍵で共用） |
+| LIFF ID | `2010239587-jevvSZzb`（= `NEXT_PUBLIC_LIFF_ID`） |
+| エンドポイントURL | **`https://shift.andsync.jp/`（サイトのルート）であること** |
+
+> ⚠️ **エンドポイントURLは必ずルート**にする。LIFFは「エンドポイントURL + 後ろのパス」を
+> 開くため、`…/liff/punch` にしていると鍵リンクが `…/liff/punch/liff/lock` になり 404。
+> ルートにすれば `/liff/punch` も `/liff/lock` も1つのIDで開ける。
+
+リッチメニュー各ボタンに設定するURL（タイプ＝**リンク**。`{LIFF_ID}` は上記ID）:
 
 | ボタン | URL |
 |---|---|
+| 出勤 | `https://liff.line.me/{LIFF_ID}/liff/punch?action=in` |
+| 退勤 | `https://liff.line.me/{LIFF_ID}/liff/punch?action=out` |
 | 🔓 解錠 | `https://liff.line.me/{LIFF_ID}/liff/lock?action=unlock` |
 | 🔒 施錠 | `https://liff.line.me/{LIFF_ID}/liff/lock?action=lock` |
 
 > 必ず `liff.line.me/...` 形式で。直に `https://本番ドメイン/liff/lock` を貼ると
-> idToken が取れず認証エラーになる。
+> idToken が取れず認証エラーになる。打刻は `/liff/punch`、鍵は `/liff/lock`、
+> 違いは末尾パスと `action` の値（`in/out/unlock/lock`）だけ。
 
 手順（LINE公式アカウントマネージャー manager.line.biz）:
 1. 対象アカウント →「トークルーム管理」→「リッチメニュー」→「作成」
@@ -81,7 +97,19 @@ LIFF / ジオフェンス（他機能と共用）:
 4. 背景画像を作成 → 保存 → 公開
 
 `{LIFF_ID}` の確認：LINE Developers → プロバイダー → **LINEログインチャネル** →
-「LIFF」タブの LIFF ID（`NEXT_PUBLIC_LIFF_ID` と同値）。
+「LIFF」タブの LIFF ID（`NEXT_PUBLIC_LIFF_ID` と同値。現在は `2010239587-jevvSZzb`）。
+
+### スタッフ操作の方式（採用：LIFF・1タップ）
+
+鍵・打刻ともボタンを押すと一瞬LIFF画面が開き、**端末GPSを取得**してサーバーへ送る
+（ジオフェンス判定に必要）。結果を表示して 1.5 秒で自動的に閉じる。
+- 一般スタッフ：店舗周辺（`STORE_LAT/LNG/GEOFENCE_M`）でのみ操作可。
+- オーナー（super_admin）：場所の制限なし。
+
+> 検討した代替案：リッチメニューをテキストにし、LINE純正の「位置情報を送信」
+> （`locationQuickReply`）でGPSを運ぶ画面なし方式も可能だが、タップが1回増え、
+> 鍵の意図（解錠/施錠）を一時記憶する実装が必要になるため、打刻と操作感を揃える
+> 目的で LIFF・1タップ方式を採用した。
 
 ## 関連ファイル
 
