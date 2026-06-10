@@ -128,7 +128,7 @@ export default function TimeCardManager({
       <form action={addAction} className="add-row" style={{ alignItems: "flex-end", marginBottom: 18 }}>
         <div className="field">
           <label>Staff <span className="jp-label">／ スタッフ</span></label>
-          <select name="staff_id" className="select" required defaultValue="" style={{ width: 160 }}>
+          <select name="staff_id" className="select" required defaultValue="" style={{ width: 130, fontSize: 12 }}>
             <option value="" disabled>選択</option>
             {staff.map((s) => (
               <option key={s.id} value={s.id}>{s.full_name}</option>
@@ -137,13 +137,13 @@ export default function TimeCardManager({
         </div>
         <div className="field">
           <label>Clock in <span className="jp-label">／ 出勤</span></label>
-          <input name="clock_in" type="datetime-local" className="input" required />
+          <input name="clock_in" type="datetime-local" className="input" required style={{ fontSize: 12 }} />
         </div>
         <div className="field">
           <label>Clock out <span className="jp-label">／ 退勤（任意）</span></label>
-          <input name="clock_out" type="datetime-local" className="input" />
+          <input name="clock_out" type="datetime-local" className="input" style={{ fontSize: 12 }} />
         </div>
-        <button type="submit" className="btn-fill" disabled={adding} style={{ padding: "12px 22px" }}>
+        <button type="submit" className="btn-fill" disabled={adding} style={{ padding: "9px 16px", fontSize: 13 }}>
           {adding ? "追加中…" : "勤怠を追加"}
         </button>
         {addState && (
@@ -162,7 +162,7 @@ export default function TimeCardManager({
           className="select"
           value={staffId}
           onChange={(e) => setStaffId(e.target.value)}
-          style={{ width: 160 }}
+          style={{ width: 120, fontSize: 12 }}
         >
           <option value="">全スタッフ</option>
           {staff.map((s) => (
@@ -174,20 +174,20 @@ export default function TimeCardManager({
           className="input"
           value={day}
           onChange={(e) => setDay(e.target.value)}
-          style={{ width: 160 }}
+          style={{ width: 130, fontSize: 12 }}
         />
         {day && (
-          <button className="btn-link" onClick={() => setDay("")} disabled={pending}>日付クリア</button>
+          <button className="btn-link" onClick={() => setDay("")} disabled={pending}>クリア</button>
         )}
-        <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 13, cursor: "pointer" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
           <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} />
           退勤漏れのみ{openTotal > 0 && `（${openTotal}）`}
         </label>
         <span style={{ flex: 1 }} />
-        <span className="help" style={{ margin: 0 }}>
+        <span className="help" style={{ margin: 0, fontSize: 12 }}>
           {filtered.length}件{filtered.length !== records.length && ` / 全${records.length}件`}
         </span>
-        <button className="btn-outline" onClick={exportCsv} style={{ padding: "8px 16px" }}>
+        <button className="btn-outline" onClick={exportCsv} style={{ padding: "6px 12px", fontSize: 12 }}>
           CSV
         </button>
       </div>

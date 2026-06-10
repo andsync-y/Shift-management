@@ -1790,11 +1790,22 @@ body {
 /* 一覧だけを内部スクロールさせ、ページ全体は1画面に収める */
 .tc-scroll { max-height: 56vh; overflow-y: auto; padding-right: 6px; }
 /* 右カラム（打刻記録）は行を詰めて表示 */
-.tc-compact .tc-row { padding: 7px 2px; gap: 7px; }
-.tc-compact .tc-name { min-width: 80px; font-size: 13px; }
-.tc-compact .tc-input { width: 150px; max-width: 44vw; font-size: 12px; padding: 6px 8px; }
-.tc-compact .add-row { flex-wrap: wrap; gap: 10px 12px; }
-.tc-compact .tc-actions { gap: 10px; }
+.tc-compact .tc-row { padding: 7px 2px; gap: 6px; flex-wrap: nowrap; }
+.tc-compact .tc-name { min-width: 72px; max-width: 100px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tc-compact .tc-input { width: 136px; max-width: 136px; font-size: 12px; padding: 5px 6px; flex-shrink: 0; }
+.tc-compact .tc-sep { flex-shrink: 0; }
+.tc-compact .tc-actions { gap: 8px; flex-shrink: 0; font-size: 12px; }
+.tc-compact .add-row { flex-wrap: wrap; gap: 8px 10px; }
+.tc-compact .add-row .input,
+.tc-compact .add-row .select { font-size: 12px; padding: 6px 8px; }
+/* 左パネル（スタッフ集計）をコンパクトに */
+.tc-grid .staff-table td { padding: 10px 12px; font-size: 13px; }
+.tc-grid .staff-table th { padding: 0 12px 10px; }
+.tc-grid .staff-table td.mono { white-space: nowrap; font-size: 12px; }
+/* 絞り込みバーをコンパクトに */
+.tc-compact .tc-filter { gap: 7px; }
+.tc-compact .tc-filter .input,
+.tc-compact .tc-filter .select { font-size: 12px; padding: 6px 8px; width: auto; }
 
 /* LIFF 打刻ページ */
 .liff-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }
