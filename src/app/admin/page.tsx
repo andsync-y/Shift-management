@@ -9,7 +9,12 @@ import ShiftCalendarView from "@/components/ShiftCalendarView";
 import DashboardInsights from "@/components/DashboardInsights";
 import type { ShiftRequirement, TimeOffRequest } from "@/lib/types";
 
-export default async function AdminDashboard() {
+export default async function AdminDashboard({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const sp = await searchParams;
   const supabase = await createClient();
 
   const [{ count: staffCount }, { count: pendingCount }, { data: periods }] =
@@ -19,40 +24,57 @@ export default async function AdminDashboard() {
         .from("time_off_requests")
         .select("*", { count: "exact", head: true })
         .eq("status", "pending"),
+      // 前月/次月ナビのため全期間を新しい順に取得（表示リストは後で5件に絞る）
       supabase
         .from("shift_periods")
         .select("*")
         .order("year", { ascending: false })
         .order("month", { ascending: false })
-        .limit(5),
+        .limit(60),
     ]);
 
-  // シフトが実際に入っている最新の期間をダッシュボードに表示する。
-  // （直近の期間がまだ空＝下書きの場合は、その手前の入っている月を出す）
+  // 表示する期間を決める。
+  // ・?period=<id> があればその月を表示（前月/次月ボタンで切り替え）。
+  // ・無ければ「シフトが実際に入っている最新の月」を自動表示（直近が空なら手前の月）。
   const periodList = periods ?? [];
   let latest = periodList[0] ?? null;
   let latestShifts: Shift[] = [];
   let staffList: Profile[] = [];
 
   if (periodList.length > 0) {
+    const fromParam = sp.period ? periodList.find((p) => p.id === sp.period) : undefined;
+
+    if (!fromParam) {
+      // 自動判定：直近5件のうち、最初にシフトが入っている月を採用
+      const recent = periodList.slice(0, 5);
+      const { data: probe } = await supabase
+        .from("shifts")
+        .select("period_id")
+        .in(
+          "period_id",
+          recent.map((p) => p.id)
+        );
+      const have = new Set((probe ?? []).map((s) => (s as { period_id: string }).period_id));
+      latest = recent.find((p) => have.has(p.id)) ?? periodList[0];
+    } else {
+      latest = fromParam;
+    }
+
     const { data: staff } = await supabase.from("profiles").select("*");
     staffList = (staff ?? []) as Profile[];
 
-    // 候補期間のシフトをまとめて取得し、新しい順に「シフトがある月」を採用
-    const ids = periodList.map((p) => p.id);
-    const { data: allShifts } = await supabase
+    const { data: monthShifts } = await supabase
       .from("shifts")
       .select("*")
-      .in("period_id", ids);
-    const shiftsByPeriod = new Map<string, Shift[]>();
-    for (const s of (allShifts ?? []) as Shift[]) {
-      if (!shiftsByPeriod.has(s.period_id)) shiftsByPeriod.set(s.period_id, []);
-      shiftsByPeriod.get(s.period_id)!.push(s);
-    }
-    const withShifts = periodList.find((p) => (shiftsByPeriod.get(p.id)?.length ?? 0) > 0);
-    latest = withShifts ?? periodList[0];
-    latestShifts = shiftsByPeriod.get(latest.id) ?? [];
+      .eq("period_id", latest.id);
+    latestShifts = (monthShifts ?? []) as Shift[];
   }
+
+  // 前月（より古い）/ 次月（より新しい）の期間。periodList は新しい順。
+  const curIdx = latest ? periodList.findIndex((p) => p.id === latest!.id) : -1;
+  const newerPeriod = curIdx > 0 ? periodList[curIdx - 1] : null;
+  const olderPeriod =
+    curIdx >= 0 && curIdx < periodList.length - 1 ? periodList[curIdx + 1] : null;
 
   // 表示中の期間の必要人数（人手不足アラート用）と承認済み休み
   let requirements: ShiftRequirement[] = [];
@@ -132,9 +154,29 @@ export default async function AdminDashboard() {
             <h2>
               {latest.year}年{latest.month}月 のシフト
             </h2>
-            <Link href={`/admin/shifts/${latest.id}`} className="btn-link">
-              編集 <span className="arrow">→</span>
-            </Link>
+            <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+              {olderPeriod ? (
+                <Link href={`/admin?period=${olderPeriod.id}`} className="btn-link">
+                  <span className="arrow">←</span> 前月
+                </Link>
+              ) : (
+                <span className="btn-link" style={{ opacity: 0.35, pointerEvents: "none" }}>
+                  <span className="arrow">←</span> 前月
+                </span>
+              )}
+              {newerPeriod ? (
+                <Link href={`/admin?period=${newerPeriod.id}`} className="btn-link">
+                  次月 <span className="arrow">→</span>
+                </Link>
+              ) : (
+                <span className="btn-link" style={{ opacity: 0.35, pointerEvents: "none" }}>
+                  次月 <span className="arrow">→</span>
+                </span>
+              )}
+              <Link href={`/admin/shifts/${latest.id}`} className="btn-link">
+                編集 <span className="arrow">→</span>
+              </Link>
+            </div>
           </div>
           <div className="section-body">
             {latestShifts.length > 0 || timeOff.length > 0 ? (
@@ -170,7 +212,7 @@ export default async function AdminDashboard() {
         <div className="section-body" style={{ paddingTop: 6 }}>
           {periods && periods.length > 0 ? (
             <div className="period-list">
-              {periods.map((p) => (
+              {periods.slice(0, 5).map((p) => (
                 <div className="period-status" key={p.id}>
                   <Link href={`/admin/shifts/${p.id}`} className="ym en">
                     {p.year}.{String(p.month).padStart(2, "0")}
