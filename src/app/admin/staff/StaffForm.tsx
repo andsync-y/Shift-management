@@ -32,9 +32,17 @@ export default function StaffForm() {
         </div>
         <div className="field full">
           <label>
-            Login ID <span className="jp-label">／ ログインID（メール）</span>
+            Login ID <span className="jp-label">／ ログインID（メール不要）</span>
           </label>
-          <input name="email" type="email" className="input" placeholder="name@example.com" required />
+          <input
+            name="email"
+            type="text"
+            className="input"
+            placeholder="例: fukuda（メール形式でも可）"
+            autoCapitalize="none"
+            spellCheck={false}
+            required
+          />
         </div>
         <div className="field">
           <label>

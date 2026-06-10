@@ -23,14 +23,16 @@ export default function CredentialsEditor({
       <div className="form-grid" style={{ margin: "0 0 26px" }}>
         <div className="field">
           <label>
-            Login ID <span className="jp-label">／ ログインID（メール）</span>
+            Login ID <span className="jp-label">／ ログインID（メール不要）</span>
           </label>
           <input
             name="email"
-            type="email"
+            type="text"
             className="input"
             defaultValue={currentEmail ?? ""}
-            placeholder="staff@example.com"
+            placeholder="例: fukuda"
+            autoCapitalize="none"
+            spellCheck={false}
             autoComplete="off"
           />
         </div>

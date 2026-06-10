@@ -1,0 +1,13 @@
+{
+  "regions": ["hnd1"],
+  "crons": [
+    {
+      "path": "/api/cron/shift-reminder",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/offer-timeout",
+      "schedule": "0 * * * *"
+    }
+  ]
+}

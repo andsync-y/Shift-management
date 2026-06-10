@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import {
   addRequirement,
   deleteRequirement,
+  applyDefaultRequirements,
 } from "../actions";
 import { DAY_LABELS_JA, type ShiftRequirement } from "@/lib/types";
 
@@ -20,6 +21,19 @@ export default function RequirementsEditor({
   async function handleAdd(formData: FormData) {
     const res = await addRequirement(periodId, formData);
     setMessage(res.message);
+  }
+
+  function handleApplyDefault() {
+    if (
+      !confirm(
+        "現在の必要人数を消して、基本パターン（早番2名・遅番2名 × 全曜日）を設定します。よろしいですか？"
+      )
+    )
+      return;
+    startTransition(async () => {
+      const res = await applyDefaultRequirements(periodId);
+      setMessage(res.message);
+    });
   }
 
   const byDay: Record<number, ShiftRequirement[]> = {};
@@ -49,6 +63,14 @@ export default function RequirementsEditor({
           <input name="required_staff" type="number" min={0} className="input w-24" defaultValue={1} required />
         </div>
         <button type="submit" className="btn-primary">追加</button>
+        <button
+          type="button"
+          onClick={handleApplyDefault}
+          className="btn-outline"
+          disabled={pending}
+        >
+          基本パターンを適用（早番2・遅番2 × 全曜日）
+        </button>
       </form>
 
       {message && <p className="text-sm text-gray-600">{message}</p>}

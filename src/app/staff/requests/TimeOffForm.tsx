@@ -3,21 +3,21 @@
 import { useActionState, useState } from "react";
 import { submitTimeOff } from "./actions";
 
+// 「終日休み」チェックで 休み(off) / 時間変更(time_change) を自動判別する。
 export default function TimeOffForm() {
   const [state, formAction, pending] = useActionState(submitTimeOff, null);
-  const [reqType, setReqType] = useState<"off" | "time_change">("off");
   const [allDay, setAllDay] = useState(true);
   const [dates, setDates] = useState<string[]>([]);
   const [draft, setDraft] = useState("");
+  const [start, setStart] = useState("10:00");
+  const [end, setEnd] = useState("19:00");
 
-  const isTimeChange = reqType === "time_change";
-  const showTimes = isTimeChange || !allDay;
+  const reqType = allDay ? "off" : "time_change";
+  const kind = allDay ? "休み" : "時間変更";
 
   function addDate() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft)) return;
-    if (!dates.includes(draft)) {
-      setDates((prev) => [...prev, draft].sort());
-    }
+    if (!dates.includes(draft)) setDates((prev) => [...prev, draft].sort());
     setDraft("");
   }
   function removeDate(d: string) {
@@ -25,138 +25,191 @@ export default function TimeOffForm() {
   }
 
   return (
-    <form action={formAction} className="space-y-4">
-      <input type="hidden" name="off_dates" value={dates.join(",")} />
-      <input type="hidden" name="request_type" value={reqType} />
-
-      <div className="seg" role="tablist" style={{ display: "inline-flex" }}>
-        <button
-          type="button"
-          className={reqType === "off" ? "on" : ""}
-          onClick={() => setReqType("off")}
+    <div className="section">
+      <div className="section-head">
+        <h2>新規申請</h2>
+        <span
+          className={`status-pill ${allDay ? "wait" : "no"}`}
+          style={
+            allDay
+              ? {
+                  color: "#1A3CC4",
+                  background: "color-mix(in oklab,#1A3CC4 7%,transparent)",
+                  borderColor: "color-mix(in oklab,#1A3CC4 26%,transparent)",
+                }
+              : {
+                  color: "#94560E",
+                  background: "color-mix(in oklab,#94560E 7%,transparent)",
+                  borderColor: "color-mix(in oklab,#94560E 26%,transparent)",
+                }
+          }
         >
-          欠勤（休み）
-        </button>
-        <button
-          type="button"
-          className={reqType === "time_change" ? "on" : ""}
-          onClick={() => setReqType("time_change")}
-        >
-          時間変更
-        </button>
+          区分：{kind}
+        </span>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div>
-          <label className="label">
-            {isTimeChange ? "対象日 *（複数追加できます）" : "休み希望日 *（複数追加できます）"}
+      <div className="section-body">
+        {/* 申請の種類を最初にはっきり選ばせる（あいまいな組み合わせを無くす） */}
+        <div className="field" style={{ marginTop: 0, marginBottom: 20 }}>
+          <label>
+            Type <span className="jp-label">／ 申請の種類 ＊</span>
           </label>
-          <div style={{ display: "flex", gap: 8 }}>
-            <input
-              type="date"
-              className="input"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value)}
-            />
+          <div className="seg" role="tablist" style={{ display: "inline-flex" }}>
             <button
               type="button"
-              className="btn-secondary"
-              onClick={addDate}
-              style={{ whiteSpace: "nowrap" }}
+              className={allDay ? "on" : ""}
+              onClick={() => setAllDay(true)}
             >
-              追加
+              終日休み（1日まるごと）
+            </button>
+            <button
+              type="button"
+              className={!allDay ? "on" : ""}
+              onClick={() => setAllDay(false)}
+            >
+              時間変更（勤務時間を変える）
             </button>
           </div>
         </div>
 
-        {!isTimeChange && (
-          <div className="flex items-end">
-            <label className="flex items-center gap-2 text-sm">
+        <p className="help" style={{ marginTop: 0, marginBottom: 24 }}>
+          {allDay
+            ? "選んだ日を「終日休み」として申請します。勤務時間の入力はありません。"
+            : "選んだ日について、希望する新しい勤務時間を指定して申請します。"}
+          対象日は複数追加できます。
+        </p>
+
+        <form action={formAction}>
+          <input type="hidden" name="off_dates" value={dates.join(",")} />
+          <input type="hidden" name="request_type" value={reqType} />
+          {allDay && <input type="hidden" name="all_day" value="on" />}
+
+          <div className="add-row" style={{ alignItems: "flex-end" }}>
+            <div className="field grow" style={{ minWidth: 260 }}>
+              <label>
+                Dates <span className="jp-label">／ 対象日 ＊（複数追加できます）</span>
+              </label>
               <input
-                type="checkbox"
-                name="all_day"
-                checked={allDay}
-                onChange={(e) => setAllDay(e.target.checked)}
+                className="input"
+                type="date"
+                value={draft}
+                onChange={(e) => setDraft(e.target.value)}
               />
-              終日休み
-            </label>
+            </div>
+            <button type="button" className="btn-outline" style={{ padding: "12px 22px" }} onClick={addDate}>
+              追加
+            </button>
           </div>
-        )}
 
-        {showTimes && (
-          <>
-            <div>
-              <label className="label">{isTimeChange ? "希望開始時刻 *" : "開始時刻"}</label>
-              <input name="start_time" type="time" className="input" defaultValue="10:00" />
+          {!allDay && (
+            <div className="to-times">
+              <div className="field">
+                <label>
+                  Start <span className="jp-label">／ 希望開始時刻 ＊</span>
+                </label>
+                <input
+                  className="input"
+                  name="start_time"
+                  type="time"
+                  value={start}
+                  onChange={(e) => setStart(e.target.value)}
+                />
+              </div>
+              <div className="field">
+                <label>
+                  End <span className="jp-label">／ 希望終了時刻 ＊</span>
+                </label>
+                <input
+                  className="input"
+                  name="end_time"
+                  type="time"
+                  value={end}
+                  onChange={(e) => setEnd(e.target.value)}
+                />
+              </div>
             </div>
-            <div>
-              <label className="label">{isTimeChange ? "希望終了時刻 *" : "終了時刻"}</label>
-              <input name="end_time" type="time" className="input" defaultValue="19:00" />
+          )}
+
+          {dates.length > 0 && (
+            <div className="date-chips">
+              {dates.map((d) => {
+                const [, m, day] = d.split("-");
+                return (
+                  <span className="achip" key={d}>
+                    <span className="atm en">
+                      {Number(m)}/{Number(day)}
+                    </span>
+                    <span className={`mk ${allDay ? "early" : "late"}`}>{allDay ? "終日" : `${start}–${end}`}</span>
+                    <button type="button" className="ax" onClick={() => removeDate(d)} aria-label="削除">
+                      ×
+                    </button>
+                  </span>
+                );
+              })}
             </div>
-          </>
-        )}
+          )}
 
-        <div className="sm:col-span-2">
-          <label className="label">理由（任意）</label>
-          <input
-            name="reason"
-            className="input"
-            placeholder={isTimeChange ? "通院のため など" : "私用 など"}
-          />
-        </div>
-      </div>
+          <div className="field" style={{ marginTop: 26, maxWidth: 640 }}>
+            <label>
+              Reason <span className="jp-label">／ 理由（任意）</span>
+            </label>
+            <input className="input" name="reason" placeholder={allDay ? "私用 など" : "通院のため など"} />
+          </div>
 
-      {isTimeChange && (
-        <p className="help" style={{ marginTop: 0 }}>
-          ※ 時間変更は「希望する新しい勤務時間」を入力してください。承認されるとカレンダーに変更希望として表示されます。
-        </p>
-      )}
+          {!allDay && (
+            <p className="help" style={{ marginTop: 16, marginBottom: 0 }}>
+              ※ 時間変更は「希望する新しい勤務時間」を入力してください。承認されるとカレンダーに変更希望として表示されます。
+            </p>
+          )}
 
-      {/* 選択済みの日付チップ */}
-      {dates.length > 0 && (
-        <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
-          {dates.map((d) => {
-            const [, m, day] = d.split("-");
-            return (
-              <span
-                key={d}
-                className="tag accent"
-                style={{ display: "inline-flex", alignItems: "center", gap: 6 }}
-              >
-                {Number(m)}/{Number(day)}
-                <button
-                  type="button"
-                  onClick={() => removeDate(d)}
-                  aria-label="削除"
-                  style={{
-                    background: "none",
-                    border: 0,
-                    cursor: "pointer",
-                    color: "inherit",
-                    lineHeight: 1,
-                  }}
-                >
-                  ×
-                </button>
+          {state && (
+            <p
+              className="help"
+              style={{ marginTop: 18, marginBottom: 0, color: state.ok ? "#3d6b4f" : "#9a3a30", fontSize: 13 }}
+            >
+              {state.message}
+            </p>
+          )}
+
+          {/* 送信前の確認プレビュー：間違った申請を防ぐ */}
+          {dates.length > 0 && (
+            <div
+              className="alert-banner ok"
+              style={{ marginTop: 26, alignItems: "center" }}
+            >
+              <span className="ab-icon">✓</span>
+              <div>
+                <p className="ab-title" style={{ marginBottom: 4 }}>
+                  この内容で申請します
+                </p>
+                <p className="help" style={{ margin: 0 }}>
+                  {dates
+                    .map((d) => {
+                      const [, m, day] = d.split("-");
+                      return `${Number(m)}/${Number(day)}`;
+                    })
+                    .join("・")}{" "}
+                  を{" "}
+                  <b className="soft">{allDay ? "終日休み" : `${start}–${end} への時間変更`}</b>{" "}
+                  として申請（{dates.length}日）
+                </p>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 22 }}>
+            <button type="submit" className="btn-fill" disabled={pending || dates.length === 0}>
+              {pending ? "申請中..." : allDay ? "お休みを申請" : "時間変更を申請"}
+              {dates.length > 0 ? `（${dates.length}日）` : ""}
+            </button>
+            {dates.length === 0 && (
+              <span className="help" style={{ marginLeft: 16 }}>
+                対象日を1日以上追加してください。
               </span>
-            );
-          })}
-        </div>
-      )}
-
-      {state && (
-        <p className={`text-sm ${state.ok ? "text-green-600" : "text-red-600"}`}>
-          {state.message}
-        </p>
-      )}
-
-      <button type="submit" className="btn-primary" disabled={pending || dates.length === 0}>
-        {pending
-          ? "申請中..."
-          : `${isTimeChange ? "時間変更を申請" : "お休みを申請"}${
-              dates.length > 0 ? `（${dates.length}日）` : ""
-            }`}
-      </button>
-    </form>
+            )}
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }

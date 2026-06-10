@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { TimeOffRequest } from "@/lib/types";
@@ -15,21 +16,30 @@ export default async function StaffRequestsPage() {
     .order("off_date", { ascending: false });
 
   return (
-    <div className="page space-y-6">
-      <div className="masthead" style={{ marginBottom: 8 }}>
-        <div className="eyebrow accent">Staff</div>
-        <h1 className="ttl en">Time Off</h1>
-        <p className="sub">お休み希望</p>
+    <div className="page">
+      <div className="page-head">
+        <div className="masthead">
+          <div className="eyebrow accent">Staff</div>
+          <h1 className="ttl en" style={{ marginTop: 12 }}>
+            Time Off
+          </h1>
+          <p className="sub">お休み希望 — {me.full_name}</p>
+        </div>
+        <Link href="/staff" className="btn-outline">
+          シフト確認 <span className="arrow">→</span>
+        </Link>
       </div>
 
-      <div className="card">
-        <h2 className="mb-4 font-semibold">新規申請</h2>
-        <TimeOffForm />
-      </div>
+      <TimeOffForm />
 
-      <div className="card">
-        <h2 className="mb-4 font-semibold">申請履歴</h2>
-        <TimeOffList requests={(requests ?? []) as TimeOffRequest[]} />
+      <div className="section">
+        <div className="section-head">
+          <h2>申請履歴</h2>
+          <span className="eyebrow">History</span>
+        </div>
+        <div className="section-body" style={{ paddingTop: 6 }}>
+          <TimeOffList requests={(requests ?? []) as TimeOffRequest[]} />
+        </div>
       </div>
     </div>
   );

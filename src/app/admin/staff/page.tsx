@@ -5,6 +5,7 @@ import {
   ROLE_LABELS_JA,
   type Profile,
 } from "@/lib/types";
+import { emailToLoginId } from "@/lib/login-id";
 import StaffForm from "./StaffForm";
 
 export default async function StaffPage() {
@@ -20,7 +21,7 @@ export default async function StaffPage() {
     const admin = createAdminClient();
     const { data: list } = await admin.auth.admin.listUsers({ perPage: 1000 });
     for (const u of list?.users ?? []) {
-      if (u.email) emailById.set(u.id, u.email);
+      if (u.email) emailById.set(u.id, emailToLoginId(u.email));
     }
   } catch {
     // service role 未設定などの場合はメール非表示で続行

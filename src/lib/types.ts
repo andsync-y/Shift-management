@@ -21,6 +21,7 @@ export interface Profile {
   is_active: boolean;
   initial_password: string | null;
   calendar_token: string | null;
+  line_user_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -91,6 +92,52 @@ export interface TimeOffRequest {
   reviewed_by: string | null;
   reviewed_at: string | null;
   created_at: string;
+}
+
+export type OfferStatus = "open" | "filled" | "failed" | "canceled";
+export type OfferCandidateStatus =
+  | "queued"
+  | "asked"
+  | "accepted"
+  | "declined"
+  | "skipped";
+
+export interface ShiftOffer {
+  id: string;
+  off_date: string; // "YYYY-MM-DD"
+  period_id: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  needed: number; // 残り必要人数
+  origin_request_id: string | null;
+  status: OfferStatus;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ShiftOfferCandidate {
+  id: string;
+  offer_id: string;
+  staff_id: string;
+  position: number;
+  status: OfferCandidateStatus;
+  asked_at: string | null;
+  responded_at: string | null;
+  created_at: string;
+}
+
+export interface TimeRecord {
+  id: string;
+  staff_id: string;
+  work_date: string; // "YYYY-MM-DD"（JST出勤日）
+  clock_in: string | null; // ISO timestamptz
+  clock_out: string | null;
+  source: string; // "line" | "manual"
+  in_lat: number | null;
+  in_lng: number | null;
+  note: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;

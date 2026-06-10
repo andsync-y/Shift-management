@@ -59,7 +59,9 @@ export default async function AdminDashboard() {
   let timeOff: TimeOffRequest[] = [];
   if (latest) {
     const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
-    const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-31`;
+    const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-${String(
+      new Date(latest.year, latest.month, 0).getDate()
+    ).padStart(2, "0")}`;
     const [{ data: reqs }, { data: offs }] = await Promise.all([
       supabase.from("shift_requirements").select("*").eq("period_id", latest.id),
       supabase
@@ -89,32 +91,28 @@ export default async function AdminDashboard() {
       </div>
 
       {/* summary (compact quick links) */}
-      <div className="summary-grid" style={{ gridTemplateColumns: "repeat(2,1fr)", marginBottom: 24 }}>
-        <div className="stat" style={{ minHeight: 0, padding: "22px 24px" }}>
-          <div className="eyebrow">Active Staff</div>
-          <div className="big en" style={{ fontSize: 40, margin: "14px 0 0" }}>
+      <div className="stat-strip">
+        <Link href="/admin/staff" className="stat-mini">
+          <div>
+            <div className="eyebrow">Active Staff</div>
+            <div className="stat-mini-sub">スタッフ管理</div>
+          </div>
+          <div className="stat-mini-num en">
             {staffCount ?? 0}
             <small>名</small>
           </div>
-          <div className="act" style={{ marginTop: 14 }}>
-            <Link href="/admin/staff" className="btn-link">
-              スタッフ管理 <span className="arrow">→</span>
-            </Link>
-          </div>
-        </div>
+        </Link>
 
-        <div className="stat" style={{ minHeight: 0, padding: "22px 24px" }}>
-          <div className="eyebrow">Pending Time-off</div>
-          <div className="big en" style={{ fontSize: 40, margin: "14px 0 0" }}>
+        <Link href="/admin/requests" className="stat-mini">
+          <div>
+            <div className="eyebrow">Pending Time-off</div>
+            <div className="stat-mini-sub">休み希望を確認</div>
+          </div>
+          <div className="stat-mini-num en">
             {pendingCount ?? 0}
             <small>件</small>
           </div>
-          <div className="act" style={{ marginTop: 14 }}>
-            <Link href="/admin/requests" className="btn-link">
-              休み希望を確認 <span className="arrow">→</span>
-            </Link>
-          </div>
-        </div>
+        </Link>
       </div>
 
       {/* insights: 今日明日の出勤者 / 人手不足 / 勤務状況 / 集計 */}
@@ -139,14 +137,21 @@ export default async function AdminDashboard() {
             </Link>
           </div>
           <div className="section-body">
-            {latestShifts.length > 0 ? (
-              <ShiftCalendarView
-                year={latest.year}
-                month={latest.month}
-                shifts={latestShifts}
-                staff={staffList}
-                timeOff={timeOff}
-              />
+            {latestShifts.length > 0 || timeOff.length > 0 ? (
+              <>
+                {latestShifts.length === 0 && (
+                  <p className="help" style={{ marginTop: 0, marginBottom: 16 }}>
+                    まだシフトはありません（承認済みのお休みのみ表示中）。シフト作成画面で生成してください。
+                  </p>
+                )}
+                <ShiftCalendarView
+                  year={latest.year}
+                  month={latest.month}
+                  shifts={latestShifts}
+                  staff={staffList}
+                  timeOff={timeOff}
+                />
+              </>
             ) : (
               <p className="help" style={{ marginTop: 0 }}>
                 このシフト期間にはまだシフトがありません。シフト作成画面で生成してください。
