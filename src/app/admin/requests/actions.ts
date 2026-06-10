@@ -20,7 +20,7 @@ export async function reviewRequest(
       reviewed_at: new Date().toISOString(),
     })
     .eq("id", requestId)
-    .select("id, staff_id, off_date, request_type")
+    .select("id, staff_id, off_date, request_type, start_time, end_time")
     .maybeSingle();
 
   // 申請者へ LINE 通知（連携済みのみ・未設定なら no-op）
@@ -38,8 +38,19 @@ export async function reviewRequest(
       `${Number(m)}/${Number(d)} の${kind}が【${verb}】されました。`
     );
 
-    // 承認時: 人員が不足していれば他スタッフへ自動で出勤打診を開始する。
     if (status === "approved") {
+      // 終日休みの承認時: 本人のその日のシフトを削除（不要な出勤予定を消す）
+      const isAllDayOff =
+        updated.request_type === "off" && !updated.start_time && !updated.end_time;
+      if (isAllDayOff) {
+        await supabase
+          .from("shifts")
+          .delete()
+          .eq("staff_id", updated.staff_id)
+          .eq("work_date", updated.off_date);
+      }
+
+      // 人員が不足していれば他スタッフへ自動で出勤打診を開始する。
       await startOfferForApprovedRequest(createAdminClient(), {
         id: updated.id,
         staff_id: updated.staff_id,
@@ -54,6 +65,45 @@ export async function reviewRequest(
   revalidatePath("/admin");
   revalidatePath("/admin/shifts", "layout");
   revalidatePath("/staff");
+}
+
+// 既に承認済みの「終日休み」に対して、本人のその日のシフトが残っていれば一括削除する。
+// 自動削除を導入する前に承認された分を掃除するための一回限りのメンテ操作。
+export async function cleanupApprovedOffShifts(): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: offs, error } = await supabase
+    .from("time_off_requests")
+    .select("staff_id, off_date, start_time, end_time")
+    .eq("request_type", "off")
+    .eq("status", "approved");
+  if (error) return { ok: false, message: error.message };
+
+  // 終日休み（時間指定なし）のみ対象
+  const allDay = (offs ?? []).filter((o) => !o.start_time && !o.end_time);
+  let removed = 0;
+  for (const o of allDay) {
+    const { data: deleted } = await supabase
+      .from("shifts")
+      .delete()
+      .eq("staff_id", o.staff_id)
+      .eq("work_date", o.off_date)
+      .select("id");
+    removed += deleted?.length ?? 0;
+  }
+
+  revalidatePath("/admin/requests");
+  revalidatePath("/admin");
+  revalidatePath("/admin/shifts", "layout");
+  revalidatePath("/staff");
+  return {
+    ok: true,
+    message:
+      removed > 0
+        ? `承認済みの終日休みに対応するシフト ${removed} 件を削除しました。`
+        : "削除対象のシフトはありませんでした。",
+  };
 }
 
 // 申請そのものを削除（オーナー用）。テストや誤申請を一覧・カレンダーから完全に消す。

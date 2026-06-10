@@ -10,6 +10,7 @@ import {
   type TimeOffRequest,
 } from "@/lib/types";
 import RequestActions from "./RequestActions";
+import CleanupShiftsButton from "./CleanupShiftsButton";
 
 function fmtRange(r: TimeOffRequest): string {
   if (!r.start_time || !r.end_time) return "終日";
@@ -222,7 +223,10 @@ export default async function AdminRequestsPage() {
             </span>
             <span className="muted" style={{ fontWeight: 400 }}> 件</span>
           </h2>
-          <span className="eyebrow">Time-off</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <CleanupShiftsButton />
+            <span className="eyebrow">Time-off</span>
+          </span>
         </div>
         <div className="section-body" style={{ paddingTop: 8 }}>
           {list.length === 0 ? (
