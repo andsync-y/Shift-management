@@ -47,8 +47,10 @@ LIFF / ジオフェンス（他機能と共用）:
 
 | 変数 | 内容 |
 |---|---|
-| `NEXT_PUBLIC_LIFF_ID` | LIFFアプリのID（打刻と共用。エンドポイントURLはサイトのルート） |
+| `NEXT_PUBLIC_LIFF_ID` | LIFFアプリのID（打刻と共用。エンドポイントURLは `/liff`） |
 | 店舗ジオフェンス | `lib/geo` の設定（緯度・経度・半径）。一般スタッフの距離判定に使用 |
+| `AUTO_LOCK_AFTER_MIN` | 無人時の自動施錠までの分数（既定15）。`0` で自動施錠を無効化 |
+| `CRON_SECRET` | Cron認証用シークレット（自動施錠エンドポイントの呼び出しに必須） |
 
 > 前提：セサミ5/6に Wi-Fiモジュール2 / Hub3 をペアリングし、アプリの
 > 「設定 → 連携 → API」を ON にしておくこと（Bluetooth単体ではクラウド操作不可）。
@@ -115,6 +117,30 @@ LIFF / ジオフェンス（他機能と共用）:
 > 鍵の意図（解錠/施錠）を一時記憶する実装が必要になるため、打刻と操作感を揃える
 > 目的で LIFF・1タップ方式を採用した。
 
+## 無人時の自動施錠（かけ忘れ防止）
+
+`/api/cron/auto-lock`（`src/app/api/cron/auto-lock/route.ts`）が判定・施錠する。
+
+- 在店判定は**打刻（time_records）**が根拠。直近16時間以内に出勤があり、いま
+  **誰も勤務中でない（全員 退勤済み）**状態が `AUTO_LOCK_AFTER_MIN` 分続いたら施錠。
+- 重複施錠・重複通知は**「現在のロック状態が `unlocked` のときだけ施錠」**で防止
+  （施錠後は `locked` になり次回以降は何もしない）。
+- 成功時はオーナー（super_admin）へ LINE 通知。
+- **前提：退勤打刻**。退勤し忘れると「無人」と見なさない。逆に、打刻に現れない人
+  （客等）は判定対象外なので、不在の最終確認は運用で担保する。
+
+### 起動方法（重要：Vercel Hobby は Cron が1日1回まで）
+
+Vercel Cron だけでは5分間隔にできないため、**外部スケジューラから5分おきに叩く**：
+
+```
+GET https://shift.andsync.jp/api/cron/auto-lock?key=<CRON_SECRET>
+```
+
+- 認証：`?key=<CRON_SECRET>` または `Authorization: Bearer <CRON_SECRET>`。
+- 推奨：cron-job.org（無料・1分〜）に上記URLを5分間隔で登録。
+- 代替：GitHub Actions のスケジュール、Supabase Cron（pg_cron + pg_net）など。
+
 ## 関連ファイル
 
 | ファイル | 役割 |
@@ -125,3 +151,4 @@ LIFF / ジオフェンス（他機能と共用）:
 | `src/app/liff/lock/page.tsx` | 旧・鍵専用ページ（`/liff` に統合済み。後方互換で残置） |
 | `src/app/liff/punch/page.tsx` | 旧・打刻専用ページ（同上） |
 | `src/app/api/line/webhook/route.ts` | テキスト「解錠/施錠」等のキーワード処理 |
+| `src/app/api/cron/auto-lock/route.ts` | 無人時の自動施錠（外部スケジューラから定期呼び出し） |
