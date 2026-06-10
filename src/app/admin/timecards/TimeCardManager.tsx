@@ -72,24 +72,21 @@ export default function TimeCardManager({
 
   const openTotal = useMemo(() => records.filter((r) => !r.clock_out).length, [records]);
 
-  // 時刻のみ編集：既存の日付部分は保持し、時刻だけ差し替える。
-  // 退勤が未設定の行は出勤日を基準にし、出勤時刻より前なら翌日扱い（日跨ぎ）。
+  // 時刻のみ編集：日付は勤務日から導出する。
+  // 退勤は出勤時刻より前なら翌日扱い（日跨ぎ）。退勤し忘れで翌日に打刻された
+  // 記録も、正しい時刻を入れ直せば勤務日当日に修正される。
   function setTime(rec: TimeRecord, key: "in" | "out", time: string) {
     setEdit((e) => {
       const cur = e[rec.id] ?? { in: toLocalInput(rec.clock_in), out: toLocalInput(rec.clock_out) };
       const next = { ...cur };
       if (key === "in") {
-        const date = cur.in ? cur.in.split("T")[0] : rec.work_date;
-        next.in = time ? `${date}T${time}` : "";
+        next.in = time ? `${rec.work_date}T${time}` : "";
+      } else if (!time) {
+        next.out = "";
       } else {
-        if (!time) {
-          next.out = "";
-        } else {
-          let date = cur.out ? cur.out.split("T")[0] : rec.work_date;
-          const inTime = (cur.in || "T").split("T")[1] ?? "";
-          if (!cur.out && inTime && time < inTime) date = addDays(rec.work_date, 1); // 日跨ぎ
-          next.out = `${date}T${time}`;
-        }
+        const inTime = (next.in || "T").split("T")[1] ?? "";
+        const date = inTime && time < inTime ? addDays(rec.work_date, 1) : rec.work_date;
+        next.out = `${date}T${time}`;
       }
       return { ...e, [rec.id]: next };
     });
@@ -150,6 +147,7 @@ export default function TimeCardManager({
           <label>Staff <span className="jp-label">／ スタッフ</span></label>
           <select name="staff_id" className="select" required defaultValue="">
             <option value="" disabled>選択</option>
+            <option value="all">全スタッフ（一括）</option>
             {staff.map((s) => (
               <option key={s.id} value={s.id}>{s.full_name}</option>
             ))}
@@ -245,6 +243,8 @@ export default function TimeCardManager({
                     className="input en tc-dt"
                     value={e.out.split("T")[1] ?? ""}
                     onChange={(ev) => setTime(r, "out", ev.target.value)}
+                    title={e.out && e.out.split("T")[0] !== r.work_date ? `退勤が翌日（${e.out.split("T")[0]}）になっています。正しい時刻を入れ直すと当日に修正されます` : undefined}
+                    style={e.out && e.out.split("T")[0] !== r.work_date ? { borderColor: "#c08a2d", color: "#94650e" } : undefined}
                   />
                   <span className="tc-badge">{open && <span className="live-dot" title="打刻中" />}</span>
                   <button className="btn-mini" onClick={() => save(r)} disabled={pending}>保存</button>

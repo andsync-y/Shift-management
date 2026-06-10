@@ -21,7 +21,7 @@ function jstDateOf(iso: string): string {
 }
 
 const addSchema = z.object({
-  staff_id: z.string().uuid(),
+  staff_id: z.string().min(1),
   clock_in: z.string().min(1),
   clock_out: z.string().optional().or(z.literal("")),
 });
@@ -37,6 +37,33 @@ export async function addTimeRecord(_prev: TcResult | null, formData: FormData):
   if (outIso && outIso <= inIso) return { ok: false, message: "退勤は出勤より後にしてください。" };
 
   const supabase = await createClient();
+
+  // 「全スタッフ」一括追加（稼働中のみ）
+  if (parsed.data.staff_id === "all") {
+    const { data: profiles, error: pErr } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("is_active", true);
+    if (pErr) return { ok: false, message: pErr.message };
+    const ids = (profiles ?? []).map((p) => p.id as string);
+    if (ids.length === 0) return { ok: false, message: "稼働中のスタッフがいません。" };
+    const { error } = await supabase.from("time_records").insert(
+      ids.map((id) => ({
+        staff_id: id,
+        work_date: jstDateOf(inIso),
+        clock_in: inIso,
+        clock_out: outIso,
+        source: "manual",
+      }))
+    );
+    if (error) return { ok: false, message: error.message };
+    revalidatePath("/admin/timecards");
+    return { ok: true, message: `${ids.length}名分の勤怠を追加しました。` };
+  }
+
+  if (!z.string().uuid().safeParse(parsed.data.staff_id).success) {
+    return { ok: false, message: "スタッフを選択してください。" };
+  }
   const { error } = await supabase.from("time_records").insert({
     staff_id: parsed.data.staff_id,
     work_date: jstDateOf(inIso),
