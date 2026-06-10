@@ -1770,42 +1770,132 @@ body {
   transition: width 0.2s ease;
 }
 
-/* 勤怠（タイムカード）の編集行 */
+/* =========================================================
+   TIME CARDS — 勤怠・給与集計（Claude Design 移植）
+   ========================================================= */
+.page-wide { max-width: 1360px; }
+
+.month-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.month-nav .btn-outline { padding: 11px 16px; white-space: nowrap; }
+.month-nav .input { padding: 10px 12px; font-size: 13.5px; }
+
+.tc-grid {
+  display: grid; grid-template-columns: 0.9fr 1.1fr; gap: 24px;
+  align-items: start;
+}
+.tc-grid > .section { margin-bottom: 0; }
+
+/* --- 左：スタッフ別 集計 --- */
+.pay-table th { padding: 0 12px 12px; }
+.pay-table td { padding: 9px 12px; vertical-align: middle; font-size: 13.5px; }
+.pay-table .en { font-size: 13px; letter-spacing: 0.01em; }
+.tc-ellip { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+
+/* 固定3カラム（色ドット／名前／稼働ドット）で全行の位置を揃える */
+.pay-staff {
+  display: grid; grid-template-columns: 7px 1fr 14px;
+  align-items: center; gap: 10px; min-width: 0;
+}
+.pay-staff .pname { font-weight: 500; }
+
+.live-dot {
+  width: 7px; height: 7px; border-radius: 50%; flex: none; justify-self: center;
+  background: oklch(0.62 0.13 152);
+  box-shadow: 0 0 0 3px color-mix(in oklab, oklch(0.62 0.13 152) 16%, transparent);
+}
+
+.pay-total {
+  display: flex; align-items: baseline; justify-content: flex-end; gap: 14px;
+  padding-top: 18px; margin-top: 4px; border-top: 1px solid var(--line);
+}
+.pt-amount { font-weight: 300; font-size: 32px; letter-spacing: -0.01em; line-height: 1; }
+
+/* --- 右：打刻記録 --- */
+.tc-records-body { padding-top: 14px; }
+.tc-add {
+  display: grid; grid-template-columns: 135px 1fr 1fr auto;
+  gap: 12px; align-items: end;
+  margin-bottom: 10px; padding-bottom: 12px; border-bottom: 1px solid var(--line);
+}
+.tc-add .field { gap: 4px; min-width: 0; }
+.tc-add .field > label { white-space: nowrap; font-size: 10px; }
+.tc-add .field > label .jp-label { font-size: 11.5px; }
+.tc-add .input { padding: 6px 9px; font-size: 12.5px; }
+.tc-add .select { padding-top: 6px; padding-bottom: 6px; font-size: 12.5px; }
+.tc-add .btn-fill { padding: 7px 14px; font-size: 12.5px; }
+/* カードが狭い中間幅では2×2に（ボタンは退勤の右隣のまま） */
+@media (max-width: 1240px) and (min-width: 1101px) {
+  .tc-add { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 560px) {
+  .tc-add { grid-template-columns: 1fr 1fr; }
+  .tc-add .field:first-child { grid-column: 1 / -1; }
+  .tc-add .btn-fill { justify-self: start; }
+}
+
+.tc-toolbar {
+  display: flex; align-items: center; gap: 14px; flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+.tc-toolbar .select, .tc-toolbar .input { padding-top: 6px !important; padding-bottom: 6px !important; }
+.tc-spacer { flex: 1; }
+
+.tc-list {
+  border: 1px solid var(--line); border-radius: var(--radius); background: #fff;
+  max-height: 560px; overflow-y: auto;
+}
+.tc-day-head {
+  position: sticky; top: 0; z-index: 1;
+  background: var(--paper-2);
+  font-size: 11px; font-weight: 500; letter-spacing: 0.1em; color: var(--ink-2);
+  padding: 5px 16px; border-bottom: 1px solid var(--line);
+}
+.tc-day + .tc-day .tc-day-head { border-top: 1px solid var(--line); }
+
 .tc-row {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 10px;
-  padding: 12px 2px; border-bottom: 1px solid var(--line);
+  display: grid;
+  grid-template-columns: minmax(96px, 1fr) 104px auto 104px 18px auto auto;
+  gap: 10px; align-items: center;
+  padding: 5px 16px; border-bottom: 1px solid var(--line);
+  white-space: nowrap;
 }
 .tc-row:last-child { border-bottom: 0; }
-.tc-name { min-width: 110px; font-size: 14px; }
-.tc-input { width: 200px; max-width: 46vw; }
-.tc-sep { color: var(--ink-3); }
-.tc-actions { margin-left: auto; display: inline-flex; gap: 14px; }
+.tc-row.open { background: color-mix(in oklab, oklch(0.62 0.13 152) 4%, #fff); }
+.tc-name { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
+.tc-dt { padding: 5px 8px; font-size: 12px; min-width: 0; }
+.tc-badge { display: flex; justify-content: center; }
 
-/* 勤怠ページ：左右2カラム＋1画面コンパクト */
-.tc-grid { display: grid; grid-template-columns: 1fr; gap: 22px; align-items: start; }
-.tc-grid > .section { margin: 0; }
-@media (min-width: 1100px) {
-  .tc-grid { grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); }
+.btn-mini {
+  background: #fff; border: 1px solid var(--line-strong); border-radius: var(--radius);
+  padding: 4px 11px; font-size: 12px; font-weight: 500; line-height: 1.5;
+  color: var(--accent-ink); white-space: nowrap; cursor: pointer;
+  transition: border-color .15s ease, background .15s ease;
 }
-/* 一覧だけを内部スクロールさせ、ページ全体は1画面に収める */
-.tc-scroll { max-height: 56vh; overflow-y: auto; padding-right: 6px; }
-/* 右カラム（打刻記録）は行を詰めて表示 */
-.tc-compact .tc-row { padding: 7px 2px; gap: 6px; flex-wrap: nowrap; }
-.tc-compact .tc-name { min-width: 72px; max-width: 100px; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.tc-compact .tc-input { width: 136px; max-width: 136px; font-size: 12px; padding: 5px 6px; flex-shrink: 0; }
-.tc-compact .tc-sep { flex-shrink: 0; }
-.tc-compact .tc-actions { gap: 8px; flex-shrink: 0; font-size: 12px; }
-.tc-compact .add-row { flex-wrap: wrap; gap: 8px 10px; }
-.tc-compact .add-row .input,
-.tc-compact .add-row .select { font-size: 12px; padding: 6px 8px; }
-/* 左パネル（スタッフ集計）をコンパクトに */
-.tc-grid .staff-table td { padding: 10px 12px; font-size: 13px; }
-.tc-grid .staff-table th { padding: 0 12px 10px; }
-.tc-grid .staff-table td.mono { white-space: nowrap; font-size: 12px; }
-/* 絞り込みバーをコンパクトに */
-.tc-compact .tc-filter { gap: 7px; }
-.tc-compact .tc-filter .input,
-.tc-compact .tc-filter .select { font-size: 12px; padding: 6px 8px; width: auto; }
+.btn-mini:hover { border-color: var(--accent); background: var(--accent-wash); }
+.btn-mini.ink { color: var(--ink-2); }
+.btn-mini.ink:hover { border-color: var(--ink); background: var(--paper-2); }
+.btn-mini:disabled { opacity: .5; cursor: default; }
+
+.tc-empty {
+  padding: 64px 30px; text-align: center;
+  font-size: 13px; color: var(--ink-2);
+}
+
+@media (max-width: 1100px) {
+  .tc-grid { grid-template-columns: 1fr; }
+}
+@media (max-width: 760px) {
+  .month-nav { width: 100%; }
+  .tc-row {
+    grid-template-columns: 1fr 1fr;
+    grid-template-areas: "name badge" "in in" "out out" "act act";
+  }
+  .tc-row > .tc-name { grid-area: name; }
+  .tc-row > .tc-dt:nth-of-type(1) { grid-area: in; }
+  .tc-row > .arrow { display: none; }
+  .tc-row > .tc-dt:nth-of-type(2) { grid-area: out; }
+  .tc-row > .tc-badge { grid-area: badge; justify-content: flex-end; }
+}
 
 /* LIFF 打刻ページ */
 .liff-wrap { min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--bg); }

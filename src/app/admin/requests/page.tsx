@@ -5,6 +5,7 @@ import {
   REQUEST_STATUS_LABELS_JA,
   type Profile,
   type RequestStatus,
+  type Shift,
   type ShiftRequirement,
   type TimeOffRequest,
 } from "@/lib/types";
@@ -98,6 +99,22 @@ export default async function AdminRequestsPage() {
   const activeStaff = staffList.filter((s) => s.role === "staff" && s.is_active).length;
 
   const list = (requests ?? []) as TimeOffRequest[];
+
+  // 申請日に組まれているシフトを取得（該当者・該当日のみ）
+  const reqDates = [...new Set(list.map((r) => r.off_date))];
+  const { data: shiftsRaw } = reqDates.length
+    ? await supabase
+        .from("shifts")
+        .select("staff_id, work_date, start_time, end_time")
+        .in("work_date", reqDates)
+    : { data: [] };
+  const shiftByKey = new Map<string, string>();
+  for (const s of (shiftsRaw ?? []) as Pick<Shift, "staff_id" | "work_date" | "start_time" | "end_time">[]) {
+    const key = `${s.staff_id}|${s.work_date}`;
+    const range = `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`;
+    shiftByKey.set(key, shiftByKey.has(key) ? `${shiftByKey.get(key)}, ${range}` : range);
+  }
+  const shiftOf = (r: TimeOffRequest) => shiftByKey.get(`${r.staff_id}|${r.off_date}`);
   const pending = list.filter((r) => r.status === "pending").length;
 
   const { gaps, hasRequirements } = findCoverageGaps(
@@ -211,6 +228,7 @@ export default async function AdminRequestsPage() {
                     <th>日付</th>
                     <th>区分</th>
                     <th>時間</th>
+                    <th>当日のシフト</th>
                     <th>理由</th>
                     <th>状態</th>
                     <th style={{ textAlign: "right" }}>操作</th>
@@ -237,6 +255,9 @@ export default async function AdminRequestsPage() {
                           </span>
                         </td>
                         <td className="mono soft">{fmtRange(r)}</td>
+                        <td className="mono soft" style={{ whiteSpace: "nowrap" }}>
+                          {shiftOf(r) ?? <span className="muted">シフトなし</span>}
+                        </td>
                         <td className="soft">{r.reason || "—"}</td>
                         <td>
                           <StatusPill status={r.status} />
@@ -282,6 +303,10 @@ export default async function AdminRequestsPage() {
                         <div className="r">
                           <span className="k">時間</span>
                           <span className="v mono">{fmtRange(r)}</span>
+                        </div>
+                        <div className="r">
+                          <span className="k">当日のシフト</span>
+                          <span className="v mono">{shiftOf(r) ?? "シフトなし"}</span>
                         </div>
                         <div className="r">
                           <span className="k">理由</span>

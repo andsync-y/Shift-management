@@ -45,12 +45,13 @@ export default async function TimeCardsPage({
   }));
 
   // スタッフ別 集計
-  type Agg = { name: string; minutes: number; wage: number | null; open: number };
+  type Agg = { name: string; color: string; minutes: number; wage: number | null; open: number };
   const agg = new Map<string, Agg>();
   for (const r of records) {
+    const p = staffMap.get(r.staff_id);
     const a =
       agg.get(r.staff_id) ??
-      { name: staffMap.get(r.staff_id)?.full_name ?? "?", minutes: 0, wage: staffMap.get(r.staff_id)?.hourly_wage ?? null, open: 0 };
+      { name: p?.full_name ?? "?", color: p?.display_color ?? "var(--ink-3)", minutes: 0, wage: p?.hourly_wage ?? null, open: 0 };
     if (r.clock_in && r.clock_out) a.minutes += minutesBetween(r.clock_in, r.clock_out);
     else if (r.clock_in && !r.clock_out) a.open += 1;
     agg.set(r.staff_id, a);
@@ -59,17 +60,17 @@ export default async function TimeCardsPage({
   const totalPay = rows.reduce((s, r) => s + (r.wage ? (r.minutes / 60) * r.wage : 0), 0);
 
   return (
-    <div className="page">
+    <div className="page page-wide">
       <div className="page-head">
         <div className="masthead">
           <div className="eyebrow accent">Owner Console</div>
           <h1 className="ttl en" style={{ marginTop: 12 }}>Time Cards</h1>
           <p className="sub">勤怠・給与集計 — {y}年{m}月</p>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+        <div className="month-nav">
           <a className="btn-outline" href={`/admin/timecards?month=${prev}`}>← 前月</a>
           <form method="get" style={{ display: "flex", gap: 8, alignItems: "center" }}>
-            <input type="month" name="month" defaultValue={month} className="input" style={{ width: 150 }} />
+            <input type="month" name="month" defaultValue={month} className="input en" style={{ width: 160 }} />
             <button type="submit" className="btn-outline">表示</button>
           </form>
           <a className="btn-outline" href={`/admin/timecards?month=${next}`}>翌月 →</a>
@@ -78,46 +79,53 @@ export default async function TimeCardsPage({
 
       <div className="tc-grid">
       {/* 給与集計 */}
-      <div className="section">
+      <div className="section" style={{ alignSelf: "start" }}>
         <div className="section-head">
           <h2>スタッフ別 集計</h2>
           <span className="eyebrow">Payroll</span>
         </div>
-        <div className="section-body">
-          <p className="help" style={{ marginTop: 0, marginBottom: 18 }}>
-            打刻（出勤〜退勤）の合計時間と、時給からの概算給与です。休憩時間は自動控除していません（必要なら別途調整してください）。
+        <div className="section-body" style={{ paddingTop: 22 }}>
+          <p className="help" style={{ marginTop: 0, marginBottom: 20 }}>
+            打刻（出勤〜退勤）の合計時間と、時給からの概算給与です。休憩時間は自動控除していません。
           </p>
           {rows.length === 0 ? (
             <p className="help" style={{ margin: 0 }}>この月の記録はありません。</p>
           ) : (
             <>
-              <table className="staff-table">
+              <table className="staff-table pay-table">
                 <thead>
                   <tr>
                     <th>スタッフ</th>
-                    <th>勤務時間</th>
-                    <th>時給</th>
-                    <th>概算給与</th>
+                    <th style={{ textAlign: "right" }}>勤務時間</th>
+                    <th style={{ textAlign: "right" }}>時給</th>
+                    <th style={{ textAlign: "right" }}>概算給与</th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((r) => (
                     <tr key={r.name}>
                       <td>
-                        {r.name}
-                        {r.open > 0 && <span className="mk early" style={{ marginLeft: 8, fontSize: 10 }}>打刻中{r.open}</span>}
+                        <span className="pay-staff">
+                          <span className="dot" style={{ background: r.color }} />
+                          <span className="pname tc-ellip" title={r.name}>{r.name}</span>
+                          {r.open > 0 && <span className="live-dot" title={`打刻中 ${r.open}件`} />}
+                        </span>
                       </td>
-                      <td className="mono">{Math.floor(r.minutes / 60)}時間{r.minutes % 60}分</td>
-                      <td className="mono soft">{r.wage ? `¥${r.wage.toLocaleString()}` : "—"}</td>
-                      <td className="mono">{r.wage ? `¥${Math.round((r.minutes / 60) * r.wage).toLocaleString()}` : "—"}</td>
+                      <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {Math.floor(r.minutes / 60)}時間{r.minutes % 60}分
+                      </td>
+                      <td className="muted" style={{ textAlign: "right" }}>{r.wage ? `¥${r.wage.toLocaleString()}` : "—"}</td>
+                      <td className={r.wage ? "en" : "muted"} style={{ textAlign: "right" }}>
+                        {r.wage ? `¥${Math.round((r.minutes / 60) * r.wage).toLocaleString()}` : "—"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-              <p style={{ marginTop: 16, textAlign: "right" }}>
-                <span className="muted" style={{ fontSize: 13 }}>概算合計 </span>
-                <span className="en" style={{ fontSize: 22 }}>¥{Math.round(totalPay).toLocaleString()}</span>
-              </p>
+              <div className="pay-total">
+                <span className="muted" style={{ fontSize: 12.5 }}>概算合計</span>
+                <span className="pt-amount en">¥{Math.round(totalPay).toLocaleString()}</span>
+              </div>
             </>
           )}
         </div>
@@ -129,9 +137,9 @@ export default async function TimeCardsPage({
           <h2>打刻記録</h2>
           <span className="eyebrow">Records</span>
         </div>
-        <div className="section-body">
+        <div className="section-body tc-records-body">
           <TimeCardManager
-            staff={staff.map((s) => ({ id: s.id, full_name: s.full_name }))}
+            staff={staff.map((s) => ({ id: s.id, full_name: s.full_name, display_color: s.display_color }))}
             records={records}
             month={month}
           />

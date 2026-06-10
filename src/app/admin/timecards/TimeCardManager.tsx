@@ -29,28 +29,37 @@ function dateLabel(workDate: string): string {
 function csvCell(v: string): string {
   return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
-
-const DEFAULT_LIMIT = 50;
+// "YYYY-MM-DD" + n日
+function addDays(date: string, n: number): string {
+  const [y, m, d] = date.split("-").map(Number);
+  const t = new Date(Date.UTC(y, m - 1, d + n));
+  return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
+}
 
 export default function TimeCardManager({
   staff,
   records,
   month,
 }: {
-  staff: Pick<Profile, "id" | "full_name">[];
+  staff: Pick<Profile, "id" | "full_name" | "display_color">[];
   records: (TimeRecord & { staffName: string })[];
   month: string;
 }) {
   const router = useRouter();
   const [addState, addAction, adding] = useActionState(addTimeRecord, null);
   const [pending, startTransition] = useTransition();
+  // 編集状態は完全な datetime-local 文字列で保持（時刻だけ画面で編集）
   const [edit, setEdit] = useState<Record<string, { in: string; out: string }>>({});
+
+  const colorOf = useMemo(() => {
+    const m = new Map(staff.map((s) => [s.id, s.display_color]));
+    return (id: string) => m.get(id) ?? "var(--ink-3)";
+  }, [staff]);
 
   // 絞り込み
   const [staffId, setStaffId] = useState("");
   const [day, setDay] = useState(""); // yyyy-mm-dd（その月内）
   const [openOnly, setOpenOnly] = useState(false);
-  const [showAll, setShowAll] = useState(false);
 
   const filtered = useMemo(() => {
     return records.filter((r) => {
@@ -61,18 +70,29 @@ export default function TimeCardManager({
     });
   }, [records, staffId, day, openOnly]);
 
-  const visible = showAll ? filtered : filtered.slice(0, DEFAULT_LIMIT);
-  const hiddenCount = filtered.length - visible.length;
   const openTotal = useMemo(() => records.filter((r) => !r.clock_out).length, [records]);
 
-  function setField(id: string, key: "in" | "out", v: string, rec: TimeRecord) {
-    setEdit((e) => ({
-      ...e,
-      [id]: {
-        in: key === "in" ? v : e[id]?.in ?? toLocalInput(rec.clock_in),
-        out: key === "out" ? v : e[id]?.out ?? toLocalInput(rec.clock_out),
-      },
-    }));
+  // 時刻のみ編集：既存の日付部分は保持し、時刻だけ差し替える。
+  // 退勤が未設定の行は出勤日を基準にし、出勤時刻より前なら翌日扱い（日跨ぎ）。
+  function setTime(rec: TimeRecord, key: "in" | "out", time: string) {
+    setEdit((e) => {
+      const cur = e[rec.id] ?? { in: toLocalInput(rec.clock_in), out: toLocalInput(rec.clock_out) };
+      const next = { ...cur };
+      if (key === "in") {
+        const date = cur.in ? cur.in.split("T")[0] : rec.work_date;
+        next.in = time ? `${date}T${time}` : "";
+      } else {
+        if (!time) {
+          next.out = "";
+        } else {
+          let date = cur.out ? cur.out.split("T")[0] : rec.work_date;
+          const inTime = (cur.in || "T").split("T")[1] ?? "";
+          if (!cur.out && inTime && time < inTime) date = addDays(rec.work_date, 1); // 日跨ぎ
+          next.out = `${date}T${time}`;
+        }
+      }
+      return { ...e, [rec.id]: next };
+    });
   }
   function save(rec: TimeRecord) {
     const e = edit[rec.id] ?? { in: toLocalInput(rec.clock_in), out: toLocalInput(rec.clock_out) };
@@ -115,20 +135,20 @@ export default function TimeCardManager({
   }
 
   // 表示用に日付ごとへグループ化（records は clock_in 降順で渡ってくる）
-  const groups: { date: string; rows: typeof visible }[] = [];
-  for (const r of visible) {
+  const groups: { date: string; rows: typeof filtered }[] = [];
+  for (const r of filtered) {
     const last = groups[groups.length - 1];
     if (last && last.date === r.work_date) last.rows.push(r);
     else groups.push({ date: r.work_date, rows: [r] });
   }
 
   return (
-    <div className="tc-compact">
+    <>
       {/* 手動追加（打刻漏れの補正用） */}
-      <form action={addAction} className="add-row" style={{ alignItems: "flex-end", marginBottom: 18 }}>
+      <form action={addAction} className="tc-add">
         <div className="field">
           <label>Staff <span className="jp-label">／ スタッフ</span></label>
-          <select name="staff_id" className="select" required defaultValue="" style={{ width: 130, fontSize: 12 }}>
+          <select name="staff_id" className="select" required defaultValue="">
             <option value="" disabled>選択</option>
             {staff.map((s) => (
               <option key={s.id} value={s.id}>{s.full_name}</option>
@@ -137,32 +157,29 @@ export default function TimeCardManager({
         </div>
         <div className="field">
           <label>Clock in <span className="jp-label">／ 出勤</span></label>
-          <input name="clock_in" type="datetime-local" className="input" required style={{ fontSize: 12 }} />
+          <input name="clock_in" type="datetime-local" className="input en" required />
         </div>
         <div className="field">
           <label>Clock out <span className="jp-label">／ 退勤（任意）</span></label>
-          <input name="clock_out" type="datetime-local" className="input" style={{ fontSize: 12 }} />
+          <input name="clock_out" type="datetime-local" className="input en" />
         </div>
-        <button type="submit" className="btn-fill" disabled={adding} style={{ padding: "9px 16px", fontSize: 13 }}>
+        <button type="submit" className="btn-fill" disabled={adding} style={{ whiteSpace: "nowrap" }}>
           {adding ? "追加中…" : "勤怠を追加"}
         </button>
-        {addState && (
-          <span className="help" style={{ color: addState.ok ? "#3d6b4f" : "#9a3a30" }}>
-            {addState.message}
-          </span>
-        )}
       </form>
+      {addState && (
+        <p className="help" style={{ margin: "0 0 10px", color: addState.ok ? "#3d6b4f" : "#9a3a30" }}>
+          {addState.message}
+        </p>
+      )}
 
       {/* 絞り込みツールバー */}
-      <div
-        className="tc-filter"
-        style={{ display: "flex", flexWrap: "wrap", gap: 10, alignItems: "center", marginBottom: 14 }}
-      >
+      <div className="tc-toolbar">
         <select
           className="select"
           value={staffId}
           onChange={(e) => setStaffId(e.target.value)}
-          style={{ width: 120, fontSize: 12 }}
+          style={{ width: 130, padding: "9px 30px 9px 12px", fontSize: 13 }}
         >
           <option value="">全スタッフ</option>
           {staff.map((s) => (
@@ -171,89 +188,73 @@ export default function TimeCardManager({
         </select>
         <input
           type="date"
-          className="input"
+          className="input en"
           value={day}
           onChange={(e) => setDay(e.target.value)}
-          style={{ width: 130, fontSize: 12 }}
+          style={{ width: 140, padding: "9px 12px", fontSize: 13 }}
         />
         {day && (
           <button className="btn-link" onClick={() => setDay("")} disabled={pending}>クリア</button>
         )}
-        <label style={{ display: "flex", alignItems: "center", gap: 5, fontSize: 12, cursor: "pointer" }}>
+        <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12.5, cursor: "pointer" }}>
           <input type="checkbox" checked={openOnly} onChange={(e) => setOpenOnly(e.target.checked)} />
-          退勤漏れのみ{openTotal > 0 && `（${openTotal}）`}
+          <span style={{ whiteSpace: "nowrap" }}>退勤漏れのみ（{openTotal}）</span>
         </label>
-        <span style={{ flex: 1 }} />
-        <span className="help" style={{ margin: 0, fontSize: 12 }}>
-          {filtered.length}件{filtered.length !== records.length && ` / 全${records.length}件`}
+        <span className="tc-spacer" />
+        <span className="muted en" style={{ fontSize: 12.5, whiteSpace: "nowrap" }}>
+          {filtered.length}<span style={{ fontFamily: "Zen Kaku Gothic New" }}>件</span>
         </span>
         <button className="btn-outline" onClick={exportCsv} style={{ padding: "6px 12px", fontSize: 12 }}>
           CSV
         </button>
       </div>
 
-      {filtered.length === 0 ? (
-        <p className="help" style={{ margin: 0 }}>
-          {records.length === 0 ? "この月の打刻記録はありません。" : "条件に合う記録はありません。"}
-        </p>
-      ) : (
-        <>
-          <div className="history-list tc-scroll">
-            {groups.map((g) => (
-              <div key={g.date} style={{ marginBottom: 6 }}>
-                <div
-                  className="eyebrow"
-                  style={{ padding: "8px 2px 4px", fontSize: 11, opacity: 0.7 }}
-                >
-                  {dateLabel(g.date)}
-                </div>
-                {g.rows.map((r) => {
-                  const e = edit[r.id] ?? { in: toLocalInput(r.clock_in), out: toLocalInput(r.clock_out) };
-                  return (
-                    <div className="tc-row" key={r.id}>
-                      <span className="tc-name">
-                        {r.staffName}
-                        {r.source === "manual" && <span className="mk late" style={{ marginLeft: 8, fontSize: 10 }}>手動</span>}
-                      </span>
-                      <input
-                        type="datetime-local"
-                        className="input tc-input"
-                        value={e.in}
-                        onChange={(ev) => setField(r.id, "in", ev.target.value, r)}
-                      />
-                      <span className="tc-sep">→</span>
-                      <input
-                        type="datetime-local"
-                        className="input tc-input"
-                        value={e.out}
-                        onChange={(ev) => setField(r.id, "out", ev.target.value, r)}
-                      />
-                      {!r.clock_out && <span className="mk early" style={{ fontSize: 10 }}>打刻中</span>}
-                      <span className="tc-actions">
-                        <button className="btn-link" onClick={() => save(r)} disabled={pending}>保存</button>
-                        <button className="btn-link ink" onClick={() => remove(r.id)} disabled={pending}>削除</button>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            ))}
+      {/* 一覧（内部スクロール） */}
+      <div className="tc-list">
+        {groups.length === 0 ? (
+          <div className="tc-empty">
+            <div className="eyebrow" style={{ marginBottom: 10 }}>No records</div>
+            {records.length === 0
+              ? "この月の打刻記録はありません。"
+              : "条件に一致する打刻がありません。絞り込みを解除してください。"}
           </div>
-
-          {hiddenCount > 0 && (
-            <div style={{ textAlign: "center", marginTop: 14 }}>
-              <button className="btn-outline" onClick={() => setShowAll(true)}>
-                残り {hiddenCount} 件を表示
-              </button>
-            </div>
-          )}
-          {showAll && filtered.length > DEFAULT_LIMIT && (
-            <div style={{ textAlign: "center", marginTop: 14 }}>
-              <button className="btn-link" onClick={() => setShowAll(false)}>最新{DEFAULT_LIMIT}件だけ表示に戻す</button>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+        ) : groups.map((g) => (
+          <div className="tc-day" key={g.date}>
+            <div className="tc-day-head en">{dateLabel(g.date)}</div>
+            {g.rows.map((r) => {
+              const e = edit[r.id] ?? { in: toLocalInput(r.clock_in), out: toLocalInput(r.clock_out) };
+              const open = !r.clock_out;
+              return (
+                <div className={"tc-row" + (open ? " open" : "")} key={r.id}>
+                  <span className="tc-name tc-ellip" title={r.staffName}>
+                    <span className="dot" style={{ background: colorOf(r.staff_id) }} />
+                    <span className="tc-ellip">{r.staffName}</span>
+                    {r.source === "manual" && (
+                      <span className="mk late" style={{ fontSize: 10 }}>手動</span>
+                    )}
+                  </span>
+                  <input
+                    type="time"
+                    className="input en tc-dt"
+                    value={e.in.split("T")[1] ?? ""}
+                    onChange={(ev) => setTime(r, "in", ev.target.value)}
+                  />
+                  <span className="muted arrow">→</span>
+                  <input
+                    type="time"
+                    className="input en tc-dt"
+                    value={e.out.split("T")[1] ?? ""}
+                    onChange={(ev) => setTime(r, "out", ev.target.value)}
+                  />
+                  <span className="tc-badge">{open && <span className="live-dot" title="打刻中" />}</span>
+                  <button className="btn-mini" onClick={() => save(r)} disabled={pending}>保存</button>
+                  <button className="btn-mini ink" onClick={() => remove(r.id)} disabled={pending}>削除</button>
+                </div>
+              );
+            })}
+          </div>
+        ))}
+      </div>
+    </>
   );
 }
