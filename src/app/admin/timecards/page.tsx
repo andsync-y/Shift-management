@@ -68,6 +68,10 @@ export default async function TimeCardsPage({
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
           <a className="btn-outline" href={`/admin/timecards?month=${prev}`}>← 前月</a>
+          <form method="get" style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="month" name="month" defaultValue={month} className="input" style={{ width: 150 }} />
+            <button type="submit" className="btn-outline">表示</button>
+          </form>
           <a className="btn-outline" href={`/admin/timecards?month=${next}`}>翌月 →</a>
         </div>
       </div>
@@ -128,6 +132,7 @@ export default async function TimeCardsPage({
           <TimeCardManager
             staff={staff.map((s) => ({ id: s.id, full_name: s.full_name }))}
             records={records}
+            month={month}
           />
         </div>
       </div>
