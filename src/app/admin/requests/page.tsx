@@ -100,7 +100,7 @@ export default async function AdminRequestsPage() {
 
   const list = (requests ?? []) as TimeOffRequest[];
 
-  // 申請日に組まれているシフトを取得（該当者・該当日のみ）
+  // 申請日に組まれているシフトを取得（同日の人員カバー確認用）
   const reqDates = [...new Set(list.map((r) => r.off_date))];
   const { data: shiftsRaw } = reqDates.length
     ? await supabase
@@ -108,13 +108,23 @@ export default async function AdminRequestsPage() {
         .select("staff_id, work_date, start_time, end_time")
         .in("work_date", reqDates)
     : { data: [] };
-  const shiftByKey = new Map<string, string>();
+  // 日付ごとに、誰が何時に入っているか（開始時刻順）
+  type DayShift = { staff_id: string; range: string; start: string };
+  const shiftsByDate = new Map<string, DayShift[]>();
   for (const s of (shiftsRaw ?? []) as Pick<Shift, "staff_id" | "work_date" | "start_time" | "end_time">[]) {
-    const key = `${s.staff_id}|${s.work_date}`;
-    const range = `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`;
-    shiftByKey.set(key, shiftByKey.has(key) ? `${shiftByKey.get(key)}, ${range}` : range);
+    const arr = shiftsByDate.get(s.work_date) ?? [];
+    arr.push({
+      staff_id: s.staff_id,
+      start: s.start_time,
+      range: `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`,
+    });
+    shiftsByDate.set(s.work_date, arr);
   }
-  const shiftOf = (r: TimeOffRequest) => shiftByKey.get(`${r.staff_id}|${r.off_date}`);
+  // 申請者本人を除いた、同日の他スタッフのシフト
+  const otherShiftsOf = (r: TimeOffRequest): DayShift[] =>
+    (shiftsByDate.get(r.off_date) ?? [])
+      .filter((s) => s.staff_id !== r.staff_id)
+      .sort((a, b) => a.start.localeCompare(b.start));
   const pending = list.filter((r) => r.status === "pending").length;
 
   const { gaps, hasRequirements } = findCoverageGaps(
@@ -228,7 +238,7 @@ export default async function AdminRequestsPage() {
                     <th>日付</th>
                     <th>区分</th>
                     <th>時間</th>
-                    <th>当日のシフト</th>
+                    <th>当日の出勤者</th>
                     <th>理由</th>
                     <th>状態</th>
                     <th style={{ textAlign: "right" }}>操作</th>
@@ -255,8 +265,20 @@ export default async function AdminRequestsPage() {
                           </span>
                         </td>
                         <td className="mono soft">{fmtRange(r)}</td>
-                        <td className="mono soft" style={{ whiteSpace: "nowrap" }}>
-                          {shiftOf(r) ?? <span className="muted">シフトなし</span>}
+                        <td>
+                          {otherShiftsOf(r).length === 0 ? (
+                            <span className="muted">他に出勤者なし</span>
+                          ) : (
+                            <div className="cover-shifts">
+                              {otherShiftsOf(r).map((s, i) => (
+                                <span className="cover-chip" key={i}>
+                                  <span className="dot" style={{ background: colorOf(s.staff_id) }} />
+                                  <span className="cs-name">{staffMap.get(s.staff_id)?.full_name ?? "?"}</span>
+                                  <span className="cs-time mono">{s.range}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </td>
                         <td className="soft">{r.reason || "—"}</td>
                         <td>
@@ -305,8 +327,22 @@ export default async function AdminRequestsPage() {
                           <span className="v mono">{fmtRange(r)}</span>
                         </div>
                         <div className="r">
-                          <span className="k">当日のシフト</span>
-                          <span className="v mono">{shiftOf(r) ?? "シフトなし"}</span>
+                          <span className="k">当日の出勤者</span>
+                          <span className="v">
+                            {otherShiftsOf(r).length === 0 ? (
+                              <span className="muted">他に出勤者なし</span>
+                            ) : (
+                              <span className="cover-shifts">
+                                {otherShiftsOf(r).map((s, i) => (
+                                  <span className="cover-chip" key={i}>
+                                    <span className="dot" style={{ background: colorOf(s.staff_id) }} />
+                                    <span className="cs-name">{staffMap.get(s.staff_id)?.full_name ?? "?"}</span>
+                                    <span className="cs-time mono">{s.range}</span>
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                          </span>
                         </div>
                         <div className="r">
                           <span className="k">理由</span>
