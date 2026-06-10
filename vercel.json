@@ -7,7 +7,7 @@
     },
     {
       "path": "/api/cron/offer-timeout",
-      "schedule": "0 * * * *"
+      "schedule": "0 0 * * *"
     }
   ]
 }
