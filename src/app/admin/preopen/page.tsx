@@ -1,15 +1,15 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { PreopenReservation, Profile } from "@/lib/types";
-import { PREOPEN_ALL_STARTS, PREOPEN_DAYS, hm, slotKey } from "@/lib/preopen";
-import { getPreopenCapacities } from "@/lib/preopen-capacity";
+import { PREOPEN_ALL_STARTS, PREOPEN_DAYS, getPreopenCapacities, hm, slotKey } from "@/lib/preopen";
 import PreopenBooking from "../../staff/preopen/PreopenBooking";
+import PreopenRoster from "../../staff/preopen/PreopenRoster";
 
 export default async function AdminPreopenPage() {
   const me = await requireAdmin();
   const supabase = await createClient();
 
-  const [{ data: staff }, { data: reservations }, capacities] = await Promise.all([
+  const [{ data: staff }, { data: reservations }] = await Promise.all([
     supabase.from("profiles").select("id, full_name, role"),
     supabase
       .from("preopen_reservations")
@@ -17,8 +17,8 @@ export default async function AdminPreopenPage() {
       .order("reserve_date", { ascending: true })
       .order("start_time", { ascending: true })
       .order("created_at", { ascending: true }),
-    getPreopenCapacities(),
   ]);
+  const capacities = getPreopenCapacities();
 
   const list = (reservations ?? []) as PreopenReservation[];
   const used = (date: string, start: string) =>
@@ -34,11 +34,11 @@ export default async function AdminPreopenPage() {
         <div className="masthead">
           <div className="eyebrow accent">Pre-Open</div>
           <h1 className="ttl en">Mock Booking</h1>
-          <p className="sub">プレオープン モデル客の予約状況（営業 13:00–22:00・施術90分）</p>
+          <p className="sub">プレオープン モデル客の予約状況（最終受付19:00・施術90分）</p>
         </div>
       </div>
 
-      {/* 3日間×時間帯の空き状況（残り数）を一望できるコンパクト表 */}
+      {/* 4日間×時間帯の空き状況（残り数）を一望できるコンパクト表 */}
       <div className="section">
         <div className="section-head">
           <h2>枠の空き状況</h2>
@@ -98,11 +98,12 @@ export default async function AdminPreopenPage() {
             </tbody>
           </table>
           <p className="help" style={{ marginBottom: 0 }}>
-            受付数は「その時間に勤務しているスタッフ数（固定シフト基準）」と「ベッド4台」の小さい方。
-            「—」は勤務スタッフがいない枠です。
+            受付数は「その時間に施術に入れるスタッフ数（プレオープン出勤表）」と「ベッド4台」の小さい方。
           </p>
         </div>
       </div>
+
+      <PreopenRoster />
 
       <PreopenBooking
         meId={me.id}

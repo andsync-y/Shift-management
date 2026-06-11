@@ -44,6 +44,11 @@ export default function PreopenBooking({
   function keyOf(date: string, start: string) {
     return slotKey(date, start);
   }
+  // 現在の枠に存在しない予約（受付時間の変更前に入ったもの）
+  const validKeys = new Set(
+    PREOPEN_DAYS.flatMap((d) => d.rounds.map((r) => slotKey(d.date, r.start)))
+  );
+  const orphans = reservations.filter((r) => !validKeys.has(slotKey(r.reserve_date, r.start_time)));
   function slotReservations(date: string, start: string) {
     return reservations.filter((r) => r.reserve_date === date && hm(r.start_time) === start);
   }
@@ -187,9 +192,55 @@ export default function PreopenBooking({
         </div>
       ))}
 
+      {orphans.length > 0 && (
+        <div className="section">
+          <div className="section-head">
+            <h2>時間変更が必要な予約</h2>
+            <span className="eyebrow">枠の変更で時間が合わなくなった予約</span>
+          </div>
+          <div className="section-body">
+            <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+              {orphans.map((r) => {
+                const canDelete = r.staff_id === meId || isAdmin;
+                return (
+                  <li key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+                    <span className="en">
+                      {r.reserve_date.slice(5).replace("-", "/")} {hm(r.start_time)}
+                    </span>
+                    <span style={{ fontWeight: 600 }}>{r.customer_name}</span>
+                    <span className="soft" style={{ fontSize: 12 }}>
+                      （担当：{ownerLabel(r.staff_id)}）
+                    </span>
+                    {canDelete && (
+                      <button
+                        onClick={() => remove(r.id)}
+                        disabled={pending}
+                        style={{
+                          marginLeft: "auto",
+                          border: 0,
+                          background: "none",
+                          color: "var(--accent-ink, #b4532a)",
+                          cursor: "pointer",
+                          fontSize: 12.5,
+                        }}
+                      >
+                        削除
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+            <p className="help" style={{ marginBottom: 0 }}>
+              受付時間の変更前に登録された予約です。お客様と時間を調整のうえ、削除して新しい枠に入れ直してください。
+            </p>
+          </div>
+        </div>
+      )}
+
       <p className="help">
         ※ 自分が登録した予約だけ削除できます。施術は90分。各枠の受付数は
-        「その時間に勤務しているスタッフ数（固定シフト基準）」と「ベッド4台」の小さい方です。
+        「その時間に勤務しているスタッフ数（プレオープン出勤表）」と「ベッド4台」の小さい方です。
       </p>
     </>
   );

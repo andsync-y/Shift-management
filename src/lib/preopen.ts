@@ -1,16 +1,26 @@
 // プレオープン（簡易予約システム）の固定設定。
-// 営業 13:00–22:00・施術90分。ベッドは PREOPEN_BEDS 台。
-// 各枠の受付数は「ベッド数」と「その時間に勤務しているスタッフ数（固定シフト基準）」の
-// 小さい方（src/lib/preopen-capacity.ts で算出）。
+// 4日間（6/16–6/19）。受付は火水14:30〜／木金13:00〜、最終受付19:00（20:30終わり）。
+// 受付数は「プレオープン出勤表（PREOPEN_DAYS の staffing）」と「ベッド4台」の小さい方。
+// ※ 通常運用の固定シフトとは独立した、プレオープン専用の特別シフト。
 
 export const PREOPEN_BEDS = 4;
 
 export type PreopenRound = { start: string; end: string }; // "HH:MM"
+
+export type PreopenShift = {
+  name: string; // 表示名（姓）
+  start: string; // 勤務開始 "HH:MM"
+  end: string; // 勤務終了
+  serveEnd: string | null; // 施術に入れる時刻の上限。null は研修のみ（施術なし）
+  note?: string;
+};
+
 export type PreopenDay = {
   date: string; // "YYYY-MM-DD"
-  label: string; // "6/17(水)"
-  note?: string; // 補足
+  label: string; // "6/16(火)"
+  note?: string; // 研修などの補足
   rounds: PreopenRound[];
+  staffing: PreopenShift[];
 };
 
 // "HH:MM" に分を足す（ゼロ埋め固定幅なので文字列比較で前後判定できる）
@@ -22,8 +32,8 @@ function addMinutes(t: string, mins: number): string {
   return `${hh}:${mm}`;
 }
 
-// 受付開始 start から90分刻みで、終了が閉店(close)を超えない範囲のラウンドを作る。
-function buildRounds(start: string, close = "22:00", stepMin = 90): PreopenRound[] {
+// 受付開始 start から90分刻みで、終了が close を超えない範囲のラウンドを作る。
+function buildRounds(start: string, close = "20:30", stepMin = 90): PreopenRound[] {
   const rounds: PreopenRound[] = [];
   let s = start;
   for (;;) {
@@ -36,10 +46,52 @@ function buildRounds(start: string, close = "22:00", stepMin = 90): PreopenRound
 }
 
 export const PREOPEN_DAYS: PreopenDay[] = [
-  // 6/17・6/18 は受付開始15:00、6/19 は13:30。いずれも閉店22:00まで90分刻み。
-  { date: "2026-06-17", label: "6/17(水)", rounds: buildRounds("15:00") },
-  { date: "2026-06-18", label: "6/18(木)", rounds: buildRounds("15:00") },
-  { date: "2026-06-19", label: "6/19(金)", rounds: buildRounds("13:30") },
+  {
+    date: "2026-06-16",
+    label: "6/16(火)",
+    note: "研修・店舗ルール 13:00–14:30",
+    rounds: buildRounds("14:30"),
+    staffing: [
+      { name: "福田", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "佐藤", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "紙坂", start: "13:00", end: "19:00", serveEnd: "19:00" },
+      { name: "二俣", start: "13:00", end: "14:30", serveEnd: null, note: "研修のみ" },
+      { name: "川島", start: "13:00", end: "14:30", serveEnd: null, note: "研修のみ" },
+    ],
+  },
+  {
+    date: "2026-06-17",
+    label: "6/17(水)",
+    note: "研修・店舗ルール 13:00–14:30",
+    rounds: buildRounds("14:30"),
+    staffing: [
+      { name: "二俣", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "川島", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "橋本", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "桑原", start: "13:00", end: "19:00", serveEnd: "19:00" },
+    ],
+  },
+  {
+    date: "2026-06-18",
+    label: "6/18(木)",
+    rounds: buildRounds("13:00"),
+    staffing: [
+      { name: "福田", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "橋本", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "二俣", start: "13:00", end: "16:00", serveEnd: "16:00" },
+      { name: "川島", start: "13:00", end: "16:00", serveEnd: "16:00" },
+    ],
+  },
+  {
+    date: "2026-06-19",
+    label: "6/19(金)",
+    rounds: buildRounds("13:00"),
+    staffing: [
+      { name: "佐藤", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "桑原", start: "13:00", end: "19:00", serveEnd: "19:00" },
+      { name: "紙坂", start: "13:00", end: "19:00", serveEnd: "19:00" },
+    ],
+  },
 ];
 
 // 全日通しの受付開始時刻（重複なし・昇順）。空き状況表の列に使う。
@@ -63,4 +115,18 @@ export function findRound(date: string, start: string): { day: PreopenDay; round
   const round = day.rounds.find((r) => r.start === hm(start));
   if (!round) return null;
   return { day, round };
+}
+
+// 各枠の受付数 = min(ベッド数, 枠の開始〜終了まで施術に入れるスタッフ数)。
+export function getPreopenCapacities(): Record<string, number> {
+  const caps: Record<string, number> = {};
+  for (const day of PREOPEN_DAYS) {
+    for (const round of day.rounds) {
+      const n = day.staffing.filter(
+        (s) => s.serveEnd !== null && s.start <= round.start && s.serveEnd >= round.end
+      ).length;
+      caps[slotKey(day.date, round.start)] = Math.min(PREOPEN_BEDS, n);
+    }
+  }
+  return caps;
 }
