@@ -414,10 +414,10 @@ body {
   max-width: var(--maxw);
   margin: 0 auto;
   height: 68px;
-  padding: 0 40px;
+  padding: 0 28px;
   display: flex;
   align-items: center;
-  gap: 34px;
+  gap: 22px;
 }
 .brand {
   display: flex;
@@ -434,18 +434,19 @@ body {
 }
 .nav {
   display: flex;
-  gap: 30px;
+  gap: 22px;
   align-items: center;
   margin-left: 8px;
 }
 .nav a {
-  font-size: 14px;
+  font-size: 13px;
   color: var(--ink-2);
   position: relative;
   padding: 4px 0;
-  letter-spacing: 0.02em;
+  letter-spacing: 0.01em;
   cursor: pointer;
   transition: color 0.15s ease;
+  white-space: nowrap;
 }
 .nav a:hover {
   color: var(--ink);
