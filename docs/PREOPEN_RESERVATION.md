@@ -43,11 +43,16 @@
 
 ## 画面・導線
 
+掲載順は **シフト → 空き枠 → 予約** で統一（スタッフ `/staff/preopen`・オーナー `/admin/preopen` 共通）。
+
+1. **シフト**（`PreopenRoster`）：通常のシフト表と同じタイムライン表示（`.tl`）。
+   スタッフ色のバーで4日分の勤務を可視化。「研」＝研修のみ。色は profiles.display_color（姓→色）。
+2. **空き枠**（`PreopenAvailability`）：4日×時間帯の残り数テーブル（「満」「—」）。
+3. **予約**（`PreopenBooking`）：枠アコーディオン。各枠の見出し右に埋まり具合（例 1/3）を表示し、
+   開くと名前を入力して登録。オーナーは `isAdmin` 扱いで誰の予約でも削除可。
+
 - スタッフ画面 `/staff` 右上「プレオープン予約 →」→ `/staff/preopen`。
-  - 冒頭に**プレオープン週のシフト表**（`PreopenRoster`）、続いて日別の予約グリッド。
 - オーナーは管理ナビ「プレオープン」→ `/admin/preopen`。
-  - 冒頭に**4日×時間帯のコンパクトな空き状況表**（セル＝残り数、「満」「—」）、
-    シフト表、予約グリッド。オーナーは `isAdmin` 扱いで**誰の予約でも削除**できる。
 
 ## DBマイグレーション（要適用）
 
@@ -62,6 +67,7 @@
 | `src/lib/preopen.ts` | 日程・受付枠・出勤表・受付数算出（すべてここに集約） |
 | `src/app/staff/preopen/page.tsx` | スタッフ予約画面（サーバー） |
 | `src/app/admin/preopen/page.tsx` | オーナー向け 空き状況表＋シフト表＋予約グリッド（isAdmin） |
-| `src/app/staff/preopen/PreopenRoster.tsx` | プレオープン週のシフト表（共用） |
-| `src/app/staff/preopen/PreopenBooking.tsx` | 予約グリッド＋枠外予約の救済（クライアント） |
+| `src/app/staff/preopen/PreopenRoster.tsx` | シフトのタイムライン表示（共用・色は profiles.display_color） |
+| `src/app/staff/preopen/PreopenAvailability.tsx` | 空き枠テーブル（共用） |
+| `src/app/staff/preopen/PreopenBooking.tsx` | 予約アコーディオン＋枠外予約の救済（クライアント） |
 | `src/app/staff/preopen/actions.ts` | 登録/削除（受付数チェック） |

@@ -828,6 +828,53 @@ body {
   font-size: 12.5px;
 }
 
+/* プレオープン予約：枠アコーディオン */
+.acc {
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+.acc-item {
+  border-bottom: 1px solid var(--line);
+}
+.acc-item:last-child {
+  border-bottom: 0;
+}
+.acc-head {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: var(--card);
+  border: 0;
+  cursor: pointer;
+  text-align: left;
+  color: var(--ink);
+}
+.acc-head:hover:not(:disabled) {
+  background: var(--paper-2);
+}
+.acc-head:disabled {
+  cursor: default;
+  color: var(--ink-3);
+}
+.acc-chev {
+  font-size: 11px;
+  color: var(--ink-3);
+  width: 12px;
+}
+.acc-time {
+  font-size: 13px;
+}
+.acc-item.open .acc-head {
+  background: var(--paper-2);
+}
+.acc-body {
+  padding: 4px 14px 14px 36px;
+  background: var(--paper-2);
+}
+
 /* legend */
 .legend {
   display: flex;

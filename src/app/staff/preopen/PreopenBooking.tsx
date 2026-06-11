@@ -22,39 +22,37 @@ export default function PreopenBooking({
   meName: string;
   staff: Pick<Profile, "id" | "full_name" | "role">[];
   reservations: PreopenReservation[];
-  // 枠キー(slotKey) → 受付数。固定シフト上の勤務スタッフ数とベッド数から算出。
+  // 枠キー(slotKey) → 受付数。
   capacities: Record<string, number>;
   isAdmin?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  // 入力中の枠 → 名前
+  const [open, setOpen] = useState<string | null>(null); // 開いている枠キー
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   const staffMap = new Map(staff.map((s) => [s.id, s]));
 
-  // 担当表示。オーナーが取った予約は特定スタッフに紐付けない「フリー」。
+  // オーナーが取った予約は「フリー」、スタッフは姓を表示。
   function ownerLabel(staffId: string) {
     const p = staffMap.get(staffId);
     if (!p) return "?";
     return p.role === "super_admin" ? "フリー" : surname(p.full_name);
   }
 
-  function keyOf(date: string, start: string) {
-    return slotKey(date, start);
+  function slotReservations(date: string, start: string) {
+    return reservations.filter((r) => r.reserve_date === date && hm(r.start_time) === start);
   }
+
   // 現在の枠に存在しない予約（受付時間の変更前に入ったもの）
   const validKeys = new Set(
     PREOPEN_DAYS.flatMap((d) => d.rounds.map((r) => slotKey(d.date, r.start)))
   );
   const orphans = reservations.filter((r) => !validKeys.has(slotKey(r.reserve_date, r.start_time)));
-  function slotReservations(date: string, start: string) {
-    return reservations.filter((r) => r.reserve_date === date && hm(r.start_time) === start);
-  }
 
   function add(date: string, start: string) {
-    const k = keyOf(date, start);
+    const k = slotKey(date, start);
     const name = (draft[k] ?? "").trim();
     if (!name) {
       setMsg({ ok: false, text: "お客様の名前を入力してください。" });
@@ -80,125 +78,145 @@ export default function PreopenBooking({
   }
 
   return (
-    <>
-      {msg && (
-        <p className={"liff-msg " + (msg.ok ? "ok" : "err")} style={{ marginTop: 0 }}>
-          {msg.text}
-        </p>
-      )}
+    <div className="section">
+      <div className="section-head">
+        <h2>モデル客の予約</h2>
+        <span className="eyebrow">枠を開いて名前を入力</span>
+      </div>
+      <div className="section-body">
+        {msg && (
+          <p className={"liff-msg " + (msg.ok ? "ok" : "err")} style={{ marginTop: 0 }}>
+            {msg.text}
+          </p>
+        )}
 
-      {PREOPEN_DAYS.map((day) => (
-        <div className="section" key={day.date}>
-          <div className="section-head">
-            <h2>{day.label}</h2>
-            {day.note && <span className="eyebrow">{day.note}</span>}
-          </div>
-          <div className="section-body" style={{ display: "grid", gap: 14 }}>
-            {day.rounds.map((round) => {
-              const list = slotReservations(day.date, round.start);
-              const k = keyOf(day.date, round.start);
-              const cap = capacities[k] ?? 0;
-              const closed = cap === 0;
-              const full = !closed && list.length >= cap;
-              return (
-                <div
-                  key={round.start}
-                  style={{
-                    border: "1px solid var(--line, #e6e6e6)",
-                    borderRadius: 10,
-                    padding: "12px 14px",
-                  }}
-                >
-                  <div style={{ display: "flex", alignItems: "baseline", gap: 10, marginBottom: 8 }}>
-                    <strong className="en">
-                      {round.start}–{round.end}
-                    </strong>
-                    <span className={"mk " + (full || closed ? "late" : "early")} style={{ fontSize: 11 }}>
-                      {closed ? "受付なし" : `${list.length}/${cap}名${full ? "・満席" : ""}`}
-                    </span>
-                  </div>
+        {PREOPEN_DAYS.map((day) => (
+          <div key={day.date} style={{ marginBottom: 14 }}>
+            <div
+              className="eyebrow"
+              style={{ margin: "4px 0 6px", display: "flex", alignItems: "baseline", gap: 8 }}
+            >
+              <span style={{ fontWeight: 700 }}>{day.label}</span>
+              {day.note && <span style={{ fontWeight: 400 }}>{day.note}</span>}
+            </div>
 
-                  {list.length > 0 && (
-                    <ul style={{ listStyle: "none", margin: "0 0 8px", padding: 0, display: "grid", gap: 4 }}>
-                      {list.map((r) => {
-                        const mine = r.staff_id === meId;
-                        const canDelete = mine || isAdmin;
-                        return (
-                          <li
-                            key={r.id}
-                            style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}
-                          >
-                            <span style={{ fontWeight: 600 }}>{r.customer_name}</span>
-                            <span className="soft" style={{ fontSize: 12 }}>
-                              （担当：{ownerLabel(r.staff_id)}）
-                            </span>
-                            {canDelete && (
-                              <button
-                                onClick={() => remove(r.id)}
-                                disabled={pending}
-                                style={{
-                                  marginLeft: "auto",
-                                  border: 0,
-                                  background: "none",
-                                  color: "var(--accent-ink, #b4532a)",
-                                  cursor: "pointer",
-                                  fontSize: 12.5,
-                                }}
-                              >
-                                削除
-                              </button>
-                            )}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  )}
-
-                  {closed ? (
-                    <p className="help" style={{ margin: 0 }}>
-                      この時間は勤務スタッフがいないため受付していません。
-                    </p>
-                  ) : !full ? (
-                    <div style={{ display: "flex", gap: 8 }}>
-                      <input
-                        className="input"
-                        placeholder={`${surname(meName)}さんのお客様の名前`}
-                        value={draft[k] ?? ""}
-                        onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter") add(day.date, round.start);
-                        }}
-                        style={{ flex: 1, fontSize: 14 }}
-                        disabled={pending}
-                      />
-                      <button
-                        className="btn-outline"
-                        onClick={() => add(day.date, round.start)}
-                        disabled={pending}
-                        style={{ fontSize: 13 }}
+            <div className="acc">
+              {day.rounds.map((round) => {
+                const k = slotKey(day.date, round.start);
+                const list = slotReservations(day.date, round.start);
+                const cap = capacities[k] ?? 0;
+                const closed = cap === 0;
+                const full = !closed && list.length >= cap;
+                const isOpen = open === k;
+                const fill = closed ? "受付なし" : `${list.length}/${cap}`;
+                return (
+                  <div className={"acc-item" + (isOpen ? " open" : "")} key={k}>
+                    <button
+                      type="button"
+                      className="acc-head"
+                      onClick={() => setOpen(isOpen ? null : k)}
+                      disabled={closed}
+                    >
+                      <span className="acc-chev">{isOpen ? "▾" : "▸"}</span>
+                      <span className="en acc-time">
+                        {round.start}–{round.end}
+                      </span>
+                      <span
+                        className={"mk " + (closed || full ? "late" : "early")}
+                        style={{ marginLeft: "auto", fontSize: 11 }}
                       >
-                        この枠に予約
-                      </button>
-                    </div>
-                  ) : (
-                    <p className="help" style={{ margin: 0 }}>
-                      満席です。別の時間枠を選んでください。
-                    </p>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-      ))}
+                        {fill}
+                        {full ? "・満" : ""}
+                      </span>
+                    </button>
 
-      {orphans.length > 0 && (
-        <div className="section">
-          <div className="section-head">
-            <h2>時間変更が必要な予約</h2>
-            <span className="eyebrow">枠の変更で時間が合わなくなった予約</span>
+                    {isOpen && !closed && (
+                      <div className="acc-body">
+                        {list.length > 0 && (
+                          <ul
+                            style={{
+                              listStyle: "none",
+                              margin: "0 0 8px",
+                              padding: 0,
+                              display: "grid",
+                              gap: 4,
+                            }}
+                          >
+                            {list.map((r) => {
+                              const canDelete = r.staff_id === meId || isAdmin;
+                              return (
+                                <li
+                                  key={r.id}
+                                  style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}
+                                >
+                                  <span style={{ fontWeight: 600 }}>{r.customer_name}</span>
+                                  <span className="soft" style={{ fontSize: 12 }}>
+                                    （担当：{ownerLabel(r.staff_id)}）
+                                  </span>
+                                  {canDelete && (
+                                    <button
+                                      onClick={() => remove(r.id)}
+                                      disabled={pending}
+                                      style={{
+                                        marginLeft: "auto",
+                                        border: 0,
+                                        background: "none",
+                                        color: "var(--accent-ink, #b4532a)",
+                                        cursor: "pointer",
+                                        fontSize: 12.5,
+                                      }}
+                                    >
+                                      削除
+                                    </button>
+                                  )}
+                                </li>
+                              );
+                            })}
+                          </ul>
+                        )}
+
+                        {full ? (
+                          <p className="help" style={{ margin: 0 }}>
+                            満席です。別の枠を選んでください。
+                          </p>
+                        ) : (
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <input
+                              className="input"
+                              placeholder={`${surname(meName)}さんのお客様の名前`}
+                              value={draft[k] ?? ""}
+                              onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter") add(day.date, round.start);
+                              }}
+                              style={{ flex: 1, fontSize: 14 }}
+                              disabled={pending}
+                              autoFocus
+                            />
+                            <button
+                              className="btn-outline"
+                              onClick={() => add(day.date, round.start)}
+                              disabled={pending}
+                              style={{ fontSize: 13 }}
+                            >
+                              予約
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="section-body">
+        ))}
+
+        {orphans.length > 0 && (
+          <div style={{ marginTop: 18 }}>
+            <div className="eyebrow" style={{ margin: "0 0 6px", fontWeight: 700 }}>
+              時間変更が必要な予約
+            </div>
             <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
               {orphans.map((r) => {
                 const canDelete = r.staff_id === meId || isAdmin;
@@ -232,16 +250,15 @@ export default function PreopenBooking({
               })}
             </ul>
             <p className="help" style={{ marginBottom: 0 }}>
-              受付時間の変更前に登録された予約です。お客様と時間を調整のうえ、削除して新しい枠に入れ直してください。
+              受付時間の変更前に入った予約です。お客様と調整のうえ削除し、新しい枠に入れ直してください。
             </p>
           </div>
-        </div>
-      )}
+        )}
 
-      <p className="help">
-        ※ 自分が登録した予約だけ削除できます。施術は90分。各枠の受付数は
-        「その時間に勤務しているスタッフ数（プレオープン出勤表）」と「ベッド4台」の小さい方です。
-      </p>
-    </>
+        <p className="help" style={{ marginBottom: 0 }}>
+          ※ 自分が登録した予約だけ削除できます。施術90分・各枠の受付数はプレオープン出勤表に連動。
+        </p>
+      </div>
+    </div>
   );
 }
