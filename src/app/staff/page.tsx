@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -10,11 +11,16 @@ import {
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import CalendarSubscribe from "@/components/CalendarSubscribe";
 
-export default async function StaffShiftsPage() {
+export default async function StaffShiftsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const sp = await searchParams;
   const me = await requireUser();
   const supabase = await createClient();
 
-  // 公開 or 確定済みの最新期間を表示
+  // 公開 or 確定済みの期間（新しい順）。?period=<id> でその月を表示できる。
   const { data: periods } = await supabase
     .from("shift_periods")
     .select("*")
@@ -22,7 +28,9 @@ export default async function StaffShiftsPage() {
     .order("year", { ascending: false })
     .order("month", { ascending: false });
 
-  const latest = (periods as ShiftPeriod[] | null)?.[0];
+  const periodList = (periods as ShiftPeriod[] | null) ?? [];
+  const latest =
+    (sp.period ? periodList.find((p) => p.id === sp.period) : undefined) ?? periodList[0];
 
   if (!latest) {
     return (
@@ -44,6 +52,12 @@ export default async function StaffShiftsPage() {
       </div>
     );
   }
+
+  // 前月（より古い）/ 次月（より新しい）の公開済み期間。periodList は新しい順。
+  const curIdx = periodList.findIndex((p) => p.id === latest.id);
+  const newerPeriod = curIdx > 0 ? periodList[curIdx - 1] : null;
+  const olderPeriod =
+    curIdx >= 0 && curIdx < periodList.length - 1 ? periodList[curIdx + 1] : null;
 
   const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
   const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-${String(
@@ -103,7 +117,26 @@ export default async function StaffShiftsPage() {
       <div className="section">
         <div className="section-head">
           <h2>シフト表</h2>
-          <span className="eyebrow">あなたの勤務を強調</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {olderPeriod ? (
+              <Link href={`/staff?period=${olderPeriod.id}`} className="btn-link">
+                <span className="arrow">←</span> 前月
+              </Link>
+            ) : (
+              <span className="btn-link" style={{ opacity: 0.35, pointerEvents: "none" }}>
+                <span className="arrow">←</span> 前月
+              </span>
+            )}
+            {newerPeriod ? (
+              <Link href={`/staff?period=${newerPeriod.id}`} className="btn-link">
+                次月 <span className="arrow">→</span>
+              </Link>
+            ) : (
+              <span className="btn-link" style={{ opacity: 0.35, pointerEvents: "none" }}>
+                次月 <span className="arrow">→</span>
+              </span>
+            )}
+          </div>
         </div>
         <div className="section-body">
           <ShiftCalendarView
