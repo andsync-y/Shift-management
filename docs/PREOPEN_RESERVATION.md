@@ -34,7 +34,8 @@
 ## 仕様
 
 - **スタッフ各自が登録**。ログイン中のスタッフが自分の客を枠に入れる。
-- **オーナーが登録した予約は「担当：フリー」表示**（特定スタッフに紐付けない）。
+- **担当区分**：登録時に「自分が施術する」か「フリー（誰が施術してもよい）」を選ぶ（`is_free`）。
+  旧データ（is_free無し）はオーナー登録分のみフリー扱い。
 - 上限チェックはサーバーアクション `addReservation`（受付数超過・受付なし枠を拒否）。
 - **削除は本人ぶんのみ**（RLS＋UI）。オーナーは誰のでも可。
 - 枠の空き状況は全ログインユーザーが閲覧可（RLSのselectは `auth.uid() is not null`）。
@@ -43,31 +44,36 @@
 
 ## 画面・導線
 
-掲載順は **シフト → 空き枠 → 予約** で統一（スタッフ `/staff/preopen`・オーナー `/admin/preopen` 共通）。
+掲載順は **シフト → 予約 → 予約一覧**（スタッフ `/staff/preopen`・オーナー `/admin/preopen` 共通）。
 
-1. **シフト**（`PreopenRoster`）：通常のシフト表と同じタイムライン表示（`.tl`）。
-   スタッフ色のバーで4日分の勤務を可視化。「研」＝研修のみ。色は profiles.display_color（姓→色）。
-2. **空き枠**（`PreopenAvailability`）：4日×時間帯の残り数テーブル（「満」「—」）。
-3. **予約**（`PreopenBooking`）：枠アコーディオン。各枠の見出し右に埋まり具合（例 1/3）を表示し、
-   開くと名前を入力して登録。オーナーは `isAdmin` 扱いで誰の予約でも削除可。
+1. **シフト**（`PreopenRoster`）：通常のシフト表と同じタイムライン表示（`.tl`・13–22時）。
+   スタッフ色のバーで4日分の勤務を可視化。「研」＝研修のみ（バー右に注記）。色は profiles.display_color（姓→色）。
+2. **予約**（`PreopenBooking`）：日付ごとに1行。
+   - 日付見出しの右に**空き状況をインライン表示**（例 `14:30–16:00 0/3`、満＝「満」、受付なし＝「—」）。
+   - 行は「予約枠プルダウン → 名前入力 → **自分が施術する / フリー（誰でも）** → 予約」。
+     担当区分は `is_free` カラム（migration 0011）。
+3. **予約一覧**：ページ最後に全予約のテーブル（日時・お客様・担当・登録者・削除）。
+   旧受付時間の予約は「要時間調整」マーク付き。削除は本人のみ（オーナーは全件）。
 
 - スタッフ画面 `/staff` 右上「プレオープン予約 →」→ `/staff/preopen`。
 - オーナーは管理ナビ「プレオープン」→ `/admin/preopen`。
 
 ## DBマイグレーション（要適用）
 
-`supabase/migrations/0010_preopen_reservations.sql` を **Supabase に適用**して初めて動く
-（Supabase SQL Editor で実行、または `supabase db push`）。テーブル `preopen_reservations`。
+以下を **Supabase に適用**して初めて動く（SQL Editor で実行、または `supabase db push`）。
+
+- `0010_preopen_reservations.sql`：テーブル `preopen_reservations` ＋ RLS
+- `0011_preopen_is_free.sql`：担当区分カラム `is_free`
 
 ## 関連ファイル
 
 | ファイル | 役割 |
 |---|---|
 | `supabase/migrations/0010_preopen_reservations.sql` | テーブル＋RLS |
+| `supabase/migrations/0011_preopen_is_free.sql` | 担当区分 `is_free` |
 | `src/lib/preopen.ts` | 日程・受付枠・出勤表・受付数算出（すべてここに集約） |
 | `src/app/staff/preopen/page.tsx` | スタッフ予約画面（サーバー） |
 | `src/app/admin/preopen/page.tsx` | オーナー向け 空き状況表＋シフト表＋予約グリッド（isAdmin） |
 | `src/app/staff/preopen/PreopenRoster.tsx` | シフトのタイムライン表示（共用・色は profiles.display_color） |
-| `src/app/staff/preopen/PreopenAvailability.tsx` | 空き枠テーブル（共用） |
-| `src/app/staff/preopen/PreopenBooking.tsx` | 予約アコーディオン＋枠外予約の救済（クライアント） |
+| `src/app/staff/preopen/PreopenBooking.tsx` | 予約フォーム＋予約一覧（クライアント） |
 | `src/app/staff/preopen/actions.ts` | 登録/削除（受付数チェック） |

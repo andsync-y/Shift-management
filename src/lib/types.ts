@@ -147,6 +147,7 @@ export interface PreopenReservation {
   start_time: string; // "HH:MM:SS"
   end_time: string;
   customer_name: string;
+  is_free?: boolean; // true=フリー（誰が施術してもよい）/ false=登録者が施術
   note: string | null;
   created_at: string;
 }

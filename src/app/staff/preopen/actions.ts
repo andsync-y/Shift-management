@@ -10,6 +10,7 @@ export async function addReservation(input: {
   date: string;
   start: string;
   customerName: string;
+  free: boolean; // true=フリー（誰が施術してもよい）
 }): Promise<{ ok: boolean; message: string }> {
   const me = await requireUser();
   const supabase = await createClient();
@@ -41,6 +42,7 @@ export async function addReservation(input: {
     start_time: slot.round.start,
     end_time: slot.round.end,
     customer_name: name,
+    is_free: input.free,
   });
   if (error) return { ok: false, message: error.message };
 

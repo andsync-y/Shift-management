@@ -4,7 +4,6 @@ import type { PreopenReservation, Profile } from "@/lib/types";
 import { getPreopenCapacities } from "@/lib/preopen";
 import PreopenBooking from "../../staff/preopen/PreopenBooking";
 import PreopenRoster from "../../staff/preopen/PreopenRoster";
-import PreopenAvailability from "../../staff/preopen/PreopenAvailability";
 
 function surname(name: string) {
   return name.split(/[\s　]/)[0];
@@ -43,7 +42,6 @@ export default async function AdminPreopenPage() {
       </div>
 
       <PreopenRoster colors={colors} />
-      <PreopenAvailability reservations={list} capacities={capacities} />
       <PreopenBooking
         meId={me.id}
         meName={me.full_name}
