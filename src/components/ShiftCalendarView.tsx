@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { DAY_LABELS_JA, type Profile, type Shift, type TimeOffRequest } from "@/lib/types";
 
 type ViewMode = "month" | "week";
@@ -60,6 +60,22 @@ export default function ShiftCalendarView({
     return new Date(year, month - 1, 1);
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  // 表示月の「最初にシフトがある日」。前月/次月で月が変わったら週ビューの基準日を
+  // その月へ追従させるために使う（月切替時にコンポーネントは再マウントされないため）。
+  const firstShiftYmd = useMemo(() => {
+    const dates = shifts.map((s) => s.work_date).sort();
+    return dates[0] ?? null;
+  }, [shifts]);
+
+  useEffect(() => {
+    if (firstShiftYmd) {
+      const [y, m, d] = firstShiftYmd.split("-").map(Number);
+      setCursor(new Date(y, m - 1, d));
+    } else {
+      setCursor(new Date(year, month - 1, 1));
+    }
+  }, [firstShiftYmd, year, month]);
 
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
 
