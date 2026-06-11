@@ -95,6 +95,9 @@ export default async function StaffShiftsPage({
           </p>
           <CalendarSubscribe token={me.calendar_token} />
         </div>
+        <Link href="/staff/preopen" className="btn-outline">
+          プレオープン予約 <span className="arrow">→</span>
+        </Link>
       </div>
 
       <div className="summary-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>

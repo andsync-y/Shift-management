@@ -140,6 +140,17 @@ export interface TimeRecord {
   updated_at: string;
 }
 
+export interface PreopenReservation {
+  id: string;
+  staff_id: string;
+  reserve_date: string; // "YYYY-MM-DD"
+  start_time: string; // "HH:MM:SS"
+  end_time: string;
+  customer_name: string;
+  note: string | null;
+  created_at: string;
+}
+
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export const ROLE_LABELS_JA: Record<UserRole, string> = {
