@@ -923,10 +923,12 @@ body {
   text-align: center;
   color: var(--line);
 }
-.bk-cal-cell {
+.bk-cal-chips {
   display: flex;
   flex-wrap: wrap;
+  align-content: flex-start;
   gap: 4px;
+  min-height: 30px;
 }
 /* 名前＋担当を2段表示するチップ */
 .bk-chip {

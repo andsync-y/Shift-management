@@ -237,7 +237,8 @@ export default function PreopenBooking({
                       );
                       return (
                         <td key={s} className="bk-cal-cell">
-                          {list.map((r) => {
+                          <div className="bk-cal-chips">
+                            {list.map((r) => {
                             const canDelete = r.staff_id === meId || isAdmin;
                             const free = r.is_free || staffMap.get(r.staff_id)?.role === "super_admin";
                             return (
@@ -264,6 +265,7 @@ export default function PreopenBooking({
                               </span>
                             );
                           })}
+                          </div>
                         </td>
                       );
                     })}
