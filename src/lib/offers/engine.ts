@@ -59,34 +59,37 @@ async function notifyOwners(admin: Admin, text: string): Promise<void> {
 }
 
 // --- 不足検知＋打診開始 ---------------------------------------------
+// 早番=開始12時より前 / 遅番=開始12時以降（ShiftCalendarView の判定と同じ）。
+function bandOf(start: string): "early" | "late" {
+  return toMin(start) < 12 * 60 ? "early" : "late";
+}
+const BAND_LABEL: Record<"early" | "late", string> = { early: "早番", late: "遅番" };
+
+type VacatedShift = { start_time: string; end_time: string };
+
 type ApprovedRequest = {
   id: string;
   staff_id: string;
   off_date: string;
   request_type: string;
+  // 終日休みの承認で削除した本人のその日のシフト（早番/遅番が無人になったかの判定に使う）
+  vacatedShifts?: VacatedShift[];
 };
 
+// 終日休みの承認で「本人が抜けて早番/遅番が無人(0名)になった枠」を、その枠の時間で
+// 他スタッフへ打診して埋める。早番・遅番は最低1名を確保する方針。
 export async function startOfferForApprovedRequest(
   admin: Admin,
   request: ApprovedRequest
 ): Promise<void> {
   if (!isLineNotifyEnabled()) return; // 通知できない環境では何もしない
   if (request.request_type !== "off") return; // 時間変更は人員から外れないので対象外
+  const vacated = request.vacatedShifts ?? [];
+  if (vacated.length === 0) return; // 本人がその日シフトに入っていなければ欠員は生じない
 
   try {
     const date = request.off_date;
     const dow = weekdayOf(date);
-
-    // 同じ休み希望からの打診が既にあれば二重に始めない
-    const { data: dup } = await admin
-      .from("shift_offers")
-      .select("id")
-      .eq("origin_request_id", request.id)
-      .in("status", ["open", "filled"])
-      .maybeSingle();
-    if (dup) return;
-
-    // 対象月のシフト期間 → 必要人数（曜日）を取得
     const [y, m] = date.split("-").map(Number);
     const { data: period } = await admin
       .from("shift_periods")
@@ -94,28 +97,38 @@ export async function startOfferForApprovedRequest(
       .eq("year", y)
       .eq("month", m)
       .maybeSingle();
+    const periodId = (period as { id: string } | null)?.id ?? null;
 
-    const { data: reqRows } = period
-      ? await admin
-          .from("shift_requirements")
-          .select("start_time, end_time, required_staff")
-          .eq("period_id", (period as { id: string }).id)
-          .eq("day_of_week", dow)
-      : { data: [] as { start_time: string; end_time: string; required_staff: number }[] };
+    // この休み希望で既に作成済みの打診（時間帯）は二重に始めない
+    const { data: existing } = await admin
+      .from("shift_offers")
+      .select("start_time")
+      .eq("origin_request_id", request.id)
+      .in("status", ["open", "filled"]);
+    const coveredStarts = new Set(
+      ((existing ?? []) as { start_time: string }[]).map((r) => r.start_time)
+    );
 
-    const reqs = (reqRows ?? []) as {
-      start_time: string;
-      end_time: string;
-      required_staff: number;
-    }[];
-    if (reqs.length === 0) return; // 必要人数未設定 → 不足判定できない
+    // その日の現在の割り当て（本人ぶんは承認時に削除済み）を早番/遅番で集計
+    const { data: shiftRows } = await admin
+      .from("shifts")
+      .select("staff_id, start_time")
+      .eq("work_date", date);
+    const dayShifts = (shiftRows ?? []) as { staff_id: string; start_time: string }[];
+    const assigned = new Set(dayShifts.map((r) => r.staff_id));
+    const countByBand: Record<"early" | "late", number> = { early: 0, late: 0 };
+    for (const s of dayShifts) countByBand[bandOf(s.start_time)] += 1;
 
-    // その曜日の必要人数 = スロットの最大値（人員カバー分析と同じ考え方）
-    const slot = reqs.reduce((a, b) => (b.required_staff > a.required_staff ? b : a));
-    const required = slot.required_staff;
-    if (required <= 0) return;
+    // 本人が抜けて 0 名になった枠だけを、本人のその枠のシフト時間で埋める
+    const gaps = new Map<"early" | "late", VacatedShift>();
+    for (const v of vacated) {
+      const b = bandOf(v.start_time);
+      if (countByBand[b] > 0) continue; // まだ誰かいる → 欠員なし
+      if (!gaps.has(b)) gaps.set(b, v); // 代表のシフト時間を採用
+    }
+    if (gaps.size === 0) return;
 
-    // 稼働スタッフ
+    // 候補抽出の共通材料
     const { data: staffRows } = await admin
       .from("profiles")
       .select("id, full_name, line_user_id")
@@ -127,26 +140,18 @@ export async function startOfferForApprovedRequest(
       line_user_id: string | null;
     }[];
 
-    // その日の承認済み終日休み（人員から外れる人）
     const { data: offRows } = await admin
       .from("time_off_requests")
       .select("staff_id, start_time, end_time")
       .eq("off_date", date)
       .eq("request_type", "off")
       .eq("status", "approved");
-    const offSet = new Set<string>();
-    for (const o of (offRows ?? []) as { staff_id: string; start_time: string | null; end_time: string | null }[]) {
-      // 終日 or スロットに重なる休みは「その枠に出られない」とみなす
-      if (!o.start_time || !o.end_time || overlaps(o.start_time, o.end_time, slot.start_time, slot.end_time)) {
-        offSet.add(o.staff_id);
-      }
-    }
+    const offList = (offRows ?? []) as {
+      staff_id: string;
+      start_time: string | null;
+      end_time: string | null;
+    }[];
 
-    const available = staff.filter((s) => !offSet.has(s.id)).length;
-    const needed = required - available;
-    if (needed <= 0) return; // 不足なし
-
-    // 候補抽出: 連携済み / 申請者本人でない / 休みでない / その曜日に勤務可能 / その日まだシフトなし
     const { data: prefRows } = await admin
       .from("availability_preferences")
       .select("staff_id, start_time, end_time, preference")
@@ -158,71 +163,110 @@ export async function startOfferForApprovedRequest(
       preference: string;
     }[];
 
-    const { data: shiftRows } = await admin
-      .from("shifts")
-      .select("staff_id")
-      .eq("work_date", date);
-    const assigned = new Set(((shiftRows ?? []) as { staff_id: string }[]).map((r) => r.staff_id));
-
-    const eligible = staff.filter((s) => {
-      if (!s.line_user_id) return false;
-      if (s.id === request.staff_id) return false;
-      if (offSet.has(s.id)) return false;
-      if (assigned.has(s.id)) return false;
-      const mine = prefs.filter((p) => p.staff_id === s.id);
-      const unavailable = mine.some(
-        (p) => p.preference === "unavailable" && overlaps(p.start_time, p.end_time, slot.start_time, slot.end_time)
-      );
-      if (unavailable) return false;
-      return mine.some(
-        (p) => p.preference !== "unavailable" && covers(p.start_time, p.end_time, slot.start_time, slot.end_time)
-      );
-    });
-
-    const label = `${mmdd(date)}(${DAY_LABELS_JA[dow]}) ${hhmm(slot.start_time)}–${hhmm(slot.end_time)}`;
-
-    if (eligible.length === 0) {
-      await notifyOwners(
-        admin,
-        `⚠ ${label} が${needed}名不足ですが、打診できる候補がいません。手動で調整してください。\n${appUrl("/admin/requests")}`
-      );
-      return;
+    for (const [band, slot] of gaps) {
+      if (coveredStarts.has(slot.start_time)) continue; // 二重防止
+      await startBandOffer(admin, {
+        date,
+        dow,
+        periodId,
+        band,
+        slot,
+        originRequestId: request.id,
+        requesterId: request.staff_id,
+        staff,
+        offList,
+        prefs,
+        assigned,
+      });
     }
-
-    // 公平性: これまで打診を受けた回数が少ない人を先に。
-    const order = await fairnessOrder(admin, eligible.map((s) => s.id));
-    const queue = [...eligible].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-
-    // 打診を作成
-    const { data: offerRow } = await admin
-      .from("shift_offers")
-      .insert({
-        off_date: date,
-        period_id: period ? (period as { id: string }).id : null,
-        start_time: slot.start_time,
-        end_time: slot.end_time,
-        needed,
-        origin_request_id: request.id,
-        status: "open",
-      })
-      .select("*")
-      .single();
-    const offer = offerRow as ShiftOffer;
-
-    await admin.from("shift_offer_candidates").insert(
-      queue.map((s, i) => ({ offer_id: offer.id, staff_id: s.id, position: i, status: "queued" }))
-    );
-
-    await notifyOwners(
-      admin,
-      `🔔 ${label} が${needed}名不足です。出勤できそうな${queue.length}名に順番で打診を始めました。`
-    );
-
-    await advanceOffer(admin, offer.id);
   } catch (e) {
     // 承認処理本体は止めない
     console.error("startOfferForApprovedRequest failed:", e);
   }
+}
+
+// 1つの枠（早番 or 遅番）について、候補抽出 → 打診作成 → 先頭へ打診開始。
+async function startBandOffer(
+  admin: Admin,
+  ctx: {
+    date: string;
+    dow: number;
+    periodId: string | null;
+    band: "early" | "late";
+    slot: VacatedShift;
+    originRequestId: string;
+    requesterId: string;
+    staff: { id: string; full_name: string; line_user_id: string | null }[];
+    offList: { staff_id: string; start_time: string | null; end_time: string | null }[];
+    prefs: { staff_id: string; start_time: string; end_time: string; preference: string }[];
+    assigned: Set<string>;
+  }
+): Promise<void> {
+  const { date, dow, periodId, band, slot, originRequestId, requesterId, staff, offList, prefs, assigned } = ctx;
+
+  // その枠に出られない人（終日 or 枠に重なる承認済み休み）
+  const offSet = new Set<string>();
+  for (const o of offList) {
+    if (!o.start_time || !o.end_time || overlaps(o.start_time, o.end_time, slot.start_time, slot.end_time)) {
+      offSet.add(o.staff_id);
+    }
+  }
+
+  // 候補: 連携済み / 本人でない / 休みでない / その日まだシフト無し / その枠に勤務可能
+  const eligible = staff.filter((s) => {
+    if (!s.line_user_id) return false;
+    if (s.id === requesterId) return false;
+    if (offSet.has(s.id)) return false;
+    if (assigned.has(s.id)) return false;
+    const mine = prefs.filter((p) => p.staff_id === s.id);
+    const unavailable = mine.some(
+      (p) => p.preference === "unavailable" && overlaps(p.start_time, p.end_time, slot.start_time, slot.end_time)
+    );
+    if (unavailable) return false;
+    return mine.some(
+      (p) => p.preference !== "unavailable" && covers(p.start_time, p.end_time, slot.start_time, slot.end_time)
+    );
+  });
+
+  const label = `${mmdd(date)}(${DAY_LABELS_JA[dow]}) ${BAND_LABEL[band]} ${hhmm(slot.start_time)}–${hhmm(slot.end_time)}`;
+
+  if (eligible.length === 0) {
+    await notifyOwners(
+      admin,
+      `⚠ ${label} が無人になりますが、打診できる候補がいません。手動で調整してください。\n${appUrl("/admin/requests")}`
+    );
+    return;
+  }
+
+  // 公平性: これまで打診を受けた回数が少ない人を先に。
+  const order = await fairnessOrder(admin, eligible.map((s) => s.id));
+  const queue = [...eligible].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
+
+  const { data: offerRow } = await admin
+    .from("shift_offers")
+    .insert({
+      off_date: date,
+      period_id: periodId,
+      start_time: slot.start_time,
+      end_time: slot.end_time,
+      needed: 1,
+      origin_request_id: originRequestId,
+      status: "open",
+    })
+    .select("*")
+    .single();
+  const offer = offerRow as ShiftOffer;
+
+  await admin.from("shift_offer_candidates").insert(
+    queue.map((s, i) => ({ offer_id: offer.id, staff_id: s.id, position: i, status: "queued" }))
+  );
+
+  await notifyOwners(
+    admin,
+    `🔔 ${label} が無人になりました。出勤できそうな${queue.length}名に順番で打診を始めました。`
+  );
+
+  await advanceOffer(admin, offer.id);
 }
 
 // これまでに打診を受けた回数（少ない順に優先）。

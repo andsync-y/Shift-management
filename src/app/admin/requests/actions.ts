@@ -39,10 +39,18 @@ export async function reviewRequest(
     );
 
     if (status === "approved") {
-      // 終日休みの承認時: 本人のその日のシフトを削除（不要な出勤予定を消す）
+      // 終日休みの承認時: 本人のその日のシフトを削除（不要な出勤予定を消す）。
+      // 削除前にシフト時間を控え、早番/遅番が無人になった枠の打診に使う。
       const isAllDayOff =
         updated.request_type === "off" && !updated.start_time && !updated.end_time;
+      let vacatedShifts: { start_time: string; end_time: string }[] = [];
       if (isAllDayOff) {
+        const { data: mine } = await supabase
+          .from("shifts")
+          .select("start_time, end_time")
+          .eq("staff_id", updated.staff_id)
+          .eq("work_date", updated.off_date);
+        vacatedShifts = (mine ?? []) as { start_time: string; end_time: string }[];
         await supabase
           .from("shifts")
           .delete()
@@ -50,12 +58,13 @@ export async function reviewRequest(
           .eq("work_date", updated.off_date);
       }
 
-      // 人員が不足していれば他スタッフへ自動で出勤打診を開始する。
+      // 早番/遅番が無人になったら他スタッフへ自動で出勤打診を開始する。
       await startOfferForApprovedRequest(createAdminClient(), {
         id: updated.id,
         staff_id: updated.staff_id,
         off_date: updated.off_date,
         request_type: updated.request_type,
+        vacatedShifts,
       });
     }
   }
