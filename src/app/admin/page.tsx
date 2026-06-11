@@ -44,20 +44,29 @@ export default async function AdminDashboard({
   if (periodList.length > 0) {
     const fromParam = sp.period ? periodList.find((p) => p.id === sp.period) : undefined;
 
-    if (!fromParam) {
-      // 自動判定：直近5件のうち、最初にシフトが入っている月を採用
-      const recent = periodList.slice(0, 5);
-      const { data: probe } = await supabase
-        .from("shifts")
-        .select("period_id")
-        .in(
-          "period_id",
-          recent.map((p) => p.id)
-        );
-      const have = new Set((probe ?? []).map((s) => (s as { period_id: string }).period_id));
-      latest = recent.find((p) => have.has(p.id)) ?? periodList[0];
-    } else {
+    if (fromParam) {
       latest = fromParam;
+    } else {
+      // 既定は「今月（JST）」。今月の期間があればそれを表示する。
+      const jst = new Date(Date.now() + 9 * 3600 * 1000);
+      const curY = jst.getUTCFullYear();
+      const curM = jst.getUTCMonth() + 1;
+      const thisMonth = periodList.find((p) => p.year === curY && p.month === curM);
+      if (thisMonth) {
+        latest = thisMonth;
+      } else {
+        // 今月の期間が無ければ、直近5件で最初にシフトが入っている月にフォールバック
+        const recent = periodList.slice(0, 5);
+        const { data: probe } = await supabase
+          .from("shifts")
+          .select("period_id")
+          .in(
+            "period_id",
+            recent.map((p) => p.id)
+          );
+        const have = new Set((probe ?? []).map((s) => (s as { period_id: string }).period_id));
+        latest = recent.find((p) => have.has(p.id)) ?? periodList[0];
+      }
     }
 
     const { data: staff } = await supabase.from("profiles").select("*");
