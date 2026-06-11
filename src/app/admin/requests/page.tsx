@@ -261,7 +261,7 @@ export default async function AdminRequestsPage() {
                           </span>
                         </td>
                         <td className="mono soft">
-                          {Number(m)}/{Number(d)}
+                          {Number(m)}/{Number(d)}（{DAY_LABELS_JA[weekdayOf(r.off_date)]}）
                         </td>
                         <td>
                           <span className={`mk ${t.cls}`} style={{ fontSize: 10.5 }}>
@@ -315,7 +315,7 @@ export default async function AdminRequestsPage() {
                         <div className="r">
                           <span className="k">日付</span>
                           <span className="v mono">
-                            {Number(m)}/{Number(d)}
+                            {Number(m)}/{Number(d)}（{DAY_LABELS_JA[weekdayOf(r.off_date)]}）
                           </span>
                         </div>
                         <div className="r">
