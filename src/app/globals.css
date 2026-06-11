@@ -858,17 +858,24 @@ body {
 .bk-slots {
   display: inline-flex;
   align-items: baseline;
-  gap: 12px;
-  flex-wrap: wrap;
+  gap: 8px;
   margin-left: auto;
-  justify-content: flex-end;
+}
+.bk-slots-lbl {
+  margin-right: 2px;
+  white-space: nowrap;
 }
 .bk-slot {
   font-size: 12.5px;
   white-space: nowrap;
   display: inline-flex;
   align-items: baseline;
+  justify-content: center;
   gap: 4px;
+  width: 116px;
+}
+.bk-slot.empty {
+  visibility: hidden;
 }
 .bk-row {
   display: flex;
@@ -886,12 +893,13 @@ body {
 .bk-cal {
   border-collapse: collapse;
   width: 100%;
-  font-size: 12.5px;
+  table-layout: fixed; /* 時間帯の列幅を均等に */
+  font-size: 12px;
 }
 .bk-cal th,
 .bk-cal td {
   border: 1px solid var(--line);
-  padding: 6px 8px;
+  padding: 5px 6px;
   vertical-align: top;
 }
 .bk-cal thead th {
@@ -900,6 +908,10 @@ body {
   font-weight: 500;
   white-space: nowrap;
   text-align: center;
+}
+.bk-cal thead th:first-child,
+.bk-cal-day {
+  width: 84px;
 }
 .bk-cal-day {
   background: var(--paper-2);
@@ -912,26 +924,33 @@ body {
   color: var(--line);
 }
 .bk-cal-cell {
-  min-width: 110px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
 }
+/* 名前＋担当を2段表示するチップ */
 .bk-chip {
   display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  margin: 0 3px 3px 0;
-  padding: 2px 6px;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 6px;
   border-radius: 4px;
   background: color-mix(in oklab, var(--ink) 7%, transparent);
-  white-space: nowrap;
 }
 .bk-chip.free {
   background: color-mix(in oklab, #1a3cc4 10%, transparent);
 }
+.bk-chip-r1 {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
 .bk-chip-nm {
   font-weight: 600;
+  font-size: 11.5px;
 }
 .bk-chip-as {
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--ink-3);
 }
 .bk-chip-x {
@@ -939,7 +958,7 @@ body {
   background: none;
   color: var(--accent-ink);
   cursor: pointer;
-  font-size: 13px;
+  font-size: 12px;
   line-height: 1;
   padding: 0;
 }

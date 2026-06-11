@@ -115,16 +115,20 @@ export default function PreopenBooking({
                     {day.note && <span style={{ fontWeight: 400 }}>　{day.note}</span>}
                   </span>
                   <span className="bk-slots">
-                    <span className="soft" style={{ fontSize: 11.5, marginRight: 2 }}>
+                    <span className="soft bk-slots-lbl" style={{ fontSize: 11.5 }}>
                       空き状況
                     </span>
-                    {day.rounds.map((r) => {
-                      const cap = capacities[slotKey(day.date, r.start)] ?? 0;
-                      const used = usedCount(day.date, r.start);
+                    {PREOPEN_ALL_STARTS.map((s) => {
+                      const round = day.rounds.find((r) => r.start === s);
+                      if (!round) {
+                        return <span key={s} className="bk-slot empty" aria-hidden />;
+                      }
+                      const cap = capacities[slotKey(day.date, s)] ?? 0;
+                      const used = usedCount(day.date, s);
                       const full = cap > 0 && used >= cap;
                       return (
-                        <span key={r.start} className="bk-slot en">
-                          {r.start}–{r.end}
+                        <span key={s} className="bk-slot en">
+                          {round.start}–{round.end}
                           <span className={"mk " + (cap === 0 || full ? "late" : "early")}>
                             {cap === 0 ? "—" : full ? "満" : `${used}/${cap}`}
                           </span>
@@ -240,23 +244,23 @@ export default function PreopenBooking({
                               <span
                                 key={r.id}
                                 className={"bk-chip" + (free ? " free" : "")}
-                                title={`担当：${assigneeLabel(r)}／登録：${surname(
-                                  staffMap.get(r.staff_id)?.full_name ?? "?"
-                                )}`}
+                                title={`登録：${surname(staffMap.get(r.staff_id)?.full_name ?? "?")}`}
                               >
-                                <span className="bk-chip-nm">{r.customer_name}</span>
+                                <span className="bk-chip-r1">
+                                  <span className="bk-chip-nm">{r.customer_name}</span>
+                                  {canDelete && (
+                                    <button
+                                      type="button"
+                                      className="bk-chip-x"
+                                      onClick={() => remove(r.id)}
+                                      disabled={pending}
+                                      aria-label="削除"
+                                    >
+                                      ×
+                                    </button>
+                                  )}
+                                </span>
                                 <span className="bk-chip-as">{assigneeLabel(r)}</span>
-                                {canDelete && (
-                                  <button
-                                    type="button"
-                                    className="bk-chip-x"
-                                    onClick={() => remove(r.id)}
-                                    disabled={pending}
-                                    aria-label="削除"
-                                  >
-                                    ×
-                                  </button>
-                                )}
                               </span>
                             );
                           })}
