@@ -55,8 +55,6 @@ export const PREOPEN_DAYS: PreopenDay[] = [
       { name: "福田", start: "13:00", end: "21:00", serveEnd: "21:00" },
       { name: "佐藤", start: "13:00", end: "21:00", serveEnd: "21:00" },
       { name: "紙坂", start: "13:00", end: "19:00", serveEnd: "19:00" },
-      { name: "二俣", start: "13:00", end: "14:30", serveEnd: null, note: "研修のみ" },
-      { name: "川島", start: "13:00", end: "14:30", serveEnd: null, note: "研修のみ" },
     ],
   },
   {
