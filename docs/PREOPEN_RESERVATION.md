@@ -17,6 +17,8 @@
 
 - スタッフ画面 `/staff` 右上「プレオープン予約 →」→ `/staff/preopen`。
 - `/staff/preopen` は3日×各ラウンドを表示。空き枠に名前を入れて「この枠に予約」。
+- オーナーは管理ナビ「プレオープン」→ `/admin/preopen` で**全体の予約状況**（合計・満席枠数・各枠の客名と担当）を確認。
+  オーナーは `isAdmin` 扱いで**誰の予約でも削除**できる（RLSの削除ポリシーが本人/管理者を許可）。
 
 ## DBマイグレーション（要適用）
 
@@ -29,6 +31,7 @@
 |---|---|
 | `supabase/migrations/0010_preopen_reservations.sql` | テーブル＋RLS |
 | `src/lib/preopen.ts` | 日付・ラウンド・ベッド数の固定設定 |
-| `src/app/staff/preopen/page.tsx` | 予約画面（サーバー） |
+| `src/app/staff/preopen/page.tsx` | スタッフ予約画面（サーバー） |
+| `src/app/admin/preopen/page.tsx` | オーナー向け 予約状況（合計/満席数＋同グリッド・isAdmin） |
 | `src/app/staff/preopen/PreopenBooking.tsx` | 予約グリッド（クライアント） |
 | `src/app/staff/preopen/actions.ts` | 登録/削除（4名上限チェック） |

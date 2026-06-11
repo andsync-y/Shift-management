@@ -40,6 +40,7 @@ export async function addReservation(input: {
   if (error) return { ok: false, message: error.message };
 
   revalidatePath("/staff/preopen");
+  revalidatePath("/admin/preopen");
   return { ok: true, message: "予約を登録しました。" };
 }
 
@@ -50,5 +51,6 @@ export async function removeReservation(id: string): Promise<{ ok: boolean; mess
   const { error } = await supabase.from("preopen_reservations").delete().eq("id", id);
   if (error) return { ok: false, message: error.message };
   revalidatePath("/staff/preopen");
+  revalidatePath("/admin/preopen");
   return { ok: true, message: "削除しました。" };
 }

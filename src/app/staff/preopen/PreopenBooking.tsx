@@ -15,11 +15,13 @@ export default function PreopenBooking({
   meName,
   staff,
   reservations,
+  isAdmin = false,
 }: {
   meId: string;
   meName: string;
   staff: Pick<Profile, "id" | "full_name">[];
   reservations: PreopenReservation[];
+  isAdmin?: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -103,6 +105,7 @@ export default function PreopenBooking({
                     <ul style={{ listStyle: "none", margin: "0 0 8px", padding: 0, display: "grid", gap: 4 }}>
                       {list.map((r) => {
                         const mine = r.staff_id === meId;
+                        const canDelete = mine || isAdmin;
                         return (
                           <li
                             key={r.id}
@@ -112,7 +115,7 @@ export default function PreopenBooking({
                             <span className="soft" style={{ fontSize: 12 }}>
                               （担当：{surname(staffMap.get(r.staff_id) ?? "?")}）
                             </span>
-                            {mine && (
+                            {canDelete && (
                               <button
                                 onClick={() => remove(r.id)}
                                 disabled={pending}
