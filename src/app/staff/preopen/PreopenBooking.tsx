@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PreopenReservation, Profile } from "@/lib/types";
-import { PREOPEN_BEDS, PREOPEN_DAYS, hm } from "@/lib/preopen";
+import { PREOPEN_DAYS, hm, slotKey } from "@/lib/preopen";
 import { addReservation, removeReservation } from "./actions";
 
 function surname(name: string) {
@@ -15,12 +15,15 @@ export default function PreopenBooking({
   meName,
   staff,
   reservations,
+  capacities,
   isAdmin = false,
 }: {
   meId: string;
   meName: string;
-  staff: Pick<Profile, "id" | "full_name">[];
+  staff: Pick<Profile, "id" | "full_name" | "role">[];
   reservations: PreopenReservation[];
+  // 枠キー(slotKey) → 受付数。固定シフト上の勤務スタッフ数とベッド数から算出。
+  capacities: Record<string, number>;
   isAdmin?: boolean;
 }) {
   const router = useRouter();
@@ -29,10 +32,17 @@ export default function PreopenBooking({
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const staffMap = new Map(staff.map((s) => [s.id, s.full_name]));
+  const staffMap = new Map(staff.map((s) => [s.id, s]));
+
+  // 担当表示。オーナーが取った予約は特定スタッフに紐付けない「フリー」。
+  function ownerLabel(staffId: string) {
+    const p = staffMap.get(staffId);
+    if (!p) return "?";
+    return p.role === "super_admin" ? "フリー" : surname(p.full_name);
+  }
 
   function keyOf(date: string, start: string) {
-    return `${date}_${start}`;
+    return slotKey(date, start);
   }
   function slotReservations(date: string, start: string) {
     return reservations.filter((r) => r.reserve_date === date && hm(r.start_time) === start);
@@ -81,8 +91,10 @@ export default function PreopenBooking({
           <div className="section-body" style={{ display: "grid", gap: 14 }}>
             {day.rounds.map((round) => {
               const list = slotReservations(day.date, round.start);
-              const full = list.length >= PREOPEN_BEDS;
               const k = keyOf(day.date, round.start);
+              const cap = capacities[k] ?? 0;
+              const closed = cap === 0;
+              const full = !closed && list.length >= cap;
               return (
                 <div
                   key={round.start}
@@ -96,8 +108,8 @@ export default function PreopenBooking({
                     <strong className="en">
                       {round.start}–{round.end}
                     </strong>
-                    <span className={"mk " + (full ? "late" : "early")} style={{ fontSize: 11 }}>
-                      {list.length}/{PREOPEN_BEDS}名{full ? "・満席" : ""}
+                    <span className={"mk " + (full || closed ? "late" : "early")} style={{ fontSize: 11 }}>
+                      {closed ? "受付なし" : `${list.length}/${cap}名${full ? "・満席" : ""}`}
                     </span>
                   </div>
 
@@ -113,7 +125,7 @@ export default function PreopenBooking({
                           >
                             <span style={{ fontWeight: 600 }}>{r.customer_name}</span>
                             <span className="soft" style={{ fontSize: 12 }}>
-                              （担当：{surname(staffMap.get(r.staff_id) ?? "?")}）
+                              （担当：{ownerLabel(r.staff_id)}）
                             </span>
                             {canDelete && (
                               <button
@@ -137,7 +149,11 @@ export default function PreopenBooking({
                     </ul>
                   )}
 
-                  {!full ? (
+                  {closed ? (
+                    <p className="help" style={{ margin: 0 }}>
+                      この時間は勤務スタッフがいないため受付していません。
+                    </p>
+                  ) : !full ? (
                     <div style={{ display: "flex", gap: 8 }}>
                       <input
                         className="input"
@@ -172,7 +188,8 @@ export default function PreopenBooking({
       ))}
 
       <p className="help">
-        ※ 自分が登録した予約だけ削除できます。各枠は{PREOPEN_BEDS}名（ベッド数）まで。施術は90分です。
+        ※ 自分が登録した予約だけ削除できます。施術は90分。各枠の受付数は
+        「その時間に勤務しているスタッフ数（固定シフト基準）」と「ベッド4台」の小さい方です。
       </p>
     </>
   );

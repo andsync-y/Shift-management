@@ -3,9 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { PREOPEN_BEDS, findRound } from "@/lib/preopen";
+import { findRound, slotKey } from "@/lib/preopen";
+import { getPreopenCapacities } from "@/lib/preopen-capacity";
 
-// モデル客を1枠に登録する。1枠 PREOPEN_BEDS(=4) 名を超えたら拒否。
+// モデル客を1枠に登録する。受付数（ベッド数×勤務スタッフ数の小さい方）を超えたら拒否。
 export async function addReservation(input: {
   date: string;
   start: string;
@@ -20,14 +21,19 @@ export async function addReservation(input: {
   const slot = findRound(input.date, input.start);
   if (!slot) return { ok: false, message: "枠の指定が不正です。" };
 
-  // 上限チェック（その枠の全予約数）
+  // 受付数チェック（その枠の全予約数 vs 受付可能数）
+  const capacities = await getPreopenCapacities();
+  const cap = capacities[slotKey(input.date, slot.round.start)] ?? 0;
   const { count } = await supabase
     .from("preopen_reservations")
     .select("*", { count: "exact", head: true })
     .eq("reserve_date", input.date)
     .eq("start_time", slot.round.start);
-  if ((count ?? 0) >= PREOPEN_BEDS) {
-    return { ok: false, message: `この枠は満席（${PREOPEN_BEDS}名）です。別の時間を選んでください。` };
+  if (cap === 0) {
+    return { ok: false, message: "この枠は受付していません（勤務スタッフがいません）。" };
+  }
+  if ((count ?? 0) >= cap) {
+    return { ok: false, message: `この枠は満席（${cap}名）です。別の時間を選んでください。` };
   }
 
   const { error } = await supabase.from("preopen_reservations").insert({
