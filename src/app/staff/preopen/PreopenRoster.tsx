@@ -10,8 +10,12 @@ function band(c: string) {
 
 // プレオープン週の出勤シフトを、通常のシフト表と同じタイムライン表示で見せる。
 // colors: 姓 → 表示カラー。
+// タイムラインの表示範囲：13:00–22:00（受付枠の区切り＝1.5h刻み）
+const TL_START = 13 * 60; // 780
+const TL_SPAN = 9 * 60; // 540
+const TICKS = ["13:00", "14:30", "16:00", "17:30", "19:00", "20:30", "22:00"];
+
 export default function PreopenRoster({ colors }: { colors: Record<string, string> }) {
-  const ticks = [10, 12, 14, 16, 18, 20, 22];
   return (
     <div className="section">
       <div className="section-head">
@@ -23,8 +27,8 @@ export default function PreopenRoster({ colors }: { colors: Record<string, strin
           <div className="tl-ruler-row">
             <div className="sp" />
             <div className="tl-ruler">
-              {ticks.map((h, i, arr) => {
-                const left = ((h - 10) / 12) * 100;
+              {TICKS.map((t, i, arr) => {
+                const left = ((toMin(t) - TL_START) / TL_SPAN) * 100;
                 const tf =
                   i === 0
                     ? "translateX(0)"
@@ -32,8 +36,8 @@ export default function PreopenRoster({ colors }: { colors: Record<string, strin
                       ? "translateX(-100%)"
                       : "translateX(-50%)";
                 return (
-                  <span className="tick en" key={h} style={{ left: left + "%", transform: tf }}>
-                    {h}
+                  <span className="tick en" key={t} style={{ left: left + "%", transform: tf }}>
+                    {t}
                   </span>
                 );
               })}
@@ -52,8 +56,8 @@ export default function PreopenRoster({ colors }: { colors: Record<string, strin
                   {day.staffing.map((s) => {
                     const a = toMin(s.start);
                     const b = toMin(s.end);
-                    const left = ((a - 600) / 720) * 100;
-                    const width = ((b - a) / 720) * 100;
+                    const left = ((a - TL_START) / TL_SPAN) * 100;
+                    const width = ((b - a) / TL_SPAN) * 100;
                     const c = colors[s.name] ?? "#8a8a8a";
                     const training = s.serveEnd === null;
                     return (
