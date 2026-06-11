@@ -79,6 +79,14 @@ export default function PreopenRoster({ colors }: { colors: Record<string, strin
                             {s.start}–{s.end}
                           </span>
                         </div>
+                        {training && (
+                          <span
+                            className="tl-note soft"
+                            style={{ left: `${Math.min(100, left + width)}%` }}
+                          >
+                            ←研修・店舗ルール説明のみ
+                          </span>
+                        )}
                       </div>
                     );
                   })}
