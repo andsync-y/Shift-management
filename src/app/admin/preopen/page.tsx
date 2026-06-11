@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { PreopenReservation, Profile } from "@/lib/types";
-import { PREOPEN_DAYS, hm, slotKey } from "@/lib/preopen";
+import { PREOPEN_ALL_STARTS, PREOPEN_DAYS, hm, slotKey } from "@/lib/preopen";
 import { getPreopenCapacities } from "@/lib/preopen-capacity";
 import PreopenBooking from "../../staff/preopen/PreopenBooking";
 
@@ -26,7 +26,7 @@ export default async function AdminPreopenPage() {
 
   const total = list.length;
   const totalCap = Object.values(capacities).reduce((a, b) => a + b, 0);
-  const rounds = PREOPEN_DAYS[0].rounds;
+  const starts = PREOPEN_ALL_STARTS;
 
   return (
     <div className="page">
@@ -51,39 +51,50 @@ export default async function AdminPreopenPage() {
             <thead>
               <tr>
                 <th style={{ whiteSpace: "nowrap" }}>日付</th>
-                {rounds.map((r) => (
-                  <th key={r.start} className="en" style={{ whiteSpace: "nowrap", textAlign: "center" }}>
-                    {r.start}
+                {starts.map((s) => (
+                  <th key={s} className="en" style={{ whiteSpace: "nowrap", textAlign: "center" }}>
+                    {s}
                   </th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {PREOPEN_DAYS.map((day) => (
-                <tr key={day.date}>
-                  <td style={{ whiteSpace: "nowrap", fontWeight: 600 }}>{day.label}</td>
-                  {day.rounds.map((r) => {
-                    const cap = capacities[slotKey(day.date, r.start)] ?? 0;
-                    const left = cap - used(day.date, r.start);
-                    const label = cap === 0 ? "—" : left <= 0 ? "満" : `残${left}`;
-                    const color =
-                      cap === 0
-                        ? "var(--ink-3, #9a9a93)"
-                        : left <= 0
-                          ? "var(--accent-ink, #b4532a)"
-                          : "inherit";
-                    return (
-                      <td
-                        key={r.start}
-                        style={{ textAlign: "center", whiteSpace: "nowrap", color }}
-                        title={cap === 0 ? "受付なし（勤務スタッフなし）" : `${cap - left}/${cap}名`}
-                      >
-                        {label}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
+              {PREOPEN_DAYS.map((day) => {
+                const startSet = new Set(day.rounds.map((r) => r.start));
+                return (
+                  <tr key={day.date}>
+                    <td style={{ whiteSpace: "nowrap", fontWeight: 600 }}>{day.label}</td>
+                    {starts.map((s) => {
+                      // その日にこの時刻の枠が無ければ空欄
+                      if (!startSet.has(s)) {
+                        return (
+                          <td key={s} style={{ textAlign: "center", color: "var(--line, #ccc)" }}>
+                            ·
+                          </td>
+                        );
+                      }
+                      const cap = capacities[slotKey(day.date, s)] ?? 0;
+                      const left = cap - used(day.date, s);
+                      const label = cap === 0 ? "—" : left <= 0 ? "満" : `残${left}`;
+                      const color =
+                        cap === 0
+                          ? "var(--ink-3, #9a9a93)"
+                          : left <= 0
+                            ? "var(--accent-ink, #b4532a)"
+                            : "inherit";
+                      return (
+                        <td
+                          key={s}
+                          style={{ textAlign: "center", whiteSpace: "nowrap", color }}
+                          title={cap === 0 ? "受付なし（勤務スタッフなし）" : `${cap - left}/${cap}名`}
+                        >
+                          {label}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
           <p className="help" style={{ marginBottom: 0 }}>
