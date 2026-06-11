@@ -880,6 +880,68 @@ body {
   padding-bottom: 9px;
 }
 
+/* プレオープン予約一覧：日付×時間帯カレンダー */
+.bk-cal {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 12.5px;
+}
+.bk-cal th,
+.bk-cal td {
+  border: 1px solid var(--line);
+  padding: 6px 8px;
+  vertical-align: top;
+}
+.bk-cal thead th {
+  background: var(--paper-2);
+  color: var(--ink-3);
+  font-weight: 500;
+  white-space: nowrap;
+  text-align: center;
+}
+.bk-cal-day {
+  background: var(--paper-2);
+  white-space: nowrap;
+  font-weight: 600;
+  text-align: left;
+}
+.bk-cal-na {
+  text-align: center;
+  color: var(--line);
+}
+.bk-cal-cell {
+  min-width: 110px;
+}
+.bk-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 0 3px 3px 0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in oklab, var(--ink) 7%, transparent);
+  white-space: nowrap;
+}
+.bk-chip.free {
+  background: color-mix(in oklab, #1a3cc4 10%, transparent);
+}
+.bk-chip-nm {
+  font-weight: 600;
+}
+.bk-chip-as {
+  font-size: 10.5px;
+  color: var(--ink-3);
+}
+.bk-chip-x {
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+}
+
 /* legend */
 .legend {
   display: flex;

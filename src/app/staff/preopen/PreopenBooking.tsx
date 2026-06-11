@@ -3,7 +3,7 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PreopenReservation, Profile } from "@/lib/types";
-import { PREOPEN_DAYS, hm, slotKey } from "@/lib/preopen";
+import { PREOPEN_ALL_STARTS, PREOPEN_DAYS, hm, slotKey } from "@/lib/preopen";
 import { addReservation, removeReservation } from "./actions";
 
 function surname(name: string) {
@@ -51,6 +51,7 @@ export default function PreopenBooking({
   const validKeys = new Set(
     PREOPEN_DAYS.flatMap((d) => d.rounds.map((r) => slotKey(d.date, r.start)))
   );
+  const orphans = reservations.filter((r) => !validKeys.has(slotKey(r.reserve_date, r.start_time)));
 
   function add(date: string) {
     const start = slotSel[date] ?? "";
@@ -142,7 +143,7 @@ export default function PreopenBooking({
                     disabled={pending}
                     style={{ width: "auto", minWidth: 150 }}
                   >
-                    <option value="">予約枠 ▽</option>
+                    <option value="">予約枠</option>
                     {openRounds.map((r) => {
                       const cap = capacities[slotKey(day.date, r.start)] ?? 0;
                       const left = cap - usedCount(day.date, r.start);
@@ -195,73 +196,121 @@ export default function PreopenBooking({
         </div>
       </div>
 
-      {/* 確定した予約一覧 */}
+      {/* 確定した予約一覧（カレンダー形式：日付×時間帯） */}
       <div className="section">
         <div className="section-head">
           <h2>予約一覧</h2>
           <span className="eyebrow">{reservations.length}件</span>
         </div>
         <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
-          {reservations.length === 0 ? (
-            <p className="help" style={{ margin: 0 }}>
-              まだ予約はありません。
-            </p>
-          ) : (
-            <table className="staff-table" style={{ fontSize: 13 }}>
-              <thead>
-                <tr>
-                  <th style={{ whiteSpace: "nowrap" }}>日時</th>
-                  <th>お客様</th>
-                  <th style={{ whiteSpace: "nowrap" }}>担当</th>
-                  <th style={{ whiteSpace: "nowrap" }}>登録</th>
-                  <th />
-                </tr>
-              </thead>
-              <tbody>
-                {reservations.map((r) => {
+          <table className="bk-cal">
+            <thead>
+              <tr>
+                <th>日付</th>
+                {PREOPEN_ALL_STARTS.map((s) => (
+                  <th key={s} className="en">
+                    {s}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {PREOPEN_DAYS.map((day) => {
+                const startSet = new Set(day.rounds.map((r) => r.start));
+                return (
+                  <tr key={day.date}>
+                    <th className="bk-cal-day">{day.label}</th>
+                    {PREOPEN_ALL_STARTS.map((s) => {
+                      if (!startSet.has(s)) {
+                        return (
+                          <td key={s} className="bk-cal-na">
+                            ·
+                          </td>
+                        );
+                      }
+                      const list = reservations.filter(
+                        (r) => r.reserve_date === day.date && hm(r.start_time) === s
+                      );
+                      return (
+                        <td key={s} className="bk-cal-cell">
+                          {list.map((r) => {
+                            const canDelete = r.staff_id === meId || isAdmin;
+                            const free = r.is_free || staffMap.get(r.staff_id)?.role === "super_admin";
+                            return (
+                              <span
+                                key={r.id}
+                                className={"bk-chip" + (free ? " free" : "")}
+                                title={`担当：${assigneeLabel(r)}／登録：${surname(
+                                  staffMap.get(r.staff_id)?.full_name ?? "?"
+                                )}`}
+                              >
+                                <span className="bk-chip-nm">{r.customer_name}</span>
+                                <span className="bk-chip-as">{assigneeLabel(r)}</span>
+                                {canDelete && (
+                                  <button
+                                    type="button"
+                                    className="bk-chip-x"
+                                    onClick={() => remove(r.id)}
+                                    disabled={pending}
+                                    aria-label="削除"
+                                  >
+                                    ×
+                                  </button>
+                                )}
+                              </span>
+                            );
+                          })}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+
+          {orphans.length > 0 && (
+            <div style={{ marginTop: 14 }}>
+              <div className="eyebrow" style={{ margin: "0 0 6px", fontWeight: 700 }}>
+                要時間調整（受付時間の変更前に入った予約）
+              </div>
+              <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 6 }}>
+                {orphans.map((r) => {
                   const canDelete = r.staff_id === meId || isAdmin;
-                  const orphan = !validKeys.has(slotKey(r.reserve_date, r.start_time));
                   return (
-                    <tr key={r.id}>
-                      <td className="en" style={{ whiteSpace: "nowrap" }}>
-                        {r.reserve_date.slice(5).replace("-", "/")} {hm(r.start_time)}–{hm(r.end_time)}
-                        {orphan && (
-                          <span className="mk late" style={{ marginLeft: 6 }}>
-                            要時間調整
-                          </span>
-                        )}
-                      </td>
-                      <td style={{ fontWeight: 600 }}>{r.customer_name}</td>
-                      <td style={{ whiteSpace: "nowrap" }}>{assigneeLabel(r)}</td>
-                      <td className="soft" style={{ whiteSpace: "nowrap" }}>
-                        {surname(staffMap.get(r.staff_id)?.full_name ?? "?")}
-                      </td>
-                      <td style={{ textAlign: "right" }}>
-                        {canDelete && (
-                          <button
-                            onClick={() => remove(r.id)}
-                            disabled={pending}
-                            style={{
-                              border: 0,
-                              background: "none",
-                              color: "var(--accent-ink, #b4532a)",
-                              cursor: "pointer",
-                              fontSize: 12.5,
-                            }}
-                          >
-                            削除
-                          </button>
-                        )}
-                      </td>
-                    </tr>
+                    <li key={r.id} style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13.5 }}>
+                      <span className="en">
+                        {r.reserve_date.slice(5).replace("-", "/")} {hm(r.start_time)}
+                      </span>
+                      <span style={{ fontWeight: 600 }}>{r.customer_name}</span>
+                      <span className="soft" style={{ fontSize: 12 }}>
+                        （{assigneeLabel(r)}）
+                      </span>
+                      {canDelete && (
+                        <button
+                          onClick={() => remove(r.id)}
+                          disabled={pending}
+                          style={{
+                            marginLeft: "auto",
+                            border: 0,
+                            background: "none",
+                            color: "var(--accent-ink, #b4532a)",
+                            cursor: "pointer",
+                            fontSize: 12.5,
+                          }}
+                        >
+                          削除
+                        </button>
+                      )}
+                    </li>
                   );
                 })}
-              </tbody>
-            </table>
+              </ul>
+            </div>
           )}
+
           <p className="help" style={{ marginBottom: 0 }}>
-            「要時間調整」は受付時間の変更前に入った予約。お客様と調整のうえ削除→入れ直してください。
-            削除は自分の予約のみ（オーナーは全件）。
+            セル内は「お客様名／担当」。×で削除（自分の予約のみ・オーナーは全件）。
           </p>
         </div>
       </div>
