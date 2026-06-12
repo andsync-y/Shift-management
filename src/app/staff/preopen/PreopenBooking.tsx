@@ -141,11 +141,10 @@ export default function PreopenBooking({
                 {/* 予約行：枠を選択 → 名前 → 担当 → 予約 */}
                 <div className="bk-row">
                   <select
-                    className="input"
+                    className="input bk-sel-slot"
                     value={slotSel[day.date] ?? ""}
                     onChange={(e) => setSlotSel((s) => ({ ...s, [day.date]: e.target.value }))}
                     disabled={pending}
-                    style={{ width: "auto", minWidth: 150 }}
                   >
                     <option value="">予約枠</option>
                     {openRounds.map((r) => {
@@ -159,7 +158,7 @@ export default function PreopenBooking({
                     })}
                   </select>
                   <input
-                    className="input"
+                    className="input bk-sel-name"
                     placeholder={`${surname(meName)}さんのお客様の名前を入力`}
                     value={nameDraft[day.date] ?? ""}
                     onChange={(e) => setNameDraft((d) => ({ ...d, [day.date]: e.target.value }))}
@@ -167,22 +166,20 @@ export default function PreopenBooking({
                       if (e.key === "Enter") add(day.date);
                     }}
                     disabled={pending}
-                    style={{ flex: 1, minWidth: 160 }}
                   />
                   <select
-                    className="input"
+                    className="input bk-sel-assign"
                     value={assign[day.date] ?? defaultAssign}
                     onChange={(e) =>
                       setAssign((a) => ({ ...a, [day.date]: e.target.value as "self" | "free" }))
                     }
                     disabled={pending}
-                    style={{ width: "auto" }}
                   >
                     <option value="self">自分が施術する</option>
                     <option value="free">フリー（誰でも）</option>
                   </select>
                   <button
-                    className="btn-outline"
+                    className="btn-outline bk-sel-go"
                     onClick={() => add(day.date)}
                     disabled={pending}
                     style={{ fontSize: 13 }}
