@@ -37,6 +37,9 @@ export default function PreopenBooking({
   const staffMap = new Map(staff.map((s) => [s.id, s]));
   const defaultAssign: "self" | "free" = isAdmin ? "free" : "self";
 
+  function slotReservations(date: string, start: string) {
+    return reservations.filter((r) => r.reserve_date === date && hm(r.start_time) === start);
+  }
   function usedCount(date: string, start: string) {
     return reservations.filter((r) => r.reserve_date === date && hm(r.start_time) === start).length;
   }
@@ -45,6 +48,35 @@ export default function PreopenBooking({
     const p = staffMap.get(r.staff_id);
     const free = r.is_free || p?.role === "super_admin";
     return free ? "フリー" : surname(p?.full_name ?? "?");
+  }
+
+  // 予約チップ（PC表・スマホ縦リスト 共通）
+  function chip(r: PreopenReservation) {
+    const canDelete = r.staff_id === meId || isAdmin;
+    const free = r.is_free || staffMap.get(r.staff_id)?.role === "super_admin";
+    return (
+      <span
+        key={r.id}
+        className={"bk-chip" + (free ? " free" : "")}
+        title={`登録：${surname(staffMap.get(r.staff_id)?.full_name ?? "?")}`}
+      >
+        <span className="bk-chip-r1">
+          <span className="bk-chip-nm">{r.customer_name}</span>
+          {canDelete && (
+            <button
+              type="button"
+              className="bk-chip-x"
+              onClick={() => remove(r.id)}
+              disabled={pending}
+              aria-label="削除"
+            >
+              ×
+            </button>
+          )}
+        </span>
+        <span className="bk-chip-as">{assigneeLabel(r)}</span>
+      </span>
+    );
   }
 
   // 現在の枠に存在しない予約（受付時間の変更前に入ったもの）
@@ -203,74 +235,75 @@ export default function PreopenBooking({
           <h2>予約一覧</h2>
           <span className="eyebrow">{reservations.length}件</span>
         </div>
-        <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
-          <table className="bk-cal">
-            <thead>
-              <tr>
-                <th>日付</th>
-                {PREOPEN_ALL_STARTS.map((s) => (
-                  <th key={s} className="en">
-                    {s}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {PREOPEN_DAYS.map((day) => {
-                const startSet = new Set(day.rounds.map((r) => r.start));
-                return (
-                  <tr key={day.date}>
-                    <th className="bk-cal-day">{day.label}</th>
-                    {PREOPEN_ALL_STARTS.map((s) => {
-                      if (!startSet.has(s)) {
+        <div className="section-body" style={{ paddingTop: 10 }}>
+          {/* PC：日付×時間帯の表 */}
+          <div className="bk-cal-desktop" style={{ overflowX: "auto" }}>
+            <table className="bk-cal">
+              <thead>
+                <tr>
+                  <th>日付</th>
+                  {PREOPEN_ALL_STARTS.map((s) => (
+                    <th key={s} className="en">
+                      {s}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {PREOPEN_DAYS.map((day) => {
+                  const startSet = new Set(day.rounds.map((r) => r.start));
+                  return (
+                    <tr key={day.date}>
+                      <th className="bk-cal-day">{day.label}</th>
+                      {PREOPEN_ALL_STARTS.map((s) => {
+                        if (!startSet.has(s)) {
+                          return (
+                            <td key={s} className="bk-cal-na">
+                              ·
+                            </td>
+                          );
+                        }
+                        const list = reservations.filter(
+                          (r) => r.reserve_date === day.date && hm(r.start_time) === s
+                        );
                         return (
-                          <td key={s} className="bk-cal-na">
-                            ·
+                          <td key={s} className="bk-cal-cell">
+                            <div className="bk-cal-chips">{list.map(chip)}</div>
                           </td>
                         );
-                      }
-                      const list = reservations.filter(
-                        (r) => r.reserve_date === day.date && hm(r.start_time) === s
-                      );
-                      return (
-                        <td key={s} className="bk-cal-cell">
-                          <div className="bk-cal-chips">
-                            {list.map((r) => {
-                            const canDelete = r.staff_id === meId || isAdmin;
-                            const free = r.is_free || staffMap.get(r.staff_id)?.role === "super_admin";
-                            return (
-                              <span
-                                key={r.id}
-                                className={"bk-chip" + (free ? " free" : "")}
-                                title={`登録：${surname(staffMap.get(r.staff_id)?.full_name ?? "?")}`}
-                              >
-                                <span className="bk-chip-r1">
-                                  <span className="bk-chip-nm">{r.customer_name}</span>
-                                  {canDelete && (
-                                    <button
-                                      type="button"
-                                      className="bk-chip-x"
-                                      onClick={() => remove(r.id)}
-                                      disabled={pending}
-                                      aria-label="削除"
-                                    >
-                                      ×
-                                    </button>
-                                  )}
-                                </span>
-                                <span className="bk-chip-as">{assigneeLabel(r)}</span>
-                              </span>
-                            );
-                          })}
-                          </div>
-                        </td>
-                      );
-                    })}
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
+                      })}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+
+          {/* スマホ：日付ごとに時間を縦並び */}
+          <div className="bk-cal-mobile">
+            {PREOPEN_DAYS.map((day) => (
+              <div className="bk-m-day" key={day.date}>
+                <div className="bk-m-dayhead">{day.label}</div>
+                {day.rounds.map((r) => {
+                  const list = slotReservations(day.date, r.start);
+                  return (
+                    <div className="bk-m-slot" key={r.start}>
+                      <span className="bk-m-time en">{r.start}</span>
+                      <div className="bk-m-names">
+                        {list.length === 0 ? (
+                          <span className="soft" style={{ fontSize: 12 }}>
+                            —
+                          </span>
+                        ) : (
+                          list.map(chip)
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            ))}
+          </div>
 
           {orphans.length > 0 && (
             <div style={{ marginTop: 14 }}>
