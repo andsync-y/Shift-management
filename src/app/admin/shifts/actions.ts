@@ -10,6 +10,7 @@ import { generateShifts } from "@/lib/shift-generator/solver";
 import { reviewShiftPlan } from "@/lib/shift-generator/llm";
 import { generateShiftsWithClaude } from "@/lib/shift-generator/claude-generator";
 import { getStoreRules } from "@/lib/store-rules";
+import { blackoutsToTimeOff, monthRange } from "@/lib/blackouts";
 import type {
   AvailabilityPreference,
   Profile,
@@ -146,13 +147,24 @@ export async function generatePeriodShifts(
         .eq("period_id", periodId),
     ]);
 
+  // 個別予定（不可時間）も取り込み、その時間は割り当て対象から外す
+  const range = monthRange(period.year, period.month);
+  const { data: blackouts } = await supabase
+    .from("staff_blackouts")
+    .select("staff_id, blackout_date, start_time, end_time")
+    .gte("blackout_date", range.first)
+    .lte("blackout_date", range.last);
+
   const result = generateShifts({
     year: period.year,
     month: period.month,
     staff: (staff ?? []) as Profile[],
     availability: (availability ?? []) as AvailabilityPreference[],
     requirements: (requirements ?? []) as ShiftRequirement[],
-    timeOff: (timeOff ?? []) as TimeOffRequest[],
+    timeOff: [
+      ...((timeOff ?? []) as TimeOffRequest[]),
+      ...blackoutsToTimeOff(blackouts ?? []),
+    ],
   });
 
   // 既存のドラフトシフトを削除して入れ替え
@@ -219,12 +231,22 @@ export async function generatePeriodShiftsWithClaude(
       .eq("period_id", periodId),
   ]);
 
+  const cRange = monthRange(period.year, period.month);
+  const { data: cBlackouts } = await supabase
+    .from("staff_blackouts")
+    .select("staff_id, blackout_date, start_time, end_time")
+    .gte("blackout_date", cRange.first)
+    .lte("blackout_date", cRange.last);
+
   const result = await generateShiftsWithClaude({
     year: period.year,
     month: period.month,
     staff: (staff ?? []) as Profile[],
     availability: (availability ?? []) as AvailabilityPreference[],
-    timeOff: (timeOff ?? []) as TimeOffRequest[],
+    timeOff: [
+      ...((timeOff ?? []) as TimeOffRequest[]),
+      ...blackoutsToTimeOff(cBlackouts ?? []),
+    ],
   });
 
   if (!result.ok) {

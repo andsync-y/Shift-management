@@ -7,6 +7,7 @@ const NAV = [
   { href: "/admin/shifts", label: "シフト作成" },
   { href: "/admin/requests", label: "休み希望" },
   { href: "/admin/timecards", label: "勤怠管理" },
+  { href: "/admin/blackouts", label: "個別予定" },
   { href: "/admin/preopen", label: "プレオープン" },
 ];
 

@@ -28,6 +28,7 @@
 |---|---|
 | `docs/LINE_INTEGRATION.md` | LINEログイン / 通知（Messaging API）の設計 |
 | `docs/SHIFT_OFFER.md` | 出勤打診エンジン（休み承認→早番/遅番の欠員を自動打診） |
+| `docs/PERSONAL_BLACKOUTS.md` | 個別予定の不可時間（タイムツリー画像取り込み→生成で回避） |
 | `docs/PREOPEN_RESERVATION.md` | プレオープン簡易予約（モデル客・スタッフ各自・1枠4名） |
 | `docs/SMART_LOCK.md` | 入口スマートロック（セサミ）＋ 公式LINEのリッチメニュー |
 | `docs/DEPLOY_AND_DOMAIN.md` | デプロイ・独自ドメイン設定 |

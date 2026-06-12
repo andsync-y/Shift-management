@@ -162,6 +162,17 @@ export interface PreopenShift {
   created_at: string;
 }
 
+export interface StaffBlackout {
+  id: string;
+  staff_id: string;
+  blackout_date: string; // "YYYY-MM-DD"
+  start_time: string | null; // "HH:MM:SS" / null は終日不可
+  end_time: string | null;
+  title: string | null;
+  source: string; // "timetree" | "manual"
+  created_at: string;
+}
+
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export const ROLE_LABELS_JA: Record<UserRole, string> = {
