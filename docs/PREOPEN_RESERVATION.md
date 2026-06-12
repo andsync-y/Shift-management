@@ -71,6 +71,7 @@
 - `0010_preopen_reservations.sql`：テーブル `preopen_reservations` ＋ RLS
 - `0011_preopen_is_free.sql`：担当区分カラム `is_free`
 - `0012_preopen_shifts.sql`：プレオープン出勤シフト `preopen_shifts`（オーナー編集）
+- `0013_seed_preopen_shifts.sql`：初期シフト投入（姓で profiles 照合・重複なし。ボタン「初期シフトに戻す」と同等）
 
 ## 関連ファイル
 
