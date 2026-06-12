@@ -1,35 +1,15 @@
 import { requireAdmin } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
-import type { PreopenReservation, Profile } from "@/lib/types";
-import { getPreopenCapacities } from "@/lib/preopen";
+import { loadPreopenData } from "@/lib/preopen-data";
 import PreopenBooking from "../../staff/preopen/PreopenBooking";
 import PreopenRoster from "../../staff/preopen/PreopenRoster";
-
-function surname(name: string) {
-  return name.split(/[\s　]/)[0];
-}
+import PreopenShiftEditor from "./PreopenShiftEditor";
 
 export default async function AdminPreopenPage() {
   const me = await requireAdmin();
-  const supabase = await createClient();
+  const { profiles, reservations, shifts, capacities, staffingByDate, colors } =
+    await loadPreopenData();
 
-  const [{ data: staff }, { data: reservations }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, role, display_color"),
-    supabase
-      .from("preopen_reservations")
-      .select("*")
-      .order("reserve_date", { ascending: true })
-      .order("start_time", { ascending: true })
-      .order("created_at", { ascending: true }),
-  ]);
-  const capacities = getPreopenCapacities();
-  const list = (reservations ?? []) as PreopenReservation[];
-  const profiles = (staff ?? []) as (Pick<Profile, "id" | "full_name" | "role"> & {
-    display_color: string;
-  })[];
-  const colors: Record<string, string> = Object.fromEntries(
-    profiles.map((p) => [surname(p.full_name), p.display_color])
-  );
+  const staffOnly = profiles.filter((p) => p.role === "staff");
 
   return (
     <div className="page">
@@ -41,12 +21,13 @@ export default async function AdminPreopenPage() {
         </div>
       </div>
 
-      <PreopenRoster colors={colors} />
+      <PreopenRoster staffingByDate={staffingByDate} colors={colors} />
+      <PreopenShiftEditor staff={staffOnly} shifts={shifts} />
       <PreopenBooking
         meId={me.id}
         meName={me.full_name}
         staff={profiles}
-        reservations={list}
+        reservations={reservations}
         capacities={capacities}
         isAdmin
       />

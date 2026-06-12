@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { findRound, getPreopenCapacities, slotKey } from "@/lib/preopen";
+import { computeCapacities, findRound, slotKey, type PreopenShiftRow } from "@/lib/preopen";
 
 // モデル客を1枠に登録する。受付数（ベッド数×勤務スタッフ数の小さい方）を超えたら拒否。
 export async function addReservation(input: {
@@ -21,8 +21,11 @@ export async function addReservation(input: {
   const slot = findRound(input.date, input.start);
   if (!slot) return { ok: false, message: "枠の指定が不正です。" };
 
-  // 受付数チェック（その枠の全予約数 vs 受付可能数）
-  const capacities = getPreopenCapacities();
+  // 受付数チェック（その枠の全予約数 vs 受付可能数）。受付数はDBのプレオープン出勤から算出。
+  const { data: shifts } = await supabase
+    .from("preopen_shifts")
+    .select("reserve_date, start_time, end_time, is_training");
+  const capacities = computeCapacities((shifts ?? []) as PreopenShiftRow[]);
   const cap = capacities[slotKey(input.date, slot.round.start)] ?? 0;
   const { count } = await supabase
     .from("preopen_reservations")

@@ -152,6 +152,16 @@ export interface PreopenReservation {
   created_at: string;
 }
 
+export interface PreopenShift {
+  id: string;
+  reserve_date: string; // "YYYY-MM-DD"
+  staff_id: string;
+  start_time: string; // "HH:MM:SS"
+  end_time: string;
+  is_training: boolean;
+  created_at: string;
+}
+
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export const ROLE_LABELS_JA: Record<UserRole, string> = {

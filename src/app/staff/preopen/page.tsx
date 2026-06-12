@@ -1,35 +1,12 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
-import type { PreopenReservation, Profile } from "@/lib/types";
-import { getPreopenCapacities } from "@/lib/preopen";
+import { loadPreopenData } from "@/lib/preopen-data";
 import PreopenBooking from "./PreopenBooking";
 import PreopenRoster from "./PreopenRoster";
 
-function surname(name: string) {
-  return name.split(/[\s　]/)[0];
-}
-
 export default async function PreopenPage() {
   const me = await requireUser();
-  const supabase = await createClient();
-
-  const [{ data: staff }, { data: reservations }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, role, display_color"),
-    supabase
-      .from("preopen_reservations")
-      .select("*")
-      .order("reserve_date", { ascending: true })
-      .order("start_time", { ascending: true })
-      .order("created_at", { ascending: true }),
-  ]);
-  const capacities = getPreopenCapacities();
-  const profiles = (staff ?? []) as (Pick<Profile, "id" | "full_name" | "role"> & {
-    display_color: string;
-  })[];
-  const colors: Record<string, string> = Object.fromEntries(
-    profiles.map((p) => [surname(p.full_name), p.display_color])
-  );
+  const { profiles, reservations, capacities, staffingByDate, colors } = await loadPreopenData();
 
   return (
     <div className="page">
@@ -44,12 +21,12 @@ export default async function PreopenPage() {
         </Link>
       </div>
 
-      <PreopenRoster colors={colors} />
+      <PreopenRoster staffingByDate={staffingByDate} colors={colors} />
       <PreopenBooking
         meId={me.id}
         meName={me.full_name}
         staff={profiles}
-        reservations={(reservations ?? []) as PreopenReservation[]}
+        reservations={reservations}
         capacities={capacities}
       />
     </div>

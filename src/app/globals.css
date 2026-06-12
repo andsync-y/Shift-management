@@ -889,6 +889,36 @@ body {
   padding-bottom: 9px;
 }
 
+/* プレオープン シフト編集 */
+.po-edit-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.po-edit-row .input {
+  width: auto;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+.po-edit-train {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12.5px;
+  color: var(--ink-2);
+  white-space: nowrap;
+}
+.po-edit-x {
+  border: 0;
+  background: none;
+  color: var(--accent-ink);
+  cursor: pointer;
+  font-size: 16px;
+  line-height: 1;
+  padding: 0 4px;
+}
+
 /* プレオープン予約一覧：日付×時間帯カレンダー */
 .bk-cal {
   border-collapse: collapse;

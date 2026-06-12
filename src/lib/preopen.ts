@@ -1,26 +1,17 @@
 // プレオープン（簡易予約システム）の固定設定。
 // 4日間（6/16–6/19）。受付は火水14:30〜／木金13:00〜、最終受付19:00（20:30終わり）。
-// 受付数は「プレオープン出勤表（PREOPEN_DAYS の staffing）」と「ベッド4台」の小さい方。
-// ※ 通常運用の固定シフトとは独立した、プレオープン専用の特別シフト。
+// 受付枠（rounds）は固定。出勤シフト（staffing）は DB の preopen_shifts で管理し、
+// オーナーが /admin/preopen から編集する。受付数はそのシフトから算出する。
 
 export const PREOPEN_BEDS = 4;
 
 export type PreopenRound = { start: string; end: string }; // "HH:MM"
-
-export type PreopenShift = {
-  name: string; // 表示名（姓）
-  start: string; // 勤務開始 "HH:MM"
-  end: string; // 勤務終了
-  serveEnd: string | null; // 施術に入れる時刻の上限。null は研修のみ（施術なし）
-  note?: string;
-};
 
 export type PreopenDay = {
   date: string; // "YYYY-MM-DD"
   label: string; // "6/16(火)"
   note?: string; // 研修などの補足
   rounds: PreopenRound[];
-  staffing: PreopenShift[];
 };
 
 // "HH:MM" に分を足す（ゼロ埋め固定幅なので文字列比較で前後判定できる）
@@ -51,45 +42,15 @@ export const PREOPEN_DAYS: PreopenDay[] = [
     label: "6/16(火)",
     note: "研修・店舗ルール 13:00–14:30",
     rounds: buildRounds("14:30"),
-    staffing: [
-      { name: "福田", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "佐藤", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "紙坂", start: "13:00", end: "19:00", serveEnd: "19:00" },
-    ],
   },
   {
     date: "2026-06-17",
     label: "6/17(水)",
     note: "研修・店舗ルール 13:00–14:30",
     rounds: buildRounds("14:30"),
-    staffing: [
-      { name: "二俣", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "川島", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "橋本", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "桑原", start: "13:00", end: "18:00", serveEnd: "18:00" },
-    ],
   },
-  {
-    date: "2026-06-18",
-    label: "6/18(木)",
-    rounds: buildRounds("13:00"),
-    staffing: [
-      { name: "福田", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "橋本", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "二俣", start: "13:00", end: "16:00", serveEnd: "16:00" },
-      { name: "川島", start: "13:00", end: "16:00", serveEnd: "16:00" },
-    ],
-  },
-  {
-    date: "2026-06-19",
-    label: "6/19(金)",
-    rounds: buildRounds("13:00"),
-    staffing: [
-      { name: "佐藤", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "桑原", start: "13:00", end: "16:00", serveEnd: "16:00" },
-      { name: "紙坂", start: "13:00", end: "19:00", serveEnd: "19:00" },
-    ],
-  },
+  { date: "2026-06-18", label: "6/18(木)", rounds: buildRounds("13:00") },
+  { date: "2026-06-19", label: "6/19(金)", rounds: buildRounds("13:00") },
 ];
 
 // 全日通しの受付開始時刻（重複なし・昇順）。空き状況表の列に使う。
@@ -115,16 +76,55 @@ export function findRound(date: string, start: string): { day: PreopenDay; round
   return { day, round };
 }
 
+// preopen_shifts の1行（受付数計算に必要な分だけ）。
+export type PreopenShiftRow = {
+  reserve_date: string;
+  start_time: string;
+  end_time: string;
+  is_training: boolean;
+};
+
 // 各枠の受付数 = min(ベッド数, 枠の開始〜終了まで施術に入れるスタッフ数)。
-export function getPreopenCapacities(): Record<string, number> {
+// is_training=true（研修のみ）は施術に数えない。
+export function computeCapacities(shifts: PreopenShiftRow[]): Record<string, number> {
   const caps: Record<string, number> = {};
   for (const day of PREOPEN_DAYS) {
+    const dayShifts = shifts.filter((s) => s.reserve_date === day.date && !s.is_training);
     for (const round of day.rounds) {
-      const n = day.staffing.filter(
-        (s) => s.serveEnd !== null && s.start <= round.start && s.serveEnd >= round.end
+      const n = dayShifts.filter(
+        (s) => hm(s.start_time) <= round.start && hm(s.end_time) >= round.end
       ).length;
       caps[slotKey(day.date, round.start)] = Math.min(PREOPEN_BEDS, n);
     }
   }
   return caps;
 }
+
+// 初期シフト（オーナーが「初期シフトに戻す」で読み込む雛形）。姓でスタッフを照合する。
+export const DEFAULT_PREOPEN_STAFFING: Record<
+  string,
+  { name: string; start: string; end: string; isTraining?: boolean }[]
+> = {
+  "2026-06-16": [
+    { name: "福田", start: "13:00", end: "21:00" },
+    { name: "佐藤", start: "13:00", end: "21:00" },
+    { name: "紙坂", start: "13:00", end: "19:00" },
+  ],
+  "2026-06-17": [
+    { name: "二俣", start: "13:00", end: "21:00" },
+    { name: "川島", start: "13:00", end: "21:00" },
+    { name: "橋本", start: "13:00", end: "21:00" },
+    { name: "桑原", start: "13:00", end: "18:00" },
+  ],
+  "2026-06-18": [
+    { name: "福田", start: "13:00", end: "21:00" },
+    { name: "橋本", start: "13:00", end: "21:00" },
+    { name: "二俣", start: "13:00", end: "16:00" },
+    { name: "川島", start: "13:00", end: "16:00" },
+  ],
+  "2026-06-19": [
+    { name: "佐藤", start: "13:00", end: "21:00" },
+    { name: "桑原", start: "13:00", end: "16:00" },
+    { name: "紙坂", start: "13:00", end: "19:00" },
+  ],
+};
