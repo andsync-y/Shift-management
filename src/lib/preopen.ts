@@ -66,7 +66,7 @@ export const PREOPEN_DAYS: PreopenDay[] = [
       { name: "二俣", start: "13:00", end: "21:00", serveEnd: "21:00" },
       { name: "川島", start: "13:00", end: "21:00", serveEnd: "21:00" },
       { name: "橋本", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "桑原", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "桑原", start: "13:00", end: "18:00", serveEnd: "18:00" },
     ],
   },
   {
@@ -86,7 +86,7 @@ export const PREOPEN_DAYS: PreopenDay[] = [
     rounds: buildRounds("13:00"),
     staffing: [
       { name: "佐藤", start: "13:00", end: "21:00", serveEnd: "21:00" },
-      { name: "桑原", start: "13:00", end: "21:00", serveEnd: "21:00" },
+      { name: "桑原", start: "13:00", end: "16:00", serveEnd: "16:00" },
       { name: "紙坂", start: "13:00", end: "19:00", serveEnd: "19:00" },
     ],
   },
