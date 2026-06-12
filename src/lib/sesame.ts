@@ -137,21 +137,37 @@ async function sendCmdToDevice(
   apiKey: string,
   operatorName: string
 ): Promise<boolean> {
-  try {
-    const res = await fetch(CMD_URL(device.uuid), {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKey },
-      body: JSON.stringify({
-        cmd,
-        // history は操作者名。アプリの履歴に「誰が操作したか」として残る（base64）。
-        history: Buffer.from(operatorName).toString("base64"),
-        sign: sesameSign(device.secret),
-      }),
-    });
-    return res.ok;
-  } catch {
-    return false;
+  const body = JSON.stringify({
+    cmd,
+    // history は操作者名。アプリの履歴に「誰が操作したか」として残る（base64）。
+    history: Buffer.from(operatorName).toString("base64"),
+    sign: sesameSign(device.secret),
+  });
+  // 一時的なネットワーク不調を吸収するため、タイムアウト付きで最大3回試す。
+  const delays = [0, 600, 1500];
+  for (let i = 0; i < delays.length; i++) {
+    if (delays[i] > 0) await new Promise((r) => setTimeout(r, delays[i]));
+    try {
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), 8000);
+      try {
+        const res = await fetch(CMD_URL(device.uuid), {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "x-api-key": apiKey },
+          body,
+          signal: controller.signal,
+        });
+        if (res.ok) return true;
+        // 4xx（認証・指定ミス等）はリトライしても無駄なので即終了。5xx/タイムアウトは再試行。
+        if (res.status >= 400 && res.status < 500) return false;
+      } finally {
+        clearTimeout(timer);
+      }
+    } catch {
+      // abort（タイムアウト）やネットワーク例外 → 次の試行へ
+    }
   }
+  return false;
 }
 
 // 登録済みの全デバイスへ同じコマンドを送る。全台成功で true。
@@ -180,12 +196,21 @@ async function deviceStatus(
   apiKey: string
 ): Promise<"locked" | "unlocked" | null> {
   try {
-    const res = await fetch(STATUS_URL(uuid), { headers: { "x-api-key": apiKey } });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { CHSesame2Status?: string };
-    if (data.CHSesame2Status === "locked") return "locked";
-    if (data.CHSesame2Status === "unlocked") return "unlocked";
-    return null;
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 6000);
+    try {
+      const res = await fetch(STATUS_URL(uuid), {
+        headers: { "x-api-key": apiKey },
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const data = (await res.json()) as { CHSesame2Status?: string };
+      if (data.CHSesame2Status === "locked") return "locked";
+      if (data.CHSesame2Status === "unlocked") return "unlocked";
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
   } catch {
     return null;
   }

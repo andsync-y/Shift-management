@@ -5,7 +5,7 @@ import { handleOfferPostback } from "@/lib/offers/engine";
 import { distanceMeters, storeGeofence, locationRequired } from "@/lib/geo";
 import { emailToLoginId } from "@/lib/login-id";
 import { appUrl } from "@/lib/app-url";
-import { isSesameEnabled, sesameLock, sesameUnlock } from "@/lib/sesame";
+import { isSesameEnabled, sesameLock, sesameStatus, sesameUnlock } from "@/lib/sesame";
 import type { TimeRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -230,14 +230,18 @@ export async function POST(req: NextRequest) {
           continue;
         }
         const ok = isLock ? await sesameLock(staff.full_name) : await sesameUnlock(staff.full_name);
-        await replyLineMessage(
-          ev.replyToken,
-          ok
-            ? isLock
-              ? "🔒 施錠しました。"
-              : "🔓 解錠しました。"
-            : "ロックの操作に失敗しました。少し時間をおいて、もう一度お試しください。"
-        );
+        let reply: string;
+        if (ok) {
+          reply = isLock ? "🔒 施錠しました。" : "🔓 解錠しました。";
+        } else {
+          const reachable = (await sesameStatus()) !== null;
+          const fallback =
+            "鍵が開かない場合は、セサミ公式アプリ（Bluetoothで本体のそばから操作）または物理鍵をお使いください。";
+          reply = reachable
+            ? `ロックの操作に失敗しました。少し時間をおいて、もう一度お試しください。${fallback}`
+            : `鍵に接続できませんでした。店舗のWi-Fi/ネット接続をご確認ください。${fallback}`;
+        }
+        await replyLineMessage(ev.replyToken, reply);
         continue;
       }
 

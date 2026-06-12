@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/server";
 import { verifyLineIdToken } from "@/lib/line";
 import { distanceMeters, storeGeofence } from "@/lib/geo";
-import { isSesameEnabled, sesameLock, sesameUnlock } from "@/lib/sesame";
+import { isSesameEnabled, sesameLock, sesameStatus, sesameUnlock } from "@/lib/sesame";
 
 export const dynamic = "force-dynamic";
 
@@ -85,10 +85,14 @@ export async function POST(req: NextRequest) {
   const ok =
     action === "lock" ? await sesameLock(staff.full_name) : await sesameUnlock(staff.full_name);
   if (!ok) {
-    return NextResponse.json(
-      { ok: false, message: "ロックの操作に失敗しました。少し時間をおいて、もう一度お試しください。" },
-      { status: 502 }
-    );
+    // 失敗時、鍵がクラウドから見えるか（＝店舗ネットに繋がっているか）を確認して案内を出し分ける。
+    const reachable = (await sesameStatus()) !== null;
+    const fallback =
+      "鍵が開かない場合は、セサミ公式アプリ（Bluetoothで本体のそばから操作）または物理鍵をお使いください。";
+    const message = reachable
+      ? `ロックの操作に失敗しました。少し時間をおいて、もう一度お試しください。${fallback}`
+      : `鍵に接続できませんでした。店舗のWi-Fi/ネット接続をご確認ください。${fallback}`;
+    return NextResponse.json({ ok: false, offline: !reachable, message }, { status: 502 });
   }
 
   return NextResponse.json({
