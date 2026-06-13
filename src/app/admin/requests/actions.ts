@@ -56,6 +56,21 @@ export async function reviewRequest(
           .delete()
           .eq("staff_id", updated.staff_id)
           .eq("work_date", updated.off_date);
+      } else if (
+        updated.request_type === "time_change" &&
+        updated.start_time &&
+        updated.end_time
+      ) {
+        // 時間変更の承認: その日の本人シフトを希望時間へ置き換える（前のシフトを残さない）。
+        await supabase
+          .from("shifts")
+          .update({
+            start_time: updated.start_time,
+            end_time: updated.end_time,
+            note: "時間変更",
+          })
+          .eq("staff_id", updated.staff_id)
+          .eq("work_date", updated.off_date);
       }
 
       // 早番/遅番が無人になったら他スタッフへ自動で出勤打診を開始する。
@@ -84,13 +99,14 @@ export async function cleanupApprovedOffShifts(): Promise<{ ok: boolean; message
 
   const { data: offs, error } = await supabase
     .from("time_off_requests")
-    .select("staff_id, off_date, start_time, end_time")
-    .eq("request_type", "off")
+    .select("staff_id, off_date, request_type, start_time, end_time")
     .eq("status", "approved");
   if (error) return { ok: false, message: error.message };
 
   // 終日休み（時間指定なし）のみ対象
-  const allDay = (offs ?? []).filter((o) => !o.start_time && !o.end_time);
+  const allDay = (offs ?? []).filter(
+    (o) => o.request_type === "off" && !o.start_time && !o.end_time
+  );
   let removed = 0;
   for (const o of allDay) {
     const { data: deleted } = await supabase
@@ -102,16 +118,31 @@ export async function cleanupApprovedOffShifts(): Promise<{ ok: boolean; message
     removed += deleted?.length ?? 0;
   }
 
+  // 承認済みの時間変更を実シフトへ反映（前のシフトが残っているものを置換）
+  const changes = (offs ?? []).filter(
+    (o) => o.request_type === "time_change" && o.start_time && o.end_time
+  );
+  let changed = 0;
+  for (const c of changes) {
+    const { data: updated } = await supabase
+      .from("shifts")
+      .update({ start_time: c.start_time, end_time: c.end_time, note: "時間変更" })
+      .eq("staff_id", c.staff_id)
+      .eq("work_date", c.off_date)
+      .select("id");
+    changed += updated?.length ?? 0;
+  }
+
   revalidatePath("/admin/requests");
   revalidatePath("/admin");
   revalidatePath("/admin/shifts", "layout");
   revalidatePath("/staff");
+  const parts: string[] = [];
+  if (removed > 0) parts.push(`終日休みのシフト ${removed} 件を削除`);
+  if (changed > 0) parts.push(`時間変更 ${changed} 件をシフトへ反映`);
   return {
     ok: true,
-    message:
-      removed > 0
-        ? `承認済みの終日休みに対応するシフト ${removed} 件を削除しました。`
-        : "削除対象のシフトはありませんでした。",
+    message: parts.length > 0 ? parts.join("・") + "しました。" : "対象のシフトはありませんでした。",
   };
 }
 

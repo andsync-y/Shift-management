@@ -107,11 +107,13 @@ export default function ShiftCalendarView({
     return m;
   }, [visibleShifts]);
 
-  // 承認済みの休み希望を日付ごとに索引化（スタッフ絞り込みを反映）
+  // 承認済みの「終日/時間帯休み」を日付ごとに索引化（スタッフ絞り込みを反映）。
+  // 時間変更は承認時に実シフトへ反映済みのため、ここでは重ねて表示しない。
   const offByDate = useMemo(() => {
     const m: Record<string, TimeOffRequest[]> = {};
     for (const t of timeOff) {
       if (t.status !== "approved") continue;
+      if (t.request_type === "time_change") continue;
       if (selected.size > 0 && !selected.has(t.staff_id)) continue;
       (m[t.off_date] ??= []).push(t);
     }
