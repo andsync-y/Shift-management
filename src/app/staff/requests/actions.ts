@@ -47,9 +47,30 @@ export async function submitTimeOff(_prev: unknown, formData: FormData) {
 
   const supabase = await createClient();
 
+  // すでに申請済み（却下以外＝申請中/承認済み）の日付は重複申請させない
+  const { data: existing } = await supabase
+    .from("time_off_requests")
+    .select("off_date")
+    .eq("staff_id", me.id)
+    .neq("status", "rejected")
+    .in("off_date", dates);
+  const taken = new Set((existing ?? []).map((r) => (r as { off_date: string }).off_date));
+  const newDates = dates.filter((d) => !taken.has(d));
+
+  const fmt = (d: string) => {
+    const [, m, day] = d.split("-");
+    return `${Number(m)}/${Number(day)}`;
+  };
+  if (newDates.length === 0) {
+    return {
+      ok: false,
+      message: `その日付はすでに申請済みです（${dates.map(fmt).join("・")}）。重複申請はできません。`,
+    };
+  }
+
   // 各日付の月から period を特定（あれば紐付け）。月ごとに1回だけ問い合わせ。
   const periodByMonth = new Map<string, string | null>();
-  for (const d of dates) {
+  for (const d of newDates) {
     const [y, m] = d.split("-").map(Number);
     const key = `${y}-${m}`;
     if (!periodByMonth.has(key)) {
@@ -63,7 +84,7 @@ export async function submitTimeOff(_prev: unknown, formData: FormData) {
     }
   }
 
-  const rows = dates.map((off_date) => {
+  const rows = newDates.map((off_date) => {
     const [y, m] = off_date.split("-").map(Number);
     return {
       staff_id: me.id,
@@ -79,10 +100,13 @@ export async function submitTimeOff(_prev: unknown, formData: FormData) {
   const { error } = await supabase.from("time_off_requests").insert(rows);
   if (error) return { ok: false, message: error.message };
 
+  const skipped = dates.filter((d) => taken.has(d));
   revalidatePath("/staff/requests");
   return {
     ok: true,
-    message: `${isTimeChange ? "時間変更希望" : "お休み希望"}を${rows.length}件申請しました。`,
+    message:
+      `${isTimeChange ? "時間変更希望" : "お休み希望"}を${rows.length}件申請しました。` +
+      (skipped.length > 0 ? `（申請済みのため除外：${skipped.map(fmt).join("・")}）` : ""),
   };
 }
 
