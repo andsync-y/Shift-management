@@ -62,6 +62,7 @@ export async function loadPreopenData(): Promise<PreopenData> {
       start: hm(s.start_time),
       end: hm(s.end_time),
       isTraining: s.is_training,
+      canServe: s.can_serve !== false,
     });
   }
   // 開始時刻→名前 で安定ソート

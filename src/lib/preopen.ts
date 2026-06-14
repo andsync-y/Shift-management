@@ -82,14 +82,17 @@ export type PreopenShiftRow = {
   start_time: string;
   end_time: string;
   is_training: boolean;
+  can_serve?: boolean; // false なら施術不可（受付数に数えない）
 };
 
 // 各枠の受付数 = min(ベッド数, 枠の開始〜終了まで施術に入れるスタッフ数)。
-// is_training=true（研修のみ）は施術に数えない。
+// is_training=true（研修のみ）/ can_serve=false（施術不可）は数えない。
 export function computeCapacities(shifts: PreopenShiftRow[]): Record<string, number> {
   const caps: Record<string, number> = {};
   for (const day of PREOPEN_DAYS) {
-    const dayShifts = shifts.filter((s) => s.reserve_date === day.date && !s.is_training);
+    const dayShifts = shifts.filter(
+      (s) => s.reserve_date === day.date && !s.is_training && s.can_serve !== false
+    );
     for (const round of day.rounds) {
       const n = dayShifts.filter(
         (s) => hm(s.start_time) <= round.start && hm(s.end_time) >= round.end

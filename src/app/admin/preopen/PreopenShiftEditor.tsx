@@ -6,7 +6,7 @@ import { PREOPEN_DAYS } from "@/lib/preopen";
 import type { PreopenShift, Profile } from "@/lib/types";
 import { resetPreopenShifts, savePreopenShifts, type ShiftInput } from "./actions";
 
-type Row = { staffId: string; start: string; end: string; training: boolean };
+type Row = { staffId: string; start: string; end: string; training: boolean; noServe: boolean };
 
 const TIME_OPTIONS = (() => {
   const out: string[] = [];
@@ -38,6 +38,7 @@ export default function PreopenShiftEditor({
           start: s.start_time.slice(0, 5),
           end: s.end_time.slice(0, 5),
           training: s.is_training,
+          noServe: s.can_serve === false,
         }));
     }
     return init;
@@ -52,7 +53,10 @@ export default function PreopenShiftEditor({
   function addRow(date: string) {
     setRowsByDate((prev) => ({
       ...prev,
-      [date]: [...prev[date], { staffId: "", start: "13:00", end: "21:00", training: false }],
+      [date]: [
+        ...prev[date],
+        { staffId: "", start: "13:00", end: "21:00", training: false, noServe: false },
+      ],
     }));
   }
   function removeRow(date: string, i: number) {
@@ -63,7 +67,14 @@ export default function PreopenShiftEditor({
     const payload: ShiftInput[] = [];
     for (const day of PREOPEN_DAYS) {
       for (const r of rowsByDate[day.date] ?? []) {
-        payload.push({ date: day.date, staffId: r.staffId, start: r.start, end: r.end, training: r.training });
+        payload.push({
+          date: day.date,
+          staffId: r.staffId,
+          start: r.start,
+          end: r.end,
+          training: r.training,
+          noServe: r.noServe,
+        });
       }
     }
     startTransition(async () => {
@@ -149,6 +160,15 @@ export default function PreopenShiftEditor({
                       disabled={pending}
                     />
                     研修のみ
+                  </label>
+                  <label className="po-edit-train">
+                    <input
+                      type="checkbox"
+                      checked={r.noServe}
+                      onChange={(e) => update(day.date, i, { noServe: e.target.checked })}
+                      disabled={pending}
+                    />
+                    施術不可
                   </label>
                   <button
                     type="button"

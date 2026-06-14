@@ -17,6 +17,7 @@ export type ShiftInput = {
   start: string; // "HH:MM"
   end: string;
   training: boolean;
+  noServe: boolean; // true = 施術不可（受付に数えない）
 };
 
 function revalidate() {
@@ -60,6 +61,7 @@ export async function savePreopenShifts(
         start_time: r.start,
         end_time: r.end,
         is_training: r.training,
+        can_serve: !r.noServe,
       }))
     );
     if (error) return { ok: false, message: error.message };

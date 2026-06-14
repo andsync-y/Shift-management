@@ -20,7 +20,10 @@
 `/admin/preopen` の「シフトを編集」から変更できる（通常運用の週次固定シフト fixed_shifts とは独立）。
 
 - **各枠の受付数** = min(ベッド4台, 枠の開始〜終了まで施術に入れるスタッフ数)。
-  `computeCapacities(shifts)`（純関数・`src/lib/preopen.ts`）で算出。`is_training=true` は研修のみ（施術に数えない）。
+  `computeCapacities(shifts)`（純関数・`src/lib/preopen.ts`）で算出。
+  `is_training=true`（研修のみ）/ `can_serve=false`（施術不可・補助）は**受付数に数えない**。
+  シフト編集の「研修のみ」「施術不可」チェックで設定（migration 0015 で `can_serve` 追加）。
+  例：桑原はまだ施術できないため「施術不可」にして受付数から除外。
 - 初期シフトの雛形は `DEFAULT_PREOPEN_STAFFING`（`preopen.ts`）。編集画面の「初期シフトに戻す」で
   姓照合により流し込む。**DBが空のうちは受付数が全て0**になるので、初回はここから読み込む。
 - 21:00上がりは最終施術後の閉め作業込み。
@@ -71,6 +74,7 @@
 - `0010_preopen_reservations.sql`：テーブル `preopen_reservations` ＋ RLS
 - `0011_preopen_is_free.sql`：担当区分カラム `is_free`
 - `0012_preopen_shifts.sql`：プレオープン出勤シフト `preopen_shifts`（オーナー編集）
+- `0015_preopen_can_serve.sql`：施術可否フラグ `can_serve`（施術不可は受付数から除外）
 - `0013_seed_preopen_shifts.sql`：初期シフト投入（姓で profiles 照合・重複なし。ボタン「初期シフトに戻す」と同等）
 
 ## 関連ファイル

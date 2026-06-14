@@ -159,6 +159,7 @@ export interface PreopenShift {
   start_time: string; // "HH:MM:SS"
   end_time: string;
   is_training: boolean;
+  can_serve: boolean; // false = 出勤するが施術不可（受付数に数えない）
   created_at: string;
 }
 

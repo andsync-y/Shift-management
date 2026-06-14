@@ -5,6 +5,7 @@ export type RosterBar = {
   start: string; // "HH:MM"
   end: string;
   isTraining: boolean;
+  canServe?: boolean; // false = 施術不可（受付数に数えない）
 };
 
 function toMin(t: string) {
@@ -83,6 +84,13 @@ export default function PreopenRoster({
                       const left = ((a - TL_START) / TL_SPAN) * 100;
                       const width = ((b - a) / TL_SPAN) * 100;
                       const c = colors[s.name] ?? "#8a8a8a";
+                      const noServe = !s.isTraining && s.canServe === false;
+                      const mark = s.isTraining ? "研" : noServe ? "補" : "遅";
+                      const note = s.isTraining
+                        ? "←研修・店舗ルール説明のみ"
+                        : noServe
+                          ? "←施術不可（受付に数えない）"
+                          : null;
                       return (
                         <div className="tl-lane" key={s.name + idx}>
                           <div
@@ -95,19 +103,19 @@ export default function PreopenRoster({
                             }}
                           >
                             <span className="nm">{s.name}</span>
-                            <span className={"mk " + (s.isTraining ? "off-mk" : "late")}>
-                              {s.isTraining ? "研" : "遅"}
+                            <span className={"mk " + (s.isTraining || noServe ? "off-mk" : "late")}>
+                              {mark}
                             </span>
                             <span className="tm">
                               {s.start}–{s.end}
                             </span>
                           </div>
-                          {s.isTraining && (
+                          {note && (
                             <span
                               className="tl-note soft"
                               style={{ left: `${Math.min(100, left + width)}%` }}
                             >
-                              ←研修・店舗ルール説明のみ
+                              {note}
                             </span>
                           )}
                         </div>
@@ -120,7 +128,7 @@ export default function PreopenRoster({
           })}
         </div>
         <p className="help" style={{ marginBottom: 0 }}>
-          「研」＝研修のみ（施術なし）。21:00上がりは最終施術（19:00枠）後の閉め作業込み。
+          「研」＝研修のみ／「補」＝施術不可（受付に数えない）。21:00上がりは最終施術後の閉め作業込み。
         </p>
       </div>
     </div>
