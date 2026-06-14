@@ -22,7 +22,11 @@ export default async function AdminPreopenPage() {
       </div>
 
       <PreopenRoster staffingByDate={staffingByDate} colors={colors} />
-      <PreopenShiftEditor staff={staffOnly} shifts={shifts} />
+      <PreopenShiftEditor
+        key={shifts.map((s) => s.id).join("-") || "empty"}
+        staff={staffOnly}
+        shifts={shifts}
+      />
       <PreopenBooking
         meId={me.id}
         meName={me.full_name}
