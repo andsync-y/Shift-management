@@ -8,7 +8,11 @@ export default async function BlackoutsPage() {
   const supabase = await createClient();
 
   const [{ data: staff }, { data: blackouts }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name").eq("is_active", true).eq("role", "staff"),
+    supabase
+      .from("profiles")
+      .select("id, full_name, display_name")
+      .eq("is_active", true)
+      .eq("role", "staff"),
     supabase
       .from("staff_blackouts")
       .select("*")

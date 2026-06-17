@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Profile, Shift, ShiftRequirement } from "@/lib/types";
 import { DAY_LABELS_JA } from "@/lib/types";
+import { displayName } from "@/lib/display-name";
 
 function toMin(t: string) {
   return Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
@@ -10,9 +11,6 @@ function hours(s: Shift) {
 }
 function hm(t: string) {
   return t.slice(0, 5);
-}
-function surname(name: string) {
-  return name.split(/[\s　]/)[0];
 }
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -138,7 +136,7 @@ export default function DashboardInsights({
                               className="dot"
                               style={{ background: p?.display_color ?? "#8e897f" }}
                             />
-                            {p ? surname(p.full_name) : "?"}
+                            {p ? displayName(p) : "?"}
                             <span className="tm en">
                               {hm(s.start_time)}–{hm(s.end_time)}
                             </span>
@@ -208,7 +206,7 @@ export default function DashboardInsights({
                   <div className="work-row" key={r.staff.id}>
                     <span className="work-name">
                       <span className="dot" style={{ background: r.staff.display_color }} />
-                      {surname(r.staff.full_name)}
+                      {displayName(r.staff)}
                     </span>
                     <span className="work-track">
                       <span

@@ -3,19 +3,16 @@
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { Profile, StaffBlackout } from "@/lib/types";
+import { displayName } from "@/lib/display-name";
 import { deleteBlackout, extractBlackouts, saveBlackouts } from "./actions";
 
 type Row = { date: string; start: string; end: string; title: string };
-
-function surname(name: string) {
-  return name.split(/[\s　]/)[0];
-}
 
 export default function BlackoutManager({
   staff,
   blackouts,
 }: {
-  staff: Pick<Profile, "id" | "full_name">[];
+  staff: Pick<Profile, "id" | "full_name" | "display_name">[];
   blackouts: StaffBlackout[];
 }) {
   const router = useRouter();
@@ -25,7 +22,7 @@ export default function BlackoutManager({
   const [rows, setRows] = useState<Row[]>([]);
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
-  const staffName = new Map(staff.map((s) => [s.id, s.full_name]));
+  const staffById = new Map(staff.map((s) => [s.id, s]));
 
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
@@ -183,7 +180,9 @@ export default function BlackoutManager({
               </div>
               <div style={{ marginTop: 12 }}>
                 <button className="btn-fill" onClick={save} disabled={pending}>
-                  {pending ? "保存中..." : `${staffId ? surname(staffName.get(staffId) ?? "") + "さんの" : ""}不可時間として保存`}
+                  {pending
+                    ? "保存中..."
+                    : `${staffId && staffById.get(staffId) ? displayName(staffById.get(staffId)!) + "さんの" : ""}不可時間として保存`}
                 </button>
               </div>
             </>
@@ -210,7 +209,7 @@ export default function BlackoutManager({
             [...byStaff.entries()].map(([sid, list]) => (
               <div key={sid} style={{ marginBottom: 12 }}>
                 <div className="eyebrow" style={{ margin: "0 0 6px", fontWeight: 700 }}>
-                  {staffName.get(sid) ?? "?"}
+                  {staffById.get(sid) ? displayName(staffById.get(sid)!) : "?"}
                 </div>
                 <ul style={{ listStyle: "none", margin: 0, padding: 0, display: "grid", gap: 4 }}>
                   {list.map((b) => (

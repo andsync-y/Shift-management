@@ -4,11 +4,8 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { PreopenReservation, Profile } from "@/lib/types";
 import { PREOPEN_ALL_STARTS, PREOPEN_DAYS, hm, slotKey } from "@/lib/preopen";
+import { displayName } from "@/lib/display-name";
 import { addReservation, removeReservation } from "./actions";
-
-function surname(name: string) {
-  return name.split(/[\s　]/)[0];
-}
 
 export default function PreopenBooking({
   meId,
@@ -20,7 +17,7 @@ export default function PreopenBooking({
 }: {
   meId: string;
   meName: string;
-  staff: Pick<Profile, "id" | "full_name" | "role">[];
+  staff: Pick<Profile, "id" | "full_name" | "display_name" | "role">[];
   reservations: PreopenReservation[];
   // 枠キー(slotKey) → 受付数。
   capacities: Record<string, number>;
@@ -47,7 +44,7 @@ export default function PreopenBooking({
   function assigneeLabel(r: PreopenReservation) {
     const p = staffMap.get(r.staff_id);
     const free = r.is_free || p?.role === "super_admin";
-    return free ? "フリー" : surname(p?.full_name ?? "?");
+    return free ? "フリー" : p ? displayName(p) : "?";
   }
 
   // 予約チップ（PC表・スマホ縦リスト 共通）
@@ -58,7 +55,10 @@ export default function PreopenBooking({
       <span
         key={r.id}
         className={"bk-chip" + (free ? " free" : "")}
-        title={`登録：${surname(staffMap.get(r.staff_id)?.full_name ?? "?")}`}
+        title={`登録：${(() => {
+          const p = staffMap.get(r.staff_id);
+          return p ? displayName(p) : "?";
+        })()}`}
       >
         <span className="bk-chip-r1">
           <span className="bk-chip-nm">{r.customer_name}</span>
@@ -191,7 +191,10 @@ export default function PreopenBooking({
                   </select>
                   <input
                     className="input bk-sel-name"
-                    placeholder={`${surname(meName)}さんのお客様の名前を入力`}
+                    placeholder={`${(() => {
+                      const me = staffMap.get(meId);
+                      return me ? displayName(me) : meName;
+                    })()}さんのお客様の名前を入力`}
                     value={nameDraft[day.date] ?? ""}
                     onChange={(e) => setNameDraft((d) => ({ ...d, [day.date]: e.target.value }))}
                     onKeyDown={(e) => {

@@ -10,6 +10,7 @@ export type RequestType = "off" | "time_change";
 export interface Profile {
   id: string;
   full_name: string;
+  display_name?: string | null;
   role: UserRole;
   employment_type: EmploymentType;
   phone: string | null;

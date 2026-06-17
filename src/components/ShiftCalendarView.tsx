@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { DAY_LABELS_JA, type Profile, type Shift, type TimeOffRequest } from "@/lib/types";
+import { displayName } from "@/lib/display-name";
 
 type ViewMode = "month" | "week";
 
@@ -29,11 +30,6 @@ function shiftMark(start: string) {
 function band(color: string) {
   return `color-mix(in oklab, ${color} 16%, transparent)`;
 }
-// 苗字（スペース区切りの先頭）
-function surname(fullName: string) {
-  return fullName.split(/[\s　]/)[0];
-}
-
 export default function ShiftCalendarView({
   year,
   month,
@@ -134,7 +130,7 @@ export default function ShiftCalendarView({
         className={"evt " + (isChange ? "change" : "off")}
         title={`${p ? p.full_name : "?"} ${isChange ? "時間変更希望" : "休み"}（${time}）`}
       >
-        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+        <span className="nm">{p ? displayName(p) : "?"}</span>
         <span className={"mk " + (isChange ? "change-mk" : "off-mk")}>
           {isChange ? "変" : "休"}
         </span>
@@ -157,7 +153,7 @@ export default function ShiftCalendarView({
         className={"evt" + (mine ? " mine" : "")}
         style={{ background: band(color(s.staff_id)), borderLeftColor: color(s.staff_id) }}
       >
-        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+        <span className="nm">{p ? displayName(p) : "?"}</span>
         <span className={"mk " + (mk === "早" ? "early" : "late")}>{mk}</span>
         {withTime && (
           <span className="tm">
@@ -299,7 +295,7 @@ export default function ShiftCalendarView({
                             outlineOffset: mine ? "-1.5px" : undefined,
                           }}
                         >
-                          <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+                          <span className="nm">{p ? displayName(p) : "?"}</span>
                           <span className={"mk " + (mk === "早" ? "early" : "late")}>{mk}</span>
                           <span className="tm">
                             {hm(s.start_time)}–{hm(s.end_time)}
@@ -320,7 +316,7 @@ export default function ShiftCalendarView({
                         <span className={"mk " + (isChange ? "change-mk" : "off-mk")}>
                           {isChange ? "変" : "休"}
                         </span>
-                        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+                        <span className="nm">{p ? displayName(p) : "?"}</span>
                         <span className="tm">{isChange ? `→ ${label}` : label}</span>
                       </div>
                     );
@@ -413,7 +409,7 @@ export default function ShiftCalendarView({
                 }}
               >
                 <span className="dot" style={{ background: s.display_color }} />
-                {surname(s.full_name)}
+                {displayName(s)}
               </button>
             );
           })}

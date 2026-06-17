@@ -6,13 +6,10 @@ import {
   type PreopenShiftRow,
 } from "@/lib/preopen";
 import type { PreopenReservation, PreopenShift, Profile } from "@/lib/types";
+import { displayName } from "@/lib/display-name";
 import type { RosterBar } from "@/app/staff/preopen/PreopenRoster";
 
-function surname(name: string) {
-  return name.split(/[\s　]/)[0];
-}
-
-export type PreopenProfile = Pick<Profile, "id" | "full_name" | "role"> & {
+export type PreopenProfile = Pick<Profile, "id" | "full_name" | "display_name" | "role"> & {
   display_color: string;
 };
 
@@ -29,7 +26,7 @@ export type PreopenData = {
 export async function loadPreopenData(): Promise<PreopenData> {
   const supabase = await createClient();
   const [{ data: profilesRaw }, { data: reservationsRaw }, { data: shiftsRaw }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, role, display_color"),
+    supabase.from("profiles").select("id, full_name, display_name, role, display_color"),
     supabase
       .from("preopen_reservations")
       .select("*")
@@ -48,7 +45,7 @@ export async function loadPreopenData(): Promise<PreopenData> {
   const shifts = (shiftsRaw ?? []) as PreopenShift[];
 
   const colors: Record<string, string> = Object.fromEntries(
-    profiles.map((p) => [surname(p.full_name), p.display_color])
+    profiles.map((p) => [displayName(p), p.display_color])
   );
   const byId = new Map(profiles.map((p) => [p.id, p]));
 
@@ -58,7 +55,7 @@ export async function loadPreopenData(): Promise<PreopenData> {
     const p = byId.get(s.staff_id);
     if (!p || !staffingByDate[s.reserve_date]) continue;
     staffingByDate[s.reserve_date].push({
-      name: surname(p.full_name),
+      name: displayName(p),
       start: hm(s.start_time),
       end: hm(s.end_time),
       isTraining: s.is_training,
