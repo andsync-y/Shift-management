@@ -176,3 +176,16 @@ LINE_MESSAGING_CHANNEL_SECRET=...   # Webhook署名検証用（友だち追加�
 
 > セキュリティ上、Channel Secret / access token は**コードに直接書かず必ず環境変数**に。
 > リポジトリには絶対にコミットしない。
+
+## 打刻リマインド（出勤・退勤）
+
+打刻忘れ防止のため、シフトの開始/終了時刻を過ぎても打刻が無いスタッフへLINEで催促する。
+
+- 実体：`/api/cron/clock-reminder`（`CRON_SECRET` で認証。`?key=` でも可）。
+- **出勤リマインド**：当日シフトの開始時刻を過ぎても**出勤打刻が無い**人へ「出勤の打刻をお願いします」。
+- **退勤リマインド**：終了時刻を過ぎても**退勤打刻が無い（出勤中）**人へ「退勤の打刻をお願いします」。
+- 二重送信は `clock_reminders(shift_id, kind)` で防止（migration 0018）。下書き期間のシフトは対象外。
+- **実行間隔が重要**：時刻どおりに送るには数分〜10分間隔で叩く必要がある。
+  - Vercel Pro なら `vercel.json` に `{ "path": "/api/cron/clock-reminder", "schedule": "*/10 * * * *" }`。
+  - Hobby（Cron 1日1回）の場合は外部スケジューラ（cron-job.org 等）から
+    `https://shift.andsync.jp/api/cron/clock-reminder?key=<CRON_SECRET>` を10分間隔で叩く。
