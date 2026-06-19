@@ -933,6 +933,20 @@ body {
   }
 }
 
+/* 給与: 日別明細アコーディオン */
+.pay-detail {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 8px 12px;
+  margin-bottom: 8px;
+}
+.pay-detail > summary {
+  cursor: pointer;
+  font-weight: 600;
+  font-size: 13.5px;
+  list-style: revert;
+}
+
 /* プレオープン シフト編集 */
 .po-edit-row {
   display: flex;

@@ -31,6 +31,7 @@
 | `docs/PERSONAL_BLACKOUTS.md` | 個別予定の不可時間（タイムツリー画像取り込み→生成で回避） |
 | `docs/PREOPEN_RESERVATION.md` | プレオープン簡易予約（モデル客・スタッフ各自・1枠4名） |
 | `docs/SMART_LOCK.md` | 入口スマートロック（セサミ）＋ 公式LINEのリッチメニュー |
+| `docs/PAYROLL.md` | 給与計算（実打刻ベース・休憩/残業/深夜・総支給） |
 | `docs/DEPLOY_AND_DOMAIN.md` | デプロイ・独自ドメイン設定 |
 | `docs/design-brief.md` | デザイン方針 |
 

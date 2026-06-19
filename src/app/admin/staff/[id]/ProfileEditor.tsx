@@ -59,6 +59,10 @@ export default function ProfileEditor({
           <input name="hourly_wage" type="number" min={0} className="input" defaultValue={profile.hourly_wage ?? ""} placeholder="例: 1100" />
         </div>
         <div className="field">
+          <label>交通費（月額・円）</label>
+          <input name="commute_allowance" type="number" min={0} className="input" defaultValue={profile.commute_allowance ?? 0} placeholder="例: 5000" />
+        </div>
+        <div className="field">
           <label>週の最低時間</label>
           <input name="min_hours_per_week" type="number" min={0} className="input" defaultValue={profile.min_hours_per_week} />
         </div>

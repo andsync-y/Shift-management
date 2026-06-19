@@ -15,6 +15,7 @@ export interface Profile {
   employment_type: EmploymentType;
   phone: string | null;
   hourly_wage: number | null;
+  commute_allowance?: number; // 月額交通費（円）
   min_hours_per_week: number;
   max_hours_per_week: number;
   display_color: string;
