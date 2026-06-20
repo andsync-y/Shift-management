@@ -35,6 +35,9 @@ export async function addTimeRecord(_prev: TcResult | null, formData: FormData):
   const outIso = parsed.data.clock_out ? jstLocalToIso(parsed.data.clock_out) : null;
   if (parsed.data.clock_out && !outIso) return { ok: false, message: "退勤時刻が不正です。" };
   if (outIso && outIso <= inIso) return { ok: false, message: "退勤は出勤より後にしてください。" };
+  if (outIso && jstDateOf(outIso) !== jstDateOf(inIso)) {
+    return { ok: false, message: "退勤は出勤と同じ日にしてください（日をまたぐ設定はできません）。" };
+  }
 
   const supabase = await createClient();
 
@@ -87,6 +90,9 @@ export async function updateTimeRecord(
   const outIso = clockOutLocal ? jstLocalToIso(clockOutLocal) : null;
   if (clockOutLocal && !outIso) return { ok: false, message: "退勤時刻が不正です。" };
   if (outIso && outIso <= inIso) return { ok: false, message: "退勤は出勤より後にしてください。" };
+  if (outIso && jstDateOf(outIso) !== jstDateOf(inIso)) {
+    return { ok: false, message: "退勤は出勤と同じ日にしてください（日をまたぐ設定はできません）。" };
+  }
 
   const supabase = await createClient();
   const { error } = await supabase

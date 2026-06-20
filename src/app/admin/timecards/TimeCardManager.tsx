@@ -29,12 +29,6 @@ function dateLabel(workDate: string): string {
 function csvCell(v: string): string {
   return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
-// "YYYY-MM-DD" + n日
-function addDays(date: string, n: number): string {
-  const [y, m, d] = date.split("-").map(Number);
-  const t = new Date(Date.UTC(y, m - 1, d + n));
-  return `${t.getUTCFullYear()}-${pad(t.getUTCMonth() + 1)}-${pad(t.getUTCDate())}`;
-}
 
 export default function TimeCardManager({
   staff,
@@ -72,21 +66,15 @@ export default function TimeCardManager({
 
   const openTotal = useMemo(() => records.filter((r) => !r.clock_out).length, [records]);
 
-  // 時刻のみ編集：日付は勤務日から導出する。
-  // 退勤は出勤時刻より前なら翌日扱い（日跨ぎ）。退勤し忘れで翌日に打刻された
-  // 記録も、正しい時刻を入れ直せば勤務日当日に修正される。
+  // 時刻のみ編集：日付は勤務日（出勤日）に固定する。退勤も同じ日に揃え、日跨ぎは作らせない。
   function setTime(rec: TimeRecord, key: "in" | "out", time: string) {
     setEdit((e) => {
       const cur = e[rec.id] ?? { in: toLocalInput(rec.clock_in), out: toLocalInput(rec.clock_out) };
       const next = { ...cur };
       if (key === "in") {
         next.in = time ? `${rec.work_date}T${time}` : "";
-      } else if (!time) {
-        next.out = "";
       } else {
-        const inTime = (next.in || "T").split("T")[1] ?? "";
-        const date = inTime && time < inTime ? addDays(rec.work_date, 1) : rec.work_date;
-        next.out = `${date}T${time}`;
+        next.out = time ? `${rec.work_date}T${time}` : "";
       }
       return { ...e, [rec.id]: next };
     });
