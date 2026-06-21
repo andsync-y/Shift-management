@@ -11,6 +11,7 @@ import {
 } from "@/lib/types";
 import RequestActions from "./RequestActions";
 import CleanupShiftsButton from "./CleanupShiftsButton";
+import LineTestButton from "./LineTestButton";
 
 function fmtRange(r: TimeOffRequest): string {
   if (!r.start_time || !r.end_time) return "終日";
@@ -84,20 +85,21 @@ export default async function AdminRequestsPage({
   const sp = await searchParams;
   const supabase = await createClient();
 
-  const [{ data: requests }, { data: staff }, { data: latestPeriod }] = await Promise.all([
+  const [{ data: requests }, { data: staff }] = await Promise.all([
     supabase.from("time_off_requests").select("*").order("created_at", { ascending: false }),
     supabase.from("profiles").select("*"),
-    supabase
-      .from("shift_periods")
-      .select("id")
-      .order("year", { ascending: false })
-      .order("month", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
 
-  const { data: requirements } = latestPeriod
-    ? await supabase.from("shift_requirements").select("*").eq("period_id", latestPeriod.id)
+  // 必要人数は「最後に設定された期間」のものを使う（最新期間が未設定でも拾えるよう、
+  // 直近で作成された requirements の期間を採用する）。
+  const { data: reqRecent } = await supabase
+    .from("shift_requirements")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const reqPeriodId = (reqRecent?.[0] as ShiftRequirement | undefined)?.period_id;
+  const { data: requirements } = reqPeriodId
+    ? await supabase.from("shift_requirements").select("*").eq("period_id", reqPeriodId)
     : { data: [] };
 
   const staffList = (staff as Profile[] | null) ?? [];
@@ -169,7 +171,10 @@ export default async function AdminRequestsPage({
       <div className="section">
         <div className="section-head">
           <h2>人員カバー分析</h2>
-          <span className="eyebrow">Coverage Alert</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+            <LineTestButton />
+            <span className="eyebrow">Coverage Alert</span>
+          </span>
         </div>
         <div className="section-body" style={{ paddingTop: 8 }}>
           {!hasRequirements ? (

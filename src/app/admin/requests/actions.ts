@@ -3,8 +3,42 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { pushLineMessage } from "@/lib/line";
+import { pushLineMessage, pushLineDetailed } from "@/lib/line";
 import { startOfferForApprovedRequest } from "@/lib/offers/engine";
+
+// LINE通知の疎通テスト（オーナー自身へ送る）。原因切り分け用。
+export async function testLinePush(): Promise<{ ok: boolean; message: string }> {
+  const me = await requireAdmin();
+  const supabase = await createClient();
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("line_user_id")
+    .eq("id", me.id)
+    .maybeSingle();
+  const lid = (prof as { line_user_id: string | null } | null)?.line_user_id ?? null;
+  if (!lid) {
+    return {
+      ok: false,
+      message:
+        "あなた（オーナー）のLINEが未連携です。先にログイン画面で『LINEでログイン』して連携してください。",
+    };
+  }
+  const res = await pushLineDetailed(lid, "【テスト送信】LINE通知のテストです。これが届けば送信設定は正常です。");
+  if (res.ok) return { ok: true, message: "送信成功。LINEに届いていれば通知設定は正常です。" };
+  if (!res.enabled) {
+    return {
+      ok: false,
+      message: "LINE_MESSAGING_CHANNEL_ACCESS_TOKEN が未設定です。Vercelの環境変数を確認してください。",
+    };
+  }
+  const hint =
+    res.status === 401
+      ? "→ 401: アクセストークンが無効/期限切れ。Messaging APIのChannel access tokenを再発行して設定。"
+      : res.status === 400
+        ? "→ 400: 送信先userIdが不正、または『LINEログイン』と『Messaging API』のチャネルが別プロバイダ、もしくは公式アカウントを友だち未追加の可能性。"
+        : "";
+  return { ok: false, message: `送信失敗（status=${res.status ?? "?"}）：${res.error ?? ""}\n${hint}` };
+}
 
 export async function reviewRequest(
   requestId: string,
