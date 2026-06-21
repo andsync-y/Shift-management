@@ -76,7 +76,12 @@ function findCoverageGaps(
   return { gaps, hasRequirements };
 }
 
-export default async function AdminRequestsPage() {
+export default async function AdminRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const sp = await searchParams;
   const supabase = await createClient();
 
   const [{ data: requests }, { data: staff }, { data: latestPeriod }] = await Promise.all([
@@ -100,6 +105,16 @@ export default async function AdminRequestsPage() {
   const activeStaff = staffList.filter((s) => s.role === "staff" && s.is_active).length;
 
   const list = (requests ?? []) as TimeOffRequest[];
+
+  // 月で絞り込み（off_date の YYYY-MM）。未指定は全期間。
+  const months = [...new Set(list.map((r) => r.off_date.slice(0, 7)))].sort().reverse();
+  const month = months.includes(sp.month ?? "") ? sp.month! : "";
+  const shown = month ? list.filter((r) => r.off_date.slice(0, 7) === month) : list;
+  const shownPending = shown.filter((r) => r.status === "pending").length;
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-");
+    return `${y}年${Number(m)}月`;
+  };
 
   // 申請日に組まれているシフトを取得（同日の人員カバー確認用）
   const reqDates = [...new Set(list.map((r) => r.off_date))];
@@ -126,7 +141,6 @@ export default async function AdminRequestsPage() {
     (shiftsByDate.get(r.off_date) ?? [])
       .filter((s) => s.staff_id !== r.staff_id)
       .sort((a, b) => a.start.localeCompare(b.start));
-  const pending = list.filter((r) => r.status === "pending").length;
 
   const { gaps, hasRequirements } = findCoverageGaps(
     list,
@@ -213,25 +227,44 @@ export default async function AdminRequestsPage() {
             未対応{" "}
             <span
               className="en"
-              style={{ color: pending ? "var(--accent-ink)" : "var(--ink-3)", marginLeft: 4 }}
+              style={{ color: shownPending ? "var(--accent-ink)" : "var(--ink-3)", marginLeft: 4 }}
             >
-              {pending}
+              {shownPending}
             </span>
-            <span className="muted" style={{ fontWeight: 400 }}> 件 ／ 全 </span>
+            <span className="muted" style={{ fontWeight: 400 }}> 件 ／ {month ? "当月" : "全"} </span>
             <span className="en" style={{ fontWeight: 400 }}>
-              {list.length}
+              {shown.length}
             </span>
             <span className="muted" style={{ fontWeight: 400 }}> 件</span>
           </h2>
           <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <form method="get">
+              <select
+                name="month"
+                defaultValue={month}
+                className="select"
+                style={{ fontSize: 13, padding: "7px 28px 7px 10px" }}
+                // 選択変更で即送信（JSなしでもボタンで送れるようsubmitも併設）
+              >
+                <option value="">全期間</option>
+                {months.map((ym) => (
+                  <option key={ym} value={ym}>
+                    {monthLabel(ym)}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="btn-outline" style={{ marginLeft: 6, fontSize: 12, padding: "6px 12px" }}>
+                絞り込み
+              </button>
+            </form>
             <CleanupShiftsButton />
             <span className="eyebrow">Time-off</span>
           </span>
         </div>
         <div className="section-body" style={{ paddingTop: 8 }}>
-          {list.length === 0 ? (
+          {shown.length === 0 ? (
             <p className="help" style={{ margin: 0 }}>
-              休み希望はまだありません。
+              {list.length === 0 ? "休み希望はまだありません。" : "この月の休み希望はありません。"}
             </p>
           ) : (
             <>
@@ -249,7 +282,7 @@ export default async function AdminRequestsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((r) => {
+                  {shown.map((r) => {
                     const t = typeLabel(r);
                     const [, m, d] = r.off_date.split("-");
                     return (
@@ -299,7 +332,7 @@ export default async function AdminRequestsPage() {
 
               {/* mobile cards */}
               <div className="staff-cards">
-                {list.map((r) => {
+                {shown.map((r) => {
                   const t = typeLabel(r);
                   const [, m, d] = r.off_date.split("-");
                   return (
