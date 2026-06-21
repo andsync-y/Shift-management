@@ -69,7 +69,7 @@ const STAFF = [
     // 週5フルタイム・早遅どちらも可・土日可（10-22で両対応）
     availability: [0, 1, 2, 3, 4, 5, 6].map((d) => ({
       day_of_week: d,
-      start_time: "10:00",
+      start_time: "09:30",
       end_time: "22:00",
       preference: "preferred",
     })),
@@ -98,12 +98,12 @@ const STAFF = [
     color: "#9333ea",
     // 早番中心・週3〜4・土曜は必須・日曜は不可の可能性（日は登録しない）
     availability: [
-      { day_of_week: 1, start_time: "10:00", end_time: "19:00", preference: "available" },
-      { day_of_week: 2, start_time: "10:00", end_time: "19:00", preference: "available" },
-      { day_of_week: 3, start_time: "10:00", end_time: "19:00", preference: "available" },
-      { day_of_week: 4, start_time: "10:00", end_time: "19:00", preference: "available" },
-      { day_of_week: 5, start_time: "10:00", end_time: "19:00", preference: "available" },
-      { day_of_week: 6, start_time: "10:00", end_time: "19:00", preference: "preferred" }, // 土曜フル必須
+      { day_of_week: 1, start_time: "09:30", end_time: "19:00", preference: "available" },
+      { day_of_week: 2, start_time: "09:30", end_time: "19:00", preference: "available" },
+      { day_of_week: 3, start_time: "09:30", end_time: "19:00", preference: "available" },
+      { day_of_week: 4, start_time: "09:30", end_time: "19:00", preference: "available" },
+      { day_of_week: 5, start_time: "09:30", end_time: "19:00", preference: "available" },
+      { day_of_week: 6, start_time: "09:30", end_time: "19:00", preference: "preferred" }, // 土曜フル必須
     ],
   },
   {
@@ -115,11 +115,11 @@ const STAFF = [
     color: "#0891b2",
     // 火木金:早短10-15 / 水:遅番13-22 / 日:出勤可 / 土:不可（月は登録しない）
     availability: [
-      { day_of_week: 0, start_time: "10:00", end_time: "19:00", preference: "available" }, // 日(日による)
-      { day_of_week: 2, start_time: "10:00", end_time: "15:00", preference: "available" }, // 火 早短
+      { day_of_week: 0, start_time: "09:30", end_time: "19:00", preference: "available" }, // 日(日による)
+      { day_of_week: 2, start_time: "09:30", end_time: "15:00", preference: "available" }, // 火 早短
       { day_of_week: 3, start_time: "13:00", end_time: "22:00", preference: "preferred" }, // 水 遅番
-      { day_of_week: 4, start_time: "10:00", end_time: "15:00", preference: "available" }, // 木 早短
-      { day_of_week: 5, start_time: "10:00", end_time: "15:00", preference: "available" }, // 金 早短
+      { day_of_week: 4, start_time: "09:30", end_time: "15:00", preference: "available" }, // 木 早短
+      { day_of_week: 5, start_time: "09:30", end_time: "15:00", preference: "available" }, // 金 早短
     ],
   },
   {
@@ -131,11 +131,11 @@ const STAFF = [
     color: "#ca8a04",
     // 月水:早遅可 / 火金:早短10-15 / 日:早遅可 /（木・土は休）
     availability: [
-      { day_of_week: 0, start_time: "10:00", end_time: "22:00", preference: "available" }, // 日
-      { day_of_week: 1, start_time: "10:00", end_time: "22:00", preference: "preferred" }, // 月
-      { day_of_week: 2, start_time: "10:00", end_time: "15:00", preference: "available" }, // 火 早短
-      { day_of_week: 3, start_time: "10:00", end_time: "22:00", preference: "preferred" }, // 水
-      { day_of_week: 5, start_time: "10:00", end_time: "15:00", preference: "available" }, // 金 早短
+      { day_of_week: 0, start_time: "09:30", end_time: "22:00", preference: "available" }, // 日
+      { day_of_week: 1, start_time: "09:30", end_time: "22:00", preference: "preferred" }, // 月
+      { day_of_week: 2, start_time: "09:30", end_time: "15:00", preference: "available" }, // 火 早短
+      { day_of_week: 3, start_time: "09:30", end_time: "22:00", preference: "preferred" }, // 水
+      { day_of_week: 5, start_time: "09:30", end_time: "15:00", preference: "available" }, // 金 早短
     ],
   },
   {
@@ -147,11 +147,11 @@ const STAFF = [
     color: "#65a30d",
     // 平日のみ・土日不可・遅番NG（終了は最大19:00）
     availability: [
-      { day_of_week: 1, start_time: "10:00", end_time: "16:00", preference: "available" }, // 月 早短
-      { day_of_week: 2, start_time: "10:00", end_time: "19:00", preference: "available" }, // 火 早番
-      { day_of_week: 3, start_time: "10:00", end_time: "16:00", preference: "available" }, // 水 早短
-      { day_of_week: 4, start_time: "10:00", end_time: "19:00", preference: "available" }, // 木 早番
-      { day_of_week: 5, start_time: "10:00", end_time: "19:00", preference: "available" }, // 金 早番
+      { day_of_week: 1, start_time: "09:30", end_time: "16:00", preference: "available" }, // 月 早短
+      { day_of_week: 2, start_time: "09:30", end_time: "19:00", preference: "available" }, // 火 早番
+      { day_of_week: 3, start_time: "09:30", end_time: "16:00", preference: "available" }, // 水 早短
+      { day_of_week: 4, start_time: "09:30", end_time: "19:00", preference: "available" }, // 木 早番
+      { day_of_week: 5, start_time: "09:30", end_time: "19:00", preference: "available" }, // 金 早番
     ],
   },
 ];
