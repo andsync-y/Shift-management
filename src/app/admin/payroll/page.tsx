@@ -119,7 +119,12 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.workedMin)}</td>
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.overtimeMin)}</td>
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.nightMin)}</td>
-                    <td className="muted" style={{ textAlign: "right" }}>{s.hourly_wage ? yen(s.hourly_wage) : "—"}</td>
+                    <td className="muted" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      {(() => {
+                        const ws = [...new Set(pay.days.map((d) => d.wage))].filter((w) => w > 0);
+                        return ws.length === 0 ? "—" : ws.map((w) => yen(w)).join(" / ");
+                      })()}
+                    </td>
                     <td className="en" style={{ textAlign: "right" }}>{yen(pay.basePay)}</td>
                     <td className="en" style={{ textAlign: "right" }}>{yen(pay.overtimePay)}</td>
                     <td className="en" style={{ textAlign: "right" }}>{yen(pay.nightPay)}</td>
@@ -132,7 +137,8 @@ export default async function PayrollPage({
           )}
           <p className="help" style={{ marginBottom: 0 }}>
             休憩自動控除（実働8h超→60分／6h超→45分）・残業1.25倍（1日8h超）・深夜22:00〜5:00を25%加算で計算。
-            時給/交通費は「スタッフ管理」で設定。総支給（額面）まで算出（源泉・社保は未控除）。
+            時給は期間別（6/8〜6/19は¥1,060／6/20〜7/31は¥1,600・全員一律）、範囲外は各自の時給。
+            交通費は「スタッフ管理」で設定。総支給（額面）まで算出（源泉・社保は未控除）。
           </p>
         </div>
       </div>
@@ -162,6 +168,7 @@ export default async function PayrollPage({
                       <th style={{ textAlign: "right" }}>休憩</th>
                       <th style={{ textAlign: "right" }}>残業</th>
                       <th style={{ textAlign: "right" }}>深夜</th>
+                      <th style={{ textAlign: "right" }}>時給</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -180,6 +187,7 @@ export default async function PayrollPage({
                         <td className="en" style={{ textAlign: "right" }}>{d.breakMin}分</td>
                         <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(d.overtimeMin)}</td>
                         <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(d.nightMin)}</td>
+                        <td className="en" style={{ textAlign: "right" }}>{d.wage ? yen(d.wage) : "—"}</td>
                       </tr>
                     ))}
                   </tbody>

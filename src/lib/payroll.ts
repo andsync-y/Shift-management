@@ -27,6 +27,7 @@ export interface DayBreakdown {
   breakMin: number;
   overtimeMin: number;
   nightMin: number;
+  wage: number; // その日に適用された時給
 }
 
 export interface PayrollResult {
@@ -68,6 +69,25 @@ function hmJst(ms: number): string {
   return `${String(j.getUTCHours()).padStart(2, "0")}:${String(j.getUTCMinutes()).padStart(2, "0")}`;
 }
 
+// 期間別の時給（全員一律）。この範囲内はスタッフ個別の時給より優先する。
+export interface WageRange {
+  from: string; // "YYYY-MM-DD"（含む）
+  to: string; // "YYYY-MM-DD"（含む）
+  wage: number;
+}
+export const WAGE_SCHEDULE: WageRange[] = [
+  { from: "2026-06-08", to: "2026-06-19", wage: 1060 },
+  { from: "2026-06-20", to: "2026-07-31", wage: 1600 },
+];
+
+// その日の時給。期間スケジュールに該当すればその額、無ければ各自の時給(fallback)。
+export function wageForDate(date: string, fallback: number): number {
+  for (const r of WAGE_SCHEDULE) {
+    if (date >= r.from && date <= r.to) return r.wage;
+  }
+  return fallback;
+}
+
 export function computePayroll(
   records: PayrollRecord[],
   wage: number | null,
@@ -88,6 +108,11 @@ export function computePayroll(
   let overtimeMin = 0;
   let nightMin = 0;
   let breakTotal = 0;
+  // 時給が日によって変わるため、賃金は日ごとに計算して合算する。
+  let baseYen = 0;
+  let overtimeYen = 0;
+  let nightYen = 0;
+  const fallback = wage ?? 0;
 
   for (const date of [...byDate.keys()].sort()) {
     const recs = byDate.get(date)!;
@@ -105,18 +130,21 @@ export function computePayroll(
     const net = Math.max(0, rawMin - brk);
     const ot = Math.max(0, net - 480);
     const night = Math.min(dayNight, net); // 念のため実働を超えないよう丸める
+    const wageDay = wageForDate(date, fallback);
 
     workedMin += net;
     overtimeMin += ot;
     nightMin += night;
     breakTotal += brk;
-    days.push({ date, inOut, workedMin: net, breakMin: brk, overtimeMin: ot, nightMin: night });
+    baseYen += (net / 60) * wageDay;
+    overtimeYen += (ot / 60) * wageDay * 0.25;
+    nightYen += (night / 60) * wageDay * 0.25;
+    days.push({ date, inOut, workedMin: net, breakMin: brk, overtimeMin: ot, nightMin: night, wage: wageDay });
   }
 
-  const w = wage ?? 0;
-  const basePay = Math.round((workedMin / 60) * w);
-  const overtimePay = Math.round((overtimeMin / 60) * w * 0.25);
-  const nightPay = Math.round((nightMin / 60) * w * 0.25);
+  const basePay = Math.round(baseYen);
+  const overtimePay = Math.round(overtimeYen);
+  const nightPay = Math.round(nightYen);
   const gross = basePay + overtimePay + nightPay + (commute || 0);
 
   return {
