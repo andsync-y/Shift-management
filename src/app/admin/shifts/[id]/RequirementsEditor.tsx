@@ -5,6 +5,7 @@ import {
   addRequirement,
   deleteRequirement,
   applyDefaultRequirements,
+  applyMinimumRequirements,
 } from "../actions";
 import { DAY_LABELS_JA, type ShiftRequirement } from "@/lib/types";
 
@@ -36,6 +37,19 @@ export default function RequirementsEditor({
     });
   }
 
+  function handleApplyMinimum() {
+    if (
+      !confirm(
+        "現在の必要人数を消して、最低人数パターン（9:30–16:00×1・15:30–22:00×1 × 全曜日）を設定します。よろしいですか？"
+      )
+    )
+      return;
+    startTransition(async () => {
+      const res = await applyMinimumRequirements(periodId);
+      setMessage(res.message);
+    });
+  }
+
   const byDay: Record<number, ShiftRequirement[]> = {};
   for (const r of initial) (byDay[r.day_of_week] ??= []).push(r);
 
@@ -63,6 +77,14 @@ export default function RequirementsEditor({
           <input name="required_staff" type="number" min={0} className="input w-24" defaultValue={1} required />
         </div>
         <button type="submit" className="btn-primary">追加</button>
+        <button
+          type="button"
+          onClick={handleApplyMinimum}
+          className="btn-outline"
+          disabled={pending}
+        >
+          最低人数パターンを適用（9:30–16:00×1・15:30–22:00×1 × 全曜日）
+        </button>
         <button
           type="button"
           onClick={handleApplyDefault}

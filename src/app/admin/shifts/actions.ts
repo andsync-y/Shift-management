@@ -114,6 +114,40 @@ export async function applyDefaultRequirements(periodId: string) {
   return { ok: true, message: "基本パターン（早番2名・遅番2名 × 全曜日）を設定しました。" };
 }
 
+// 最低人数パターン：店に誰もいない時間を作らない最小構成。
+// 9:30–16:00 に1名、15:30–22:00 に1名（15:30–16:00 が重なるので終日途切れない）。
+function minimumRequirementRows(periodId: string) {
+  const slots = [
+    { start: "09:30", end: "16:00", required: 1 },
+    { start: "15:30", end: "22:00", required: 1 },
+  ];
+  const rows = [];
+  for (let dow = 0; dow < 7; dow++) {
+    for (const s of slots) {
+      rows.push({
+        period_id: periodId,
+        day_of_week: dow,
+        start_time: s.start,
+        end_time: s.end,
+        required_staff: s.required,
+      });
+    }
+  }
+  return rows;
+}
+
+export async function applyMinimumRequirements(periodId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("shift_requirements").delete().eq("period_id", periodId);
+  await supabase.from("shift_requirements").insert(minimumRequirementRows(periodId));
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return {
+    ok: true,
+    message: "最低人数パターン（9:30–16:00×1・15:30–22:00×1 × 全曜日）を設定しました。",
+  };
+}
+
 // --- AIシフト生成 -----------------------------------------------------
 export interface GenerateActionResult {
   ok: boolean;
