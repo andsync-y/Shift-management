@@ -10,7 +10,7 @@
 | `0020_accounting.sql` | `receipts` / `ec_orders` / `card_transactions` ＋ `audit_logs`＋監査トリガー＋RLS（オーナーのみ） |
 | `0021_receipt_matching.sql` | 領収書⇔カード明細の自動マッチング（日付±3日・金額一致） |
 | `0022_accounting_views.sql` | 人件費ビュー・経費ビュー・月次P&Lビュー |
-| `supabase/functions/receipt-ocr/` | 領収書まとめ撮り画像→Geminiで複数領収書を一括抽出するEdge Function |
+| `src/app/api/accounting/receipt-ocr/route.ts` | 領収書まとめ撮り画像→Claudeで複数領収書を一括抽出（オーナーのみ） |
 
 ## 1. テーブルと監査ログ
 
@@ -19,14 +19,13 @@
   - `audit_logs` は **閲覧のみ**（UPDATE/DELETE ポリシー無し＝追記専用＝改ざん防止）。
   - `changed_by` は `auth.uid()`（サービスロール経由は NULL）。
 
-## 2. 領収書OCR（Edge Function `receipt-ocr`）
+## 2. 領収書OCR（Next.js APIルート `POST /api/accounting/receipt-ocr`）
 
-- 入力: `{ path, bucket="receipts", insert? }`（Storageの画像パス）。
-- 処理: Storageから画像取得 → **Gemini 1.5 Flash** にマルチモーダル要求（`responseMimeType: application/json`・temperature 0）→
-  各領収書を `{date, amount, merchant}` で配列返却。`insert:true` で `receipts` に `status='pending'` 登録。
-- 必要 secrets: `GEMINI_API_KEY`（`SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` は自動）。
-- デプロイ: `supabase functions deploy receipt-ocr` ／ `supabase secrets set GEMINI_API_KEY=...`
-- ※ 本アプリ本体は Claude(Anthropic) を使用。本機能のみ要望によりGeminiを使用（OpenAIにも差し替え可）。
+- 入力: `{ path, bucket="receipts", insert? }`（Storageの画像パス）。`requireAdmin` でオーナー限定。
+- 処理: Storageから画像取得（service role）→ **Claude ビジョン**（既存 `ANTHROPIC_API_KEY`・`src/lib/accounting/receipt-ocr.ts`）→
+  各領収書を `{date, amount, merchant}` で配列返却。`insert:true` で `receipts` に `status='pending'` 登録（オーナーセッションでinsert＝監査ログに記録）。
+- **追加の鍵は不要**（本体と同じ `ANTHROPIC_API_KEY`。モデルは `RECEIPT_OCR_MODEL` で上書き可、既定 `claude-opus-4-8`）。
+- ※ 当初仕様の Gemini + Supabase Edge Function は、既存スタックに合わせ **Claude + Next.js ルート**へ変更。
 
 ## 3. 自動マッチング
 
