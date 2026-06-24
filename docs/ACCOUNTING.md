@@ -10,6 +10,7 @@
 | `0020_accounting.sql` | `receipts` / `ec_orders` / `card_transactions` ＋ `audit_logs`＋監査トリガー＋RLS（オーナーのみ） |
 | `0021_receipt_matching.sql` | 領収書⇔カード明細の自動マッチング（日付±3日・金額一致） |
 | `0022_accounting_views.sql` | 人件費ビュー・経費ビュー・月次P&Lビュー |
+| `0023_monthly_sales.sql` | 月次売上(手入力) `monthly_sales` ＋ P&Lに売上反映 |
 | `src/app/api/accounting/receipt-ocr/route.ts` | 領収書まとめ撮り画像→Claudeで複数領収書を一括抽出（オーナーのみ） |
 
 ## 1. テーブルと監査ログ
@@ -49,11 +50,12 @@
 - **領収書** `/admin/accounting/receipts`：画像アップロード→OCR→一覧で日付/金額/支払先/勘定科目を確認・修正→確定。
   - アップロードは `POST /api/accounting/receipt-upload`（Storage `receipts` バケットへ保存→Claude抽出→receipts登録）。
   - 画像は署名付きURLで表示（Storageは非公開）。カード明細との照合状況も表示。
-- カード明細CSV取込・売上連携は今後。
+- **売上入力** `/admin/accounting/sales`：月次売上を手入力（同月は上書き）。P&Lの売上に反映。
+- カード明細CSV取込は今後。
 
 ### 必要な準備
 - Supabase Storage に **`receipts` バケット**（非公開）を作成。
-- マイグレーション 0020→0021→0022 を適用（0022で財務ビューのアクセス制御も設定）。
+- マイグレーション 0020→0021→0022→0023 を適用（0022で財務ビューのアクセス制御、0023で売上連携）。
 
 ## 未実装・今後
 

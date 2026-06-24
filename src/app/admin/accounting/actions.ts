@@ -66,3 +66,32 @@ export async function deleteReceipt(id: string): Promise<AcctResult> {
   revalidatePath("/admin/accounting/receipts");
   return { ok: true, message: "削除しました。" };
 }
+
+// 月次売上の登録/更新（月キーで upsert）
+export async function upsertMonthlySale(
+  month: string,
+  amount: number,
+  memo: string | null
+): Promise<AcctResult> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の指定が不正です（YYYY-MM）。" };
+  if (!Number.isFinite(amount) || amount < 0) return { ok: false, message: "金額を正しく入力してください。" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("monthly_sales")
+    .upsert({ month, amount, memo: memo || null }, { onConflict: "month" });
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/accounting/sales");
+  revalidatePath("/admin/accounting");
+  return { ok: true, message: `${month} の売上を保存しました。` };
+}
+
+export async function deleteMonthlySale(id: string): Promise<AcctResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("monthly_sales").delete().eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/accounting/sales");
+  revalidatePath("/admin/accounting");
+  return { ok: true, message: "削除しました。" };
+}

@@ -75,7 +75,7 @@ export default async function AccountingPage() {
             </table>
           )}
           <p className="help" style={{ marginBottom: 0 }}>
-            ※ 売上は売上ソース未連携のため現在 0 です。人件費は実打刻×時給の簡易値（休憩控除・割増・期間別時給は未反映）。
+            ※ 売上は「売上入力」の月次手入力値。人件費は実打刻×時給の簡易値（休憩控除・割増・期間別時給は未反映）。
             正確な支給額は「給与計算」を参照。
           </p>
         </div>
