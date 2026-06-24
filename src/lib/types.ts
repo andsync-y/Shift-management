@@ -176,6 +176,29 @@ export interface StaffBlackout {
   created_at: string;
 }
 
+export interface Receipt {
+  id: string;
+  image_url: string;
+  detected_date: string | null;
+  detected_amount: number | null;
+  detected_merchant: string | null;
+  suggested_account: string | null;
+  status: "pending" | "confirmed";
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CardTransaction {
+  id: string;
+  transaction_date: string;
+  amount: number;
+  merchant_name: string | null;
+  receipt_id: string | null;
+  ec_order_id: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export const ROLE_LABELS_JA: Record<UserRole, string> = {

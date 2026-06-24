@@ -66,5 +66,13 @@ left join v_expense_monthly e on e.month = m.month
 left join v_labor_cost_monthly l on l.month = m.month
 order by m.month;
 
--- ビューは定義者(postgres)権限で実行され RLS を回避するため、参照は
--- アプリ側でオーナー権限のサーバー処理から行うこと（service role / requireAdmin）。
+-- ビューは定義者(postgres)権限で実行され RLS を回避するため、財務ビューは
+-- 一般ロール(anon/authenticated)からの参照を禁止し、サーバーの service role 経由のみとする。
+revoke all on
+  v_labor_cost_staff_daily, v_labor_cost_daily, v_labor_cost_monthly,
+  v_expense_monthly, v_pl_monthly
+from anon, authenticated;
+grant select on
+  v_labor_cost_staff_daily, v_labor_cost_daily, v_labor_cost_monthly,
+  v_expense_monthly, v_pl_monthly
+to service_role;

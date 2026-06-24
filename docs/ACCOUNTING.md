@@ -42,6 +42,19 @@
 - ⚠️ ビューの人件費は**簡易**（休憩控除・残業/深夜割増・期間別時給は未反映）。正確な支給額は
   `/admin/payroll`（`src/lib/payroll.ts`）。決算用に厳密値が要る場合はpayrollロジックの集計を別途用意する。
 
+## 画面（経理セクション・オーナーのみ）
+
+管理ナビは **「運営」「経理」の2グループ**（NavBarのドロップダウン）に整理。経理グループ:
+- **月次P&L** `/admin/accounting`：`v_pl_monthly` を service role で参照（RLS回避ビューのため一般ロールからは revoke 済み）。
+- **領収書** `/admin/accounting/receipts`：画像アップロード→OCR→一覧で日付/金額/支払先/勘定科目を確認・修正→確定。
+  - アップロードは `POST /api/accounting/receipt-upload`（Storage `receipts` バケットへ保存→Claude抽出→receipts登録）。
+  - 画像は署名付きURLで表示（Storageは非公開）。カード明細との照合状況も表示。
+- カード明細CSV取込・売上連携は今後。
+
+### 必要な準備
+- Supabase Storage に **`receipts` バケット**（非公開）を作成。
+- マイグレーション 0020→0021→0022 を適用（0022で財務ビューのアクセス制御も設定）。
+
 ## 未実装・今後
 
 - 管理画面UI（領収書アップロード/確認・カード明細CSV取込・EC注文取込・P&Lダッシュボード）。

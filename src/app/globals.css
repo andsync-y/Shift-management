@@ -451,6 +451,75 @@ body {
 .nav a:hover {
   color: var(--ink);
 }
+
+/* ナビのグループ（ドロップダウン） */
+.nav-grp {
+  position: relative;
+  display: inline-flex;
+}
+.nav-grp-btn {
+  font-size: 13px;
+  color: var(--ink-2);
+  background: none;
+  border: 0;
+  padding: 4px 0;
+  cursor: pointer;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.nav-grp-btn:hover,
+.nav-grp-btn.active {
+  color: var(--accent-ink);
+}
+.nav-grp-caret {
+  font-size: 9px;
+}
+.nav-grp-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 60;
+  min-width: 160px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.1);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.nav-grp-menu a {
+  font-size: 13px;
+  color: var(--ink-2);
+  padding: 8px 10px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.nav-grp-menu a:hover {
+  background: var(--paper-2);
+  color: var(--ink);
+}
+.nav-grp-menu a.active {
+  color: var(--accent-ink);
+  background: color-mix(in oklab, var(--accent) 8%, transparent);
+}
+.nav-grp-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+}
+/* モバイル：グループ見出し */
+.mm-group-label {
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  color: var(--ink-3);
+  margin: 10px 0 2px;
+  text-transform: none;
+}
 .nav a.active {
   color: var(--accent-ink);
 }

@@ -5,21 +5,27 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/auth/actions";
 import type { Profile } from "@/lib/types";
-import { ROLE_LABELS_JA } from "@/lib/types";
 
 interface NavItem {
   href: string;
   label: string;
 }
+export interface NavGroup {
+  label: string;
+  items: NavItem[];
+}
 
 export default function NavBar({
   profile,
-  items,
+  items = [],
+  groups = [],
 }: {
   profile: Profile;
-  items: NavItem[];
+  items?: NavItem[];
+  groups?: NavGroup[];
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(false); // モバイルメニュー
+  const [openGroup, setOpenGroup] = useState<string | null>(null); // PCのドロップダウン
   const pathname = usePathname();
   const roleEn = profile.role === "super_admin" ? "Owner" : "Staff";
 
@@ -27,7 +33,7 @@ export default function NavBar({
     if (href === "/admin" || href === "/staff") return pathname === href;
     return pathname.startsWith(href);
   }
-
+  const groupActive = (g: NavGroup) => g.items.some((i) => isActive(i.href));
   const home = profile.role === "super_admin" ? "/admin" : "/staff";
 
   return (
@@ -40,13 +46,34 @@ export default function NavBar({
 
           <nav className="nav">
             {items.map((item) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={isActive(item.href) ? "active" : ""}
-              >
+              <Link key={item.href} href={item.href} className={isActive(item.href) ? "active" : ""}>
                 {item.label}
               </Link>
+            ))}
+            {groups.map((g) => (
+              <div className="nav-grp" key={g.label}>
+                <button
+                  type="button"
+                  className={"nav-grp-btn" + (groupActive(g) ? " active" : "")}
+                  onClick={() => setOpenGroup((c) => (c === g.label ? null : g.label))}
+                >
+                  {g.label} <span className="nav-grp-caret">▾</span>
+                </button>
+                {openGroup === g.label && (
+                  <div className="nav-grp-menu">
+                    {g.items.map((i) => (
+                      <Link
+                        key={i.href}
+                        href={i.href}
+                        className={isActive(i.href) ? "active" : ""}
+                        onClick={() => setOpenGroup(null)}
+                      >
+                        {i.label}
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
             ))}
           </nav>
 
@@ -75,7 +102,10 @@ export default function NavBar({
         </div>
       </header>
 
-      {/* モバイルメニュー（appbarの外に置く: backdrop-filter下では fixed が効かないため） */}
+      {/* PCドロップダウンの外側クリックで閉じる */}
+      {openGroup && <div className="nav-grp-backdrop" onClick={() => setOpenGroup(null)} />}
+
+      {/* モバイルメニュー */}
       <div className={"mobile-menu" + (open ? " open" : "")}>
         {items.map((item) => (
           <Link
@@ -87,6 +117,22 @@ export default function NavBar({
             {item.label}
             <span className="arrow muted">→</span>
           </Link>
+        ))}
+        {groups.map((g) => (
+          <div className="mm-group" key={g.label}>
+            <div className="mm-group-label">{g.label}</div>
+            {g.items.map((i) => (
+              <Link
+                key={i.href}
+                href={i.href}
+                className={isActive(i.href) ? "active" : ""}
+                onClick={() => setOpen(false)}
+              >
+                {i.label}
+                <span className="arrow muted">→</span>
+              </Link>
+            ))}
+          </div>
         ))}
         <div className="mm-who">
           <span>
