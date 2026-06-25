@@ -510,7 +510,7 @@ body {
 .nav-grp-backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
+  z-index: 30; /* ヘッダー(z-index:40)より背面に置く。前面だとメニュー項目のクリックを奪う */
 }
 /* モバイル：グループ見出し */
 .mm-group-label {
