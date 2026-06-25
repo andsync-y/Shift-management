@@ -193,6 +193,7 @@ export interface CardTransaction {
   transaction_date: string;
   amount: number;
   merchant_name: string | null;
+  account?: string | null; // 勘定科目
   receipt_id: string | null;
   ec_order_id: string | null;
   created_at: string;

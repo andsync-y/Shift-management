@@ -23,6 +23,7 @@ const GROUPS: NavGroup[] = [
       { href: "/admin/accounting/sales", label: "売上入力" },
       { href: "/admin/accounting/cards", label: "カード明細" },
       { href: "/admin/accounting/receipts", label: "領収書" },
+      { href: "/admin/accounting/report", label: "科目別集計" },
     ],
   },
 ];

@@ -2,13 +2,15 @@
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteCardTransaction, insertCardTransactions } from "../actions";
+import { deleteCardTransaction, insertCardTransactions, updateCardAccount } from "../actions";
+import { ACCOUNTS } from "@/lib/accounting/accounts";
 
 export interface CardRow {
   id: string;
   transaction_date: string;
   amount: number;
   merchant_name: string | null;
+  account: string | null;
   matched: { merchant: string | null; amount: number | null } | null;
 }
 
@@ -152,6 +154,13 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
       if (res.ok) router.refresh();
     });
   }
+  function saveAccount(id: string, account: string) {
+    start(async () => {
+      const res = await updateCardAccount(id, account);
+      if (!res.ok) setMsg({ ok: false, text: res.message });
+      else router.refresh();
+    });
+  }
 
   const colOptions = header.length
     ? header.map((h, i) => ({ i, label: `${i + 1}: ${h || "(空)"}` }))
@@ -261,6 +270,7 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
                   <th>日付</th>
                   <th style={{ textAlign: "right" }}>金額</th>
                   <th>店名</th>
+                  <th>勘定科目</th>
                   <th>領収書照合</th>
                   <th style={{ textAlign: "right" }}>操作</th>
                 </tr>
@@ -271,6 +281,18 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
                     <td className="en" style={{ whiteSpace: "nowrap" }}>{r.transaction_date}</td>
                     <td className="en" style={{ textAlign: "right" }}>{yen(r.amount)}</td>
                     <td>{r.merchant_name ?? ""}</td>
+                    <td>
+                      <input
+                        className="input"
+                        list="acct-list-card"
+                        defaultValue={r.account ?? ""}
+                        style={{ width: 130 }}
+                        disabled={pending}
+                        onBlur={(e) => {
+                          if ((e.target.value || "") !== (r.account ?? "")) saveAccount(r.id, e.target.value);
+                        }}
+                      />
+                    </td>
                     <td>
                       {r.matched ? (
                         <span className="status-pill ok">照合済</span>
@@ -286,6 +308,11 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
               </tbody>
             </table>
           )}
+          <datalist id="acct-list-card">
+            {ACCOUNTS.map((a) => (
+              <option key={a} value={a} />
+            ))}
+          </datalist>
         </div>
       </div>
     </>

@@ -143,6 +143,20 @@ export async function insertCardTransactions(
   };
 }
 
+// カード明細の勘定科目を更新
+export async function updateCardAccount(id: string, account: string | null): Promise<AcctResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("card_transactions")
+    .update({ account: account && account.trim() ? account.trim() : null })
+    .eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/accounting/cards");
+  revalidatePath("/admin/accounting/report");
+  return { ok: true, message: "勘定科目を更新しました。" };
+}
+
 export async function deleteCardTransaction(id: string): Promise<AcctResult> {
   await requireAdmin();
   const supabase = await createClient();

@@ -31,6 +31,7 @@ export default async function CardsPage() {
     transaction_date: t.transaction_date,
     amount: Number(t.amount),
     merchant_name: t.merchant_name,
+    account: t.account ?? null,
     matched: t.receipt_id
       ? {
           merchant: recById.get(t.receipt_id)?.detected_merchant ?? null,

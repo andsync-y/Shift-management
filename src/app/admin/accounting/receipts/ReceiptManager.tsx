@@ -4,22 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CardTransaction, Receipt } from "@/lib/types";
 import { deleteReceipt, setReceiptStatus, updateReceipt } from "../actions";
-
-const ACCOUNTS = [
-  "消耗品費",
-  "接待交際費",
-  "会議費",
-  "通信費",
-  "旅費交通費",
-  "広告宣伝費",
-  "水道光熱費",
-  "地代家賃",
-  "仕入高",
-  "外注費",
-  "福利厚生費",
-  "新聞図書費",
-  "雑費",
-];
+import { ACCOUNTS } from "@/lib/accounting/accounts";
 
 const yen = (n: number | null) => (n == null ? "—" : `¥${Math.round(n).toLocaleString()}`);
 
