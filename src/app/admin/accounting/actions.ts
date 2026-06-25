@@ -95,3 +95,60 @@ export async function deleteMonthlySale(id: string): Promise<AcctResult> {
   revalidatePath("/admin/accounting");
   return { ok: true, message: "削除しました。" };
 }
+
+// カード明細をCSV取込（クライアントで列マッピング・正規化済みの配列を受ける）。
+// 既存と日付+金額+店名が完全一致する行はスキップ（重複防止）。挿入で自動マッチングが発火。
+export async function insertCardTransactions(
+  rows: { transaction_date: string; amount: number; merchant_name: string | null }[]
+): Promise<AcctResult> {
+  await requireAdmin();
+  const valid = rows.filter(
+    (r) => /^\d{4}-\d{2}-\d{2}$/.test(r.transaction_date) && Number.isFinite(r.amount)
+  );
+  if (valid.length === 0) return { ok: false, message: "取り込める明細がありません。" };
+
+  const supabase = await createClient();
+  // 取込対象の日付範囲の既存明細を取得して重複キーを作る
+  const dates = valid.map((r) => r.transaction_date).sort();
+  const { data: existing } = await supabase
+    .from("card_transactions")
+    .select("transaction_date, amount, merchant_name")
+    .gte("transaction_date", dates[0])
+    .lte("transaction_date", dates[dates.length - 1]);
+  const key = (d: string, a: number, m: string | null) => `${d}|${a}|${m ?? ""}`;
+  const seen = new Set(
+    ((existing ?? []) as { transaction_date: string; amount: number; merchant_name: string | null }[]).map((e) =>
+      key(e.transaction_date, Number(e.amount), e.merchant_name)
+    )
+  );
+
+  const toInsert: typeof valid = [];
+  for (const r of valid) {
+    const k = key(r.transaction_date, r.amount, r.merchant_name);
+    if (seen.has(k)) continue; // 既存と重複
+    seen.add(k); // 取込内の重複も除外
+    toInsert.push(r);
+  }
+  const skipped = valid.length - toInsert.length;
+  if (toInsert.length === 0) {
+    return { ok: false, message: `全${valid.length}件が既存と重複のためスキップしました。` };
+  }
+  const { error } = await supabase.from("card_transactions").insert(toInsert);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/accounting/cards");
+  revalidatePath("/admin/accounting");
+  return {
+    ok: true,
+    message: `${toInsert.length}件を取り込みました${skipped > 0 ? `（重複${skipped}件をスキップ）` : ""}。`,
+  };
+}
+
+export async function deleteCardTransaction(id: string): Promise<AcctResult> {
+  await requireAdmin();
+  const supabase = await createClient();
+  const { error } = await supabase.from("card_transactions").delete().eq("id", id);
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/accounting/cards");
+  revalidatePath("/admin/accounting");
+  return { ok: true, message: "削除しました。" };
+}

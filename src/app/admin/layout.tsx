@@ -21,6 +21,7 @@ const GROUPS: NavGroup[] = [
     items: [
       { href: "/admin/accounting", label: "月次P&L" },
       { href: "/admin/accounting/sales", label: "売上入力" },
+      { href: "/admin/accounting/cards", label: "カード明細" },
       { href: "/admin/accounting/receipts", label: "領収書" },
     ],
   },

@@ -51,7 +51,10 @@
   - アップロードは `POST /api/accounting/receipt-upload`（Storage `receipts` バケットへ保存→Claude抽出→receipts登録）。
   - 画像は署名付きURLで表示（Storageは非公開）。カード明細との照合状況も表示。
 - **売上入力** `/admin/accounting/sales`：月次売上を手入力（同月は上書き）。P&Lの売上に反映。
-- カード明細CSV取込は今後。
+- **カード明細** `/admin/accounting/cards`：CSVを取り込む（汎用）。
+  - 文字コードは自動判定（UTF-8↔Shift_JIS）。1行目見出し有無、日付/金額/店名の**列をプルダウンで指定**。
+  - 金額の絶対値化（マイナス無視）対応。プレビュー→取込。**日付+金額+店名が既存と一致する行はスキップ**（重複防止）。
+  - 取込時に自動マッチング（領収書⇔明細）が発火。一覧で照合状況・削除。
 
 ### 必要な準備
 - Supabase Storage に **`receipts` バケット**（非公開）を作成。
