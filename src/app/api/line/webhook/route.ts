@@ -65,7 +65,8 @@ async function punchIn(
     in_lat: loc?.lat ?? null,
     in_lng: loc?.lng ?? null,
   });
-  return `おはようございます！${hhmm} に出勤を記録しました。今日もよろしくお願いします。`;
+  const md = dateStr.slice(5).replace("-", "/");
+  return `✅ 出勤を打刻しました\n🕘 ${md} ${hhmm}\nおはようございます！今日もよろしくお願いします。`;
 }
 
 // 退勤打刻。打刻中が無ければ案内のみ。
@@ -74,9 +75,10 @@ async function punchOut(admin: Admin, staffId: string): Promise<string> {
   if (!open) {
     return "出勤の打刻が見つかりません。先に「おはようございます」で出勤を記録してください。";
   }
-  const { iso, hhmm } = jstNow();
+  const { iso, dateStr, hhmm } = jstNow();
   await admin.from("time_records").update({ clock_out: iso, updated_at: iso }).eq("id", open.id);
-  return `お疲れ様でした！${hhmm} に退勤を記録しました（勤務 ${fmtDuration(open.clock_in!, iso)}）。`;
+  const md = dateStr.slice(5).replace("-", "/");
+  return `✅ 退勤を打刻しました\n🕕 ${md} ${hhmm}（勤務 ${fmtDuration(open.clock_in!, iso)}）\nお疲れ様でした！`;
 }
 
 const IN_WORDS = ["おはよう", "出勤", "おはよ"];
