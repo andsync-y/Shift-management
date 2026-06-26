@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
+import { fetchMonthlySquareSales } from "@/lib/accounting/square";
 
 export type AcctResult = { ok: boolean; message: string };
 
@@ -84,6 +85,25 @@ export async function upsertMonthlySale(
   revalidatePath("/admin/accounting/sales");
   revalidatePath("/admin/accounting");
   return { ok: true, message: `${month} の売上を保存しました。` };
+}
+
+// Squareから当該月の税抜純売上を取得し、monthly_sales に上書き保存
+export async function syncSquareSales(month: string): Promise<AcctResult> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の指定が不正です（YYYY-MM）。" };
+  const res = await fetchMonthlySquareSales(month);
+  if (!res.ok) return { ok: false, message: res.message ?? "Square取得に失敗しました。" };
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("monthly_sales")
+    .upsert(
+      { month, amount: res.amount, memo: `Square自動取得（税抜純売上・${res.count}件）` },
+      { onConflict: "month" }
+    );
+  if (error) return { ok: false, message: error.message };
+  revalidatePath("/admin/accounting/sales");
+  revalidatePath("/admin/accounting");
+  return { ok: true, message: `${month} の売上を取得：¥${res.amount.toLocaleString()}（${res.count}件）` };
 }
 
 export async function deleteMonthlySale(id: string): Promise<AcctResult> {

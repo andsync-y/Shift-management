@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { deleteMonthlySale, upsertMonthlySale } from "../actions";
+import { deleteMonthlySale, syncSquareSales, upsertMonthlySale } from "../actions";
 
 export interface MonthlySale {
   id: string;
@@ -84,6 +84,20 @@ export default function SalesManager({ sales }: { sales: MonthlySale[] }) {
             </div>
             <button className="btn-fill" onClick={submit} disabled={pending || !amount}>
               {pending ? "保存中…" : "保存"}
+            </button>
+            <button
+              className="btn-outline"
+              onClick={() =>
+                start(async () => {
+                  const res = await syncSquareSales(month);
+                  setMsg({ ok: res.ok, text: res.message });
+                  if (res.ok) router.refresh();
+                })
+              }
+              disabled={pending}
+              title="選択中の月の売上をSquareから取得して上書きします"
+            >
+              Squareから取得
             </button>
           </div>
           {msg && (
