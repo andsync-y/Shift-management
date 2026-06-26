@@ -452,6 +452,123 @@ body {
   color: var(--ink);
 }
 
+/* =============== シフト印刷 =============== */
+.print-root {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 60px;
+}
+.print-controls {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.print-sheet {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 18px;
+  overflow-x: auto;
+}
+.print-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.print-head h1 {
+  font-size: 18px;
+  font-weight: 700;
+}
+.print-store {
+  font-size: 12px;
+  color: var(--ink-3);
+}
+.print-table {
+  border-collapse: collapse;
+  width: 100%;
+  table-layout: fixed;
+}
+.print-table th,
+.print-table td {
+  border: 1px solid #cfcabf;
+  padding: 4px 3px;
+  font-size: 11px;
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.print-table thead th {
+  background: var(--paper-2);
+  font-weight: 600;
+}
+.print-table .pt-name {
+  text-align: left;
+  width: 84px;
+  position: sticky;
+  left: 0;
+  background: var(--paper-2);
+  font-weight: 600;
+}
+.print-table .pt-w {
+  display: block;
+  font-size: 9px;
+  color: var(--ink-3);
+}
+.print-table .sun {
+  color: var(--accent-ink);
+}
+.print-table .sat {
+  color: #3a5a86;
+}
+.print-table td.off {
+  background: repeating-linear-gradient(45deg, #f1efe9 0 4px, transparent 4px 8px);
+  color: var(--ink-3);
+}
+
+@media print {
+  .appbar,
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .print-root {
+    max-width: none;
+    margin: 0;
+    padding: 0;
+  }
+  .print-sheet {
+    border: 0;
+    border-radius: 0;
+    padding: 0;
+    overflow: visible;
+  }
+  .print-table th,
+  .print-table td {
+    font-size: 9px;
+    padding: 2px;
+  }
+  .print-table .pt-name {
+    position: static;
+  }
+  .print-sheet.landscape {
+    /* 1か月は横向き */
+    page: landscape;
+  }
+  @page {
+    margin: 10mm;
+  }
+  @page landscape {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+}
+
 /* ナビのグループ（ドロップダウン） */
 .nav-grp {
   position: relative;

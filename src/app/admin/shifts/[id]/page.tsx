@@ -133,9 +133,14 @@ export default async function PeriodDetailPage({
             シフト作成 — {p.year}年{p.month}月
           </p>
         </div>
-        <Link href="/admin/shifts" className="btn-outline">
-          <span className="arrow">←</span> 一覧へ
-        </Link>
+        <span style={{ display: "flex", gap: 8 }}>
+          <Link href={`/admin/shifts/${id}/print`} className="btn-outline">
+            🖨 印刷
+          </Link>
+          <Link href="/admin/shifts" className="btn-outline">
+            <span className="arrow">←</span> 一覧へ
+          </Link>
+        </span>
       </div>
 
       {/* 承認済みお休みとシフトの矛盾 警告 */}
