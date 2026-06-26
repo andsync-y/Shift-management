@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteCardTransaction, insertCardTransactions, updateCardAccount } from "../actions";
 import { ACCOUNTS } from "@/lib/accounting/accounts";
@@ -79,16 +79,6 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
   const [merchantCol, setMerchantCol] = useState(2);
   const [absolute, setAbsolute] = useState(true);
 
-  function guess(headers: string[]) {
-    const find = (kw: string[]) => headers.findIndex((h) => kw.some((k) => h.includes(k)));
-    const d = find(["利用日", "ご利用日", "日付", "取引日", "日"]);
-    const a = find(["金額", "利用金額", "ご利用金額", "請求"]);
-    const m = find(["店名", "ご利用先", "利用店名", "摘要", "内容", "加盟店"]);
-    if (d >= 0) setDateCol(d);
-    if (a >= 0) setAmountCol(a);
-    if (m >= 0) setMerchantCol(m);
-  }
-
   function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -111,13 +101,57 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
         return;
       }
       setGrid(g);
-      if (hasHeader) guess(g[0]);
     });
     e.target.value = "";
   }
 
   const header = grid?.[0] ?? [];
   const dataRows = useMemo(() => (grid ? (hasHeader ? grid.slice(1) : grid) : []), [grid, hasHeader]);
+
+  // 実データから日付/金額/店名の列を推定（見出しが無い/当てにならないCSVでも当たる）
+  useEffect(() => {
+    if (!grid || dataRows.length === 0) return;
+    const cols = Math.max(...grid.map((r) => r.length), 0);
+    const sample = dataRows.slice(0, 40);
+    const dScore: number[] = [];
+    const aScore: number[] = [];
+    const tScore: number[] = [];
+    for (let c = 0; c < cols; c++) {
+      let d = 0, a = 0, t = 0, n = 0;
+      for (const r of sample) {
+        const v = (r[c] ?? "").trim();
+        if (!v) continue;
+        n++;
+        const isDate = !!normDate(v);
+        const isAmt = normAmount(v, true) != null;
+        if (isDate) d++;
+        if (isAmt) a++;
+        if (!isDate && !isAmt) t++;
+      }
+      dScore[c] = n ? d / n : 0;
+      aScore[c] = n ? a / n : 0;
+      tScore[c] = n ? t / n : 0;
+    }
+    const argmax = (arr: number[], exclude: number[] = []) => {
+      let best = -1, idx = 0;
+      for (let c = 0; c < arr.length; c++) {
+        if (exclude.includes(c)) continue;
+        if (arr[c] > best) {
+          best = arr[c];
+          idx = c;
+        }
+      }
+      return idx;
+    };
+    const d = argmax(dScore);
+    const a = argmax(aScore, [d]);
+    const m = argmax(tScore, [d, a]);
+    setDateCol(d);
+    setAmountCol(a);
+    setMerchantCol(m);
+    // grid / hasHeader が変わったときだけ推定（手動変更は保持）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [grid, hasHeader]);
 
   const parsed = useMemo(
     () =>
@@ -162,9 +196,13 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
     });
   }
 
-  const colOptions = header.length
-    ? header.map((h, i) => ({ i, label: `${i + 1}: ${h || "(空)"}` }))
-    : (grid?.[0] ?? []).map((_, i) => ({ i, label: `${i + 1}列目` }));
+  // 各列の選択肢ラベルに「実データの例」を添える（見出しが当てにならないCSV対策）
+  const colCount = grid ? Math.max(...grid.map((r) => r.length), 0) : 0;
+  const sampleRow = dataRows[0] ?? [];
+  const colOptions = Array.from({ length: colCount }, (_, i) => {
+    const ex = (sampleRow[i] ?? "").toString().trim().slice(0, 14);
+    return { i, label: `${i + 1}列目${ex ? `（例: ${ex}）` : ""}` };
+  });
 
   return (
     <>
