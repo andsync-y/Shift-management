@@ -16,7 +16,7 @@ export default function KpiForm({ initial, asOf }: { initial: FcKpiData; asOf: s
   const [state, action, pending] = useActionState(saveKpi, null);
   const m = initial.month ?? {};
   const y = initial.yesterday ?? {};
-  const pctVal = (r?: number) => (typeof r === "number" ? Math.round(r * 100) : "");
+  const pctVal = (r?: number) => (typeof r === "number" ? Math.round(r * 1000) / 10 : "");
 
   return (
     <form action={action}>

@@ -3,7 +3,7 @@
 import type { FcKpiData } from "@/lib/fc-kpi/types";
 
 const yen = (n?: number) => (typeof n === "number" ? `¥${Math.round(n).toLocaleString()}` : "—");
-const pct = (r?: number) => (typeof r === "number" ? `${Math.round(r * 100)}%` : "—");
+const pct = (r?: number) => (typeof r === "number" ? `${(r * 100).toFixed(1)}%` : "—");
 const num = (n?: number) => (typeof n === "number" ? n.toLocaleString() : "—");
 const mmdd = (d?: string) => (d && /^\d{4}-\d{2}-\d{2}$/.test(d) ? `${Number(d.slice(5, 7))}/${Number(d.slice(8, 10))}` : "");
 
