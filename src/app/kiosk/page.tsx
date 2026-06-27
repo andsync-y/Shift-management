@@ -19,6 +19,8 @@ type StaffState = {
 
 export default function KioskPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
+  const hideTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [staff, setStaff] = useState<StaffState[]>([]);
   const [date, setDate] = useState("");
@@ -54,16 +56,34 @@ export default function KioskPage() {
     return () => clearInterval(id);
   }, []);
 
-  // 出勤の瞬間だけカメラ起動 → 右上にプレビュー表示 → 1枚撮影 → 即停止。失敗時 undefined（写真なし）。
+  // カメラ停止＋プレビューを消す（保留中のタイマーも掃除）。
+  const stopCamera = useCallback(() => {
+    if (hideTimer.current) {
+      clearTimeout(hideTimer.current);
+      hideTimer.current = null;
+    }
+    streamRef.current?.getTracks().forEach((t) => t.stop());
+    streamRef.current = null;
+    if (videoRef.current) videoRef.current.srcObject = null;
+    setCapturing(false);
+  }, []);
+
+  // 出勤の瞬間だけカメラ起動 → 右上にプレビュー → 1枚撮影。撮影後もプレビューを約3秒残してから停止。
+  // 撮影自体は速く返すので打刻送信は待たせない（プレビューだけ後から消える）。失敗時 undefined。
   const captureOnce = useCallback(async (): Promise<string | undefined> => {
-    let stream: MediaStream | null = null;
+    stopCamera(); // 前回の残りを掃除
+    let dataUrl: string | undefined;
     try {
-      stream = await navigator.mediaDevices.getUserMedia({
+      const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
         audio: false,
       });
+      streamRef.current = stream;
       const v = videoRef.current;
-      if (!v) return undefined;
+      if (!v) {
+        stopCamera();
+        return undefined;
+      }
       v.srcObject = stream;
       setCapturing(true);
       await v.play().catch(() => {});
@@ -72,25 +92,30 @@ export default function KioskPage() {
         v.onloadeddata = () => res();
         setTimeout(res, 1200);
       });
-      await new Promise((r) => setTimeout(r, 350)); // 露出が安定するまで少し待つ（プレビューも見える）
-      if (!v.videoWidth) return undefined;
-      const W = 480;
-      const H = Math.round((v.videoHeight / v.videoWidth) * W) || 360;
-      const canvas = document.createElement("canvas");
-      canvas.width = W;
-      canvas.height = H;
-      const ctx = canvas.getContext("2d");
-      if (!ctx) return undefined;
-      ctx.drawImage(v, 0, 0, W, H);
-      return canvas.toDataURL("image/jpeg", 0.7);
+      await new Promise((r) => setTimeout(r, 350)); // 露出が安定するまで少し待つ
+      if (v.videoWidth) {
+        const W = 480;
+        const H = Math.round((v.videoHeight / v.videoWidth) * W) || 360;
+        const canvas = document.createElement("canvas");
+        canvas.width = W;
+        canvas.height = H;
+        const ctx = canvas.getContext("2d");
+        if (ctx) {
+          ctx.drawImage(v, 0, 0, W, H);
+          dataUrl = canvas.toDataURL("image/jpeg", 0.7);
+        }
+      }
     } catch {
+      stopCamera();
       return undefined;
-    } finally {
-      stream?.getTracks().forEach((t) => t.stop()); // カメラを必ず止める
-      if (videoRef.current) videoRef.current.srcObject = null;
-      setCapturing(false);
     }
-  }, []);
+    // 撮影後もプレビューを約3秒残してからカメラを止める
+    hideTimer.current = setTimeout(stopCamera, 3000);
+    return dataUrl;
+  }, [stopCamera]);
+
+  // 画面離脱時はカメラを確実に止める
+  useEffect(() => stopCamera, [stopCamera]);
 
   const load = useCallback(async (t: string) => {
     try {
