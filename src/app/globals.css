@@ -2257,6 +2257,7 @@ body {
   border: 1px solid var(--line-strong); background: #000; transform: scaleX(-1); /* 鏡像 */
 }
 .kiosk-clock { font-size: 20px; font-weight: 700; letter-spacing: 0.02em; }
+.kiosk-actions { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; justify-content: flex-end; }
 .kiosk-print-btn {
   font-size: 12px; text-decoration: none; color: var(--ink); white-space: nowrap;
   border: 1px solid var(--line-strong); border-radius: 8px; padding: 6px 10px; background: #fff;
@@ -2305,12 +2306,15 @@ body {
 .kiosk-cal .cal-daynum { font-size: 11px; }
 .kiosk-cal .cal-toolbar { margin-bottom: 10px; }
 .kiosk-cal .legend { font-size: 12px; }
-/* 当日は日付の背景にうすい赤丸 */
+/* 当日は日付の位置はそのままで、背景にうすい赤丸だけを敷く */
 .kiosk-cal .cal-cell.is-today .cal-daynum {
-  display: inline-flex; align-items: center; justify-content: center;
-  min-width: 21px; height: 21px; padding: 0 5px; border-radius: 999px;
-  background: color-mix(in oklab, #e8380d 16%, transparent);
-  color: var(--accent-ink); font-weight: 700;
+  position: relative; z-index: 0; color: var(--accent-ink); font-weight: 700;
+}
+.kiosk-cal .cal-cell.is-today .cal-daynum::before {
+  content: ""; position: absolute; z-index: -1;
+  left: 0.55em; top: 50%; transform: translate(-50%, -50%);
+  width: 21px; height: 21px; border-radius: 50%;
+  background: color-mix(in oklab, #e8380d 18%, transparent);
 }
 .kiosk-toast {
   position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);

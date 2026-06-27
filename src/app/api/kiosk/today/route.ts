@@ -83,5 +83,11 @@ export async function GET(req: NextRequest) {
     .filter((x): x is NonNullable<typeof x> => x !== null)
     .sort((a, b) => a.firstStart.localeCompare(b.firstStart));
 
-  return NextResponse.json({ ok: true, date: today, staff });
+  // 受付タブレットから印刷する書類のリンク（Googleドライブ等・環境変数で設定）
+  const links = {
+    counseling: process.env.COUNSELING_SHEET_URL ?? null,
+    ticketTerms: process.env.TICKET_TERMS_URL ?? null,
+  };
+
+  return NextResponse.json({ ok: true, date: today, staff, links });
 }

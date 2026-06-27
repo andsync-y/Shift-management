@@ -48,6 +48,11 @@ export default function KioskPage() {
     timeOff: TimeOffRequest[];
   } | null>(null);
   const [calMonth, setCalMonth] = useState(""); // 表示中の月 "YYYY-MM"
+  const [links, setLinks] = useState<{ counseling: string | null; ticketTerms: string | null }>({
+    counseling: null,
+    ticketTerms: null,
+  });
+  const [ready, setReady] = useState(false); // token 判定済み
 
   // token を URL から取得し、以降は localStorage に保持
   useEffect(() => {
@@ -61,6 +66,7 @@ export default function KioskPage() {
       window.history.replaceState({}, "", url.toString());
     }
     setToken(t);
+    setReady(true);
   }, []);
 
   // 時計
@@ -147,6 +153,7 @@ export default function KioskPage() {
       setError(null);
       setStaff(j.staff);
       setDate(j.date);
+      if (j.links) setLinks(j.links);
     } catch {
       setError("通信に失敗しました。ネットワークを確認してください。");
     }
@@ -223,12 +230,28 @@ export default function KioskPage() {
             playsInline
             style={{ display: capturing ? "block" : "none" }}
           />
-          <a href="/kiosk/print" className="kiosk-print-btn">🖨 シフト表を印刷</a>
+          <div className="kiosk-actions">
+            <a href="/kiosk/print" className="kiosk-print-btn">🖨 シフト表</a>
+            {links.counseling && (
+              <a href={links.counseling} target="_blank" rel="noreferrer" className="kiosk-print-btn">
+                📄 カウンセリングシート
+              </a>
+            )}
+            {links.ticketTerms && (
+              <a href={links.ticketTerms} target="_blank" rel="noreferrer" className="kiosk-print-btn">
+                📄 回数券 規約
+              </a>
+            )}
+          </div>
           <div className="kiosk-clock en">{clock}</div>
         </div>
       </header>
 
-      {error ? (
+      {ready && !token ? (
+        <div className="kiosk-empty">
+          このタブレットは未設定です。設定用URL（<span className="en">/kiosk?token=…</span>）で開いてください。
+        </div>
+      ) : error ? (
         <div className="kiosk-empty">{error}</div>
       ) : staff.length === 0 ? (
         <div className="kiosk-empty">本日の出勤予定はありません。</div>
