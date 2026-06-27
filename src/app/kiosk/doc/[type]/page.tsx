@@ -10,10 +10,14 @@ import { useParams } from "next/navigation";
 const PRINT_CSS = `
 @media print {
   @page { size: A4; margin: 6mm; }
-  body { background: #fff; }
+  html, body { background: #fff !important; }
   .no-print { display: none !important; }
-  .kdoc-page { width: 100% !important; max-width: none !important; height: auto !important;
-    margin: 0 !important; box-shadow: none !important; }
+  /* 余分な高さ・余白を消す（min-height:100vh や padding が2ページ目を生む） */
+  .kdoc { min-height: 0 !important; background: #fff !important; }
+  .kdoc-pages { padding: 0 !important; }
+  /* 1ページの画像が1枚に収まるよう、幅・高さとも用紙内に制限 */
+  .kdoc-page { display: block; width: auto !important; height: auto !important;
+    max-width: 100% !important; max-height: 99vh !important; margin: 0 auto !important; box-shadow: none !important; }
   /* 最後のページには改ページを入れない（空白の余分ページを防ぐ） */
   .kdoc-page:not(:last-child) { page-break-after: always; }
 }
