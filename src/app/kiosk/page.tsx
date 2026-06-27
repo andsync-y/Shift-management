@@ -207,6 +207,7 @@ export default function KioskPage() {
             playsInline
             style={{ display: capturing ? "block" : "none" }}
           />
+          <a href="/kiosk/print" className="kiosk-print-btn">🖨 シフト表を印刷</a>
           <div className="kiosk-clock en">{clock}</div>
         </div>
       </header>

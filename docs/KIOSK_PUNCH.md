@@ -23,6 +23,9 @@
 - カメラ不可（権限拒否等）でも打刻は通る（写真なしで記録）。
 - 画面下部に**当月のシフトカレンダー**を表示（管理画面と同じ `ShiftCalendarView`・月/週切替・スタッフ絞り込み）。
   データは `/api/kiosk/shifts?token=...&month=YYYY-MM`（KIOSK_TOKEN保護・下書き期間は除外）で10分ごとに更新。
+- ヘッダーの **「🖨 シフト表を印刷」** → `/kiosk/print`。スタッフ×日のマトリクスを横向きで表示し、
+  `window.print()` で印刷（Android なら Brother iPrint&Scan 等の印刷サービスを選択）。前月/翌月の切替可。
+  トークンは localStorage から読むので、印刷ページにトークンを付けなくてよい。
 
 ## データ・確認
 
