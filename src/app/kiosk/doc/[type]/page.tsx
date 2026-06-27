@@ -13,7 +13,9 @@ const PRINT_CSS = `
   body { background: #fff; }
   .no-print { display: none !important; }
   .kdoc-page { width: 100% !important; max-width: none !important; height: auto !important;
-    margin: 0 !important; box-shadow: none !important; page-break-after: always; }
+    margin: 0 !important; box-shadow: none !important; }
+  /* 最後のページには改ページを入れない（空白の余分ページを防ぐ） */
+  .kdoc-page:not(:last-child) { page-break-after: always; }
 }
 .kdoc-page { display: block; width: 100%; max-width: 820px; height: auto;
   margin: 0 auto 14px; box-shadow: 0 1px 8px rgba(0,0,0,.18); background: #fff; }
