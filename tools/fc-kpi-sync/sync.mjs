@@ -50,32 +50,98 @@ async function login(page) {
   ]);
 }
 
-// ===== ここから下は本部画面に合わせて実装する（実機でセレクタ確認） =====
-// 各関数は本部システムの該当ページへ遷移し、数値を読み取って返す。
-// 取得できない項目は null/[] を返してよい（アプリ側は欠損を許容して表示する）。
+// ===== 本部ダッシュボードからの読み取り =====
+// SPAのCSSクラスは不定なので、テーブルを「見出し名」で探して行を読む堅牢方式にする。
+// 数値: ¥ , % を除去して数値化。率は % → 0-1 に変換。
+
+const toNum = (s) => {
+  const n = Number(String(s ?? "").replace(/[^0-9.\-]/g, ""));
+  return Number.isFinite(n) ? n : null;
+};
+const toRate = (s) => {
+  const n = toNum(s);
+  return n == null ? null : n / 100;
+};
+
+// 見出しに mustHave を全て含むテーブルを探し、{headers, rows} を返す。
+async function readTable(page, mustHave) {
+  const tables = await page.$$("table");
+  for (const t of tables) {
+    const headers = await t
+      .$$eval("thead th, thead td, tr:first-child th, tr:first-child td", (els) =>
+        els.map((e) => e.textContent.replace(/\s+/g, "").trim())
+      )
+      .catch(() => []);
+    if (headers.length && mustHave.every((h) => headers.some((x) => x.includes(h)))) {
+      const rows = await t.$$eval("tbody tr", (trs) =>
+        trs.map((tr) => Array.from(tr.querySelectorAll("td,th")).map((td) => td.textContent.replace(/\s+/g, " ").trim()))
+      );
+      return { headers, rows };
+    }
+  }
+  return null;
+}
+function colIndex(headers, name) {
+  return headers.findIndex((h) => h.includes(name));
+}
 
 async function extractMonth(page) {
-  // TODO: 当月の「売上 / 新規販売数 / 新規販売率 / 指名数 / 指名率」を読む。
-  // 例: await page.goto(".../dashboard"); const sales = await page.textContent("#sales"); ...
+  // 表示期間を「今月」にしてから「店舗別売上」表（総来店数を持つ＝担当別ではない）を読む。
+  try {
+    await page.click("text=今月", { timeout: 5000 });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(1200);
+  } catch {
+    /* 既定が今月ならそのまま */
+  }
+  const t = await readTable(page, ["売上", "総来店数", "指名率"]);
+  const month = ymd(new Date()).slice(0, 7);
+  if (!t || t.rows.length === 0) return { month, sales: null, newCount: null, newRate: null, nominationCount: null, nominationRate: null };
+  const r = t.rows[0];
+  const get = (name) => r[colIndex(t.headers, name)];
   return {
-    month: ymd(new Date()).slice(0, 7),
-    sales: null,
-    newCount: null,
-    newRate: null, // 0-1
-    nominationCount: null,
-    nominationRate: null, // 0-1
+    month,
+    sales: toNum(get("売上")),
+    newCount: toNum(get("新規販売数")),
+    newRate: toRate(get("新規販売率")),
+    nominationCount: toNum(get("指名数")),
+    nominationRate: toRate(get("指名率")),
   };
 }
 
+// 担当別売上テーブルを読み、新規販売数>0 / 指名数>0 のスタッフを返す。
+async function readStaffTable(page) {
+  const t = await readTable(page, ["担当", "新規販売数", "指名数"]);
+  if (!t) return { newSales: [], nominations: [] };
+  const iName = colIndex(t.headers, "担当");
+  const iNew = colIndex(t.headers, "新規販売数");
+  const iNom = colIndex(t.headers, "指名数");
+  const newSales = [];
+  const nominations = [];
+  for (const r of t.rows) {
+    const staff = (r[iName] || "").replace(/\s+/g, " ").trim();
+    if (!staff) continue;
+    const nNew = toNum(r[iNew]);
+    const nNom = toNum(r[iNom]);
+    if (nNew && nNew > 0) newSales.push({ staff, ticket: null }); // 回数券の回数は日報側のため未取得
+    if (nNom && nNom > 0) nominations.push({ staff, count: nNom });
+  }
+  return { newSales, nominations };
+}
+
 async function extractYesterday(page) {
-  // TODO: 昨日の「新規販売したスタッフ（回数券の回数）」「指名を獲得したスタッフ」を読む。
   const y = new Date();
   y.setUTCDate(y.getUTCDate() - 1);
-  return {
-    date: ymd(y),
-    newSales: [], // [{ staff: "AINA", ticket: 10 }]
-    nominations: [], // [{ staff: "AINA", count: 3 }]
-  };
+  // 表示期間を「昨日」に切替えて担当別を読む。
+  try {
+    await page.click("text=昨日", { timeout: 5000 });
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForTimeout(1500);
+  } catch {
+    // ボタンが見つからない場合は現在の表示のまま読む（要セレクタ調整）
+  }
+  const { newSales, nominations } = await readStaffTable(page);
+  return { date: ymd(y), newSales, nominations };
 }
 
 async function main() {
