@@ -4,7 +4,9 @@
 // 集計元: time_records（出勤 clock_in 〜 退勤 clock_out, JST）。
 // ルール:
 //  - 休憩自動控除: その日の実働が 8時間超→60分 / 6時間超→45分 を差し引く。
-//  - 残業: 1日の実働(休憩控除後)が8時間を超えた分は 1.25倍（割増 +0.25）。
+//  - 端数: 1日の実働(休憩控除後)を 15分単位で四捨五入してから賃金計算する。
+//          深夜分も同様に15分単位で四捨五入する。
+//  - 残業: 1日の実働(15分丸め後)が8時間を超えた分は 1.25倍（割増 +0.25）。
 //  - 深夜: 22:00〜翌5:00(JST) の労働に +0.25 の加算。
 //  - 総支給 = 基本(全労働×時給) + 残業割増 + 深夜割増 + 交通費(月額)。
 // すべて分単位で集計し、最後に円へ丸める（四捨五入）。
@@ -13,6 +15,11 @@
 const DAY = 86400000;
 const HOUR = 3600000;
 const JST = 9 * HOUR;
+
+// 分を15分単位に四捨五入する（給与の端数処理）。
+function round15(min: number): number {
+  return Math.round(min / 15) * 15;
+}
 
 export interface PayrollRecord {
   work_date: string; // "YYYY-MM-DD"（JST出勤日）
@@ -127,9 +134,10 @@ export function computePayroll(
       inOut.push({ in: hmJst(inMs), out: hmJst(outMs) });
     }
     const brk = rawMin > 480 ? 60 : rawMin > 360 ? 45 : 0;
-    const net = Math.max(0, rawMin - brk);
+    // 休憩控除後の実働を15分単位で四捨五入（この丸め後の値で賃金・残業を計算）。
+    const net = round15(Math.max(0, rawMin - brk));
     const ot = Math.max(0, net - 480);
-    const night = Math.min(dayNight, net); // 念のため実働を超えないよう丸める
+    const night = Math.min(round15(dayNight), net); // 深夜も15分丸め・実働を超えないよう抑える
     const wageDay = wageForDate(date, fallback);
 
     workedMin += net;
