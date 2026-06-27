@@ -87,24 +87,27 @@ export async function POST(req: NextRequest) {
     if (open) {
       return NextResponse.json({ ok: false, message: `${name}さんはすでに出勤中です。退勤する場合は「退勤」を押してください。` });
     }
-    await admin.from("time_records").insert({
-      staff_id: staff.id,
-      work_date: dateStr,
-      clock_in: iso,
-      source: "kiosk",
-      in_photo_url: photoPath,
-    });
+    // 写真列(0028)が無い環境でも出勤は通すよう、写真があるときだけ列を付ける
+    const row: Record<string, unknown> = { staff_id: staff.id, work_date: dateStr, clock_in: iso, source: "kiosk" };
+    if (photoPath) row.in_photo_url = photoPath;
+    const { error } = await admin.from("time_records").insert(row);
+    if (error) {
+      return NextResponse.json({ ok: false, message: `記録に失敗しました：${error.message}` }, { status: 500 });
+    }
     return NextResponse.json({ ok: true, action: "in", name, time: hhmm, message: `${name}さん、おはようございます！${hhmm} 出勤を記録しました。` });
   }
 
-  // out
+  // out（退勤は写真なし）
   if (!open) {
     return NextResponse.json({ ok: false, message: `${name}さんの出勤打刻が見つかりません。先に「出勤」を押してください。` });
   }
-  await admin
+  const { error: outErr } = await admin
     .from("time_records")
-    .update({ clock_out: iso, out_photo_url: photoPath ?? open.out_photo_url ?? null, updated_at: iso })
+    .update({ clock_out: iso, updated_at: iso })
     .eq("id", open.id);
+  if (outErr) {
+    return NextResponse.json({ ok: false, message: `記録に失敗しました：${outErr.message}` }, { status: 500 });
+  }
   return NextResponse.json({
     ok: true,
     action: "out",

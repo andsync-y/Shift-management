@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 // タブレット（受付）用の打刻キオスク。
 // 名前ボタンをタップ → 出勤時のみ、その瞬間だけカメラを起動して1枚撮り即停止（オンデマンド）。
-// 顔認証（照合）はしない。常時カメラONにしないので電池・プライバシーに配慮。
+// 撮影中だけ右上にプレビューを出す。顔認証（照合）はしない。常時カメラONにしない＝電池/privacy配慮。
 // ?token=<KIOSK_TOKEN> で保護。初回URLのtokenを端末に保存する。
 
 type StaffState = {
@@ -17,50 +17,14 @@ type StaffState = {
   outAt: string | null;
 };
 
-// 出勤の瞬間だけカメラを起動 → 1コマ取得 → すぐ停止。失敗時は undefined（写真なしで打刻）。
-async function captureOnce(): Promise<string | undefined> {
-  let stream: MediaStream | null = null;
-  try {
-    stream = await navigator.mediaDevices.getUserMedia({
-      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-      audio: false,
-    });
-    const video = document.createElement("video");
-    video.muted = true;
-    video.playsInline = true;
-    video.srcObject = stream;
-    await video.play().catch(() => {});
-    // 最初のフレーム待ち（安全のためタイムアウト付き）
-    await new Promise<void>((res) => {
-      if (video.readyState >= 2 && video.videoWidth) return res();
-      video.onloadeddata = () => res();
-      setTimeout(res, 1200);
-    });
-    // 露出が安定するよう少しだけ待つ
-    await new Promise((r) => setTimeout(r, 250));
-    if (!video.videoWidth) return undefined;
-    const W = 480;
-    const H = Math.round((video.videoHeight / video.videoWidth) * W) || 360;
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return undefined;
-    ctx.drawImage(video, 0, 0, W, H);
-    return canvas.toDataURL("image/jpeg", 0.7);
-  } catch {
-    return undefined;
-  } finally {
-    stream?.getTracks().forEach((t) => t.stop()); // カメラを必ず止める
-  }
-}
-
 export default function KioskPage() {
+  const videoRef = useRef<HTMLVideoElement | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [staff, setStaff] = useState<StaffState[]>([]);
   const [date, setDate] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null); // 打刻中のstaffId
+  const [capturing, setCapturing] = useState(false); // 撮影中（プレビュー表示）
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [clock, setClock] = useState("");
 
@@ -88,6 +52,44 @@ export default function KioskPage() {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
+  }, []);
+
+  // 出勤の瞬間だけカメラ起動 → 右上にプレビュー表示 → 1枚撮影 → 即停止。失敗時 undefined（写真なし）。
+  const captureOnce = useCallback(async (): Promise<string | undefined> => {
+    let stream: MediaStream | null = null;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      const v = videoRef.current;
+      if (!v) return undefined;
+      v.srcObject = stream;
+      setCapturing(true);
+      await v.play().catch(() => {});
+      await new Promise<void>((res) => {
+        if (v.readyState >= 2 && v.videoWidth) return res();
+        v.onloadeddata = () => res();
+        setTimeout(res, 1200);
+      });
+      await new Promise((r) => setTimeout(r, 350)); // 露出が安定するまで少し待つ（プレビューも見える）
+      if (!v.videoWidth) return undefined;
+      const W = 480;
+      const H = Math.round((v.videoHeight / v.videoWidth) * W) || 360;
+      const canvas = document.createElement("canvas");
+      canvas.width = W;
+      canvas.height = H;
+      const ctx = canvas.getContext("2d");
+      if (!ctx) return undefined;
+      ctx.drawImage(v, 0, 0, W, H);
+      return canvas.toDataURL("image/jpeg", 0.7);
+    } catch {
+      return undefined;
+    } finally {
+      stream?.getTracks().forEach((t) => t.stop()); // カメラを必ず止める
+      if (videoRef.current) videoRef.current.srcObject = null;
+      setCapturing(false);
+    }
   }, []);
 
   const load = useCallback(async (t: string) => {
@@ -135,7 +137,7 @@ export default function KioskPage() {
         setTimeout(() => setToast(null), 3500);
       }
     },
-    [token, busy, load]
+    [token, busy, captureOnce, load]
   );
 
   return (
@@ -146,6 +148,13 @@ export default function KioskPage() {
           <div className="kiosk-date">{date && `${date.slice(5).replace("-", "/")} の出勤予定`}</div>
         </div>
         <div className="kiosk-right">
+          <video
+            ref={videoRef}
+            className="kiosk-cam"
+            muted
+            playsInline
+            style={{ display: capturing ? "block" : "none" }}
+          />
           <div className="kiosk-clock en">{clock}</div>
         </div>
       </header>
