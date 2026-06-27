@@ -1,6 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import ShiftCalendarView from "@/components/ShiftCalendarView";
+import type { Profile, Shift, TimeOffRequest } from "@/lib/types";
 
 // タブレット（受付）用の打刻キオスク。
 // 名前ボタンをタップ → 出勤時のみ、その瞬間だけカメラを起動して1枚撮り即停止（オンデマンド）。
@@ -29,6 +31,13 @@ export default function KioskPage() {
   const [capturing, setCapturing] = useState(false); // 撮影中（プレビュー表示）
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [clock, setClock] = useState("");
+  const [cal, setCal] = useState<{
+    year: number;
+    month: number;
+    shifts: Shift[];
+    staff: Profile[];
+    timeOff: TimeOffRequest[];
+  } | null>(null);
 
   // token を URL から取得し、以降は localStorage に保持
   useEffect(() => {
@@ -140,6 +149,24 @@ export default function KioskPage() {
     return () => clearInterval(id);
   }, [token, load]);
 
+  // 下部のシフトカレンダー（当月）。打刻ほど頻繁でなくてよいので10分ごと。
+  const loadCal = useCallback(async (t: string) => {
+    try {
+      const r = await fetch(`/api/kiosk/shifts?token=${encodeURIComponent(t)}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j.ok) setCal({ year: j.year, month: j.month, shifts: j.shifts, staff: j.staff, timeOff: j.timeOff });
+    } catch {
+      /* カレンダーは補助表示なので失敗は無視 */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    loadCal(token);
+    const id = setInterval(() => loadCal(token), 600000);
+    return () => clearInterval(id);
+  }, [token, loadCal]);
+
   const punch = useCallback(
     async (s: StaffState) => {
       if (!token || busy) return;
@@ -208,6 +235,21 @@ export default function KioskPage() {
               </span>
             </button>
           ))}
+        </div>
+      )}
+
+      {cal && (
+        <div className="kiosk-cal">
+          <div className="kiosk-cal-title">
+            {cal.year}年{cal.month}月 のシフト
+          </div>
+          <ShiftCalendarView
+            year={cal.year}
+            month={cal.month}
+            shifts={cal.shifts}
+            staff={cal.staff}
+            timeOff={cal.timeOff}
+          />
         </div>
       )}
 

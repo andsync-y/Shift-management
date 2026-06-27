@@ -2290,6 +2290,10 @@ body {
 .kiosk-card.open .kc-action { background: #94560e; }
 .kc-state { grid-area: state; margin-top: 8px; font-size: 12.5px; color: var(--ink-3); text-align: center; }
 .kiosk-empty { padding: 80px 20px; text-align: center; color: var(--ink-2); font-size: 16px; }
+.kiosk-cal {
+  margin-top: 26px; padding-top: 18px; border-top: 1px solid var(--line);
+}
+.kiosk-cal-title { font-size: 16px; font-weight: 700; margin-bottom: 12px; }
 .kiosk-toast {
   position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
   max-width: 90vw; padding: 18px 26px; border-radius: 14px; font-size: 18px; font-weight: 600;
