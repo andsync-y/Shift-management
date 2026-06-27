@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
 import { computePayroll, hhmm, type PayrollRecord } from "@/lib/payroll";
+import NominationInput from "./NominationInput";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -46,13 +47,17 @@ export default async function PayrollPage({
   const next = m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
+    supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
   ]);
 
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
+  const nomCounts = new Map(
+    ((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count])
+  );
   const byStaff = new Map<string, PayrollRecord[]>();
   for (const r of records) {
     if (!byStaff.has(r.staff_id)) byStaff.set(r.staff_id, []);
@@ -60,13 +65,16 @@ export default async function PayrollPage({
   }
 
   const rows = staff
-    .map((s) => ({
-      staff: s,
-      pay: computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0),
-    }))
-    .filter((r) => r.pay.workedMin > 0 || r.pay.openCount > 0);
+    .map((s) => {
+      const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0);
+      const rate = s.nomination_back_rate ?? 0;
+      const count = nomCounts.get(s.id) ?? 0;
+      const nominationBack = rate * count;
+      return { staff: s, pay, rate, count, nominationBack, grossTotal: pay.gross + nominationBack };
+    })
+    .filter((r) => r.pay.workedMin > 0 || r.pay.openCount > 0 || r.count > 0);
 
-  const totalGross = rows.reduce((sum, r) => sum + r.pay.gross, 0);
+  const totalGross = rows.reduce((sum, r) => sum + r.grossTotal, 0);
 
   return (
     <div className="page page-wide">
@@ -120,11 +128,13 @@ export default async function PayrollPage({
                   <th style={{ textAlign: "right" }}>残業割増</th>
                   <th style={{ textAlign: "right" }}>深夜割増</th>
                   <th style={{ textAlign: "right" }}>交通費</th>
+                  <th style={{ textAlign: "right" }}>指名本数</th>
+                  <th style={{ textAlign: "right" }}>指名バック</th>
                   <th style={{ textAlign: "right" }}>総支給</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ staff: s, pay }) => (
+                {rows.map(({ staff: s, pay, count, nominationBack, grossTotal }) => (
                   <tr key={s.id}>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <span className="dot" style={{ background: s.display_color, marginRight: 6 }} />
@@ -163,7 +173,13 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right" }}>{yen(pay.overtimePay)}</td>
                     <td className="en" style={{ textAlign: "right" }}>{yen(pay.nightPay)}</td>
                     <td className="en" style={{ textAlign: "right" }}>{yen(pay.commute)}</td>
-                    <td className="en" style={{ textAlign: "right", fontWeight: 700 }}>{yen(pay.gross)}</td>
+                    <td style={{ textAlign: "right" }}>
+                      <NominationInput staffId={s.id} month={month} initial={count} />
+                    </td>
+                    <td className="en" style={{ textAlign: "right" }}>
+                      {nominationBack > 0 ? yen(nominationBack) : <span className="muted">—</span>}
+                    </td>
+                    <td className="en" style={{ textAlign: "right", fontWeight: 700 }}>{yen(grossTotal)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -173,6 +189,7 @@ export default async function PayrollPage({
             休憩自動控除（実働8h超→60分／6h超→45分）・実働は1日ごと15分単位で四捨五入・残業1.25倍（1日8h超）・深夜22:00〜5:00を25%加算で計算。
             時給は期間別（6/8〜6/19は¥1,060／6/20〜7/31は¥1,600・全員一律）、範囲外は各自の時給。
             交通費は「スタッフ管理」で設定。総支給（額面）まで算出（源泉・社保は未控除）。
+            <strong>指名バック＝指名本数×単価</strong>を総支給に加算（本数はこの表で入力＝自動保存／単価は「スタッフ管理」で設定）。
           </p>
           <p className="help" style={{ marginTop: 6, marginBottom: 0 }}>
             <strong>週平均</strong>は月内の各週（月〜日）の実働合計の平均（実績）。社保加入の目安は下の「社会保険 加入判定」を参照。

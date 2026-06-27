@@ -20,6 +20,7 @@ export interface Profile {
   hourly_wage: number | null;
   commute_allowance?: number; // 月額交通費（円）
   contracted_weekly_hours?: number | null; // 週の所定労働時間（社保判定用）
+  nomination_back_rate?: number; // 指名バック単価（円/指名）
   min_hours_per_week: number;
   max_hours_per_week: number;
   display_color: string;

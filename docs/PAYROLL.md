@@ -16,7 +16,10 @@
   - 判定は**1日8時間超のみ**（週40時間超の残業は未対応）。
 - **深夜**：22:00〜翌5:00(JST) の労働に +0.25 加算（`nightMinutes` で区間重なりを算出）。
   - 深夜かつ残業が重なる時間は 基本1.0＋残業0.25＋深夜0.25＝**1.5倍**相当。
-- **総支給** = 基本(全労働×時給) + 残業割増 + 深夜割増 + **交通費(月額)**。
+- **指名バック**：`指名バック = 指名本数 × 単価`。
+  - 単価 `profiles.nomination_back_rate`（円/指名）は「スタッフ管理」で設定。
+  - 指名本数は**給与画面の表で月ごとに手入力**（`nomination_counts`・フォーカスアウトで自動保存）。
+- **総支給** = 基本(全労働×時給) + 残業割増 + 深夜割増 + **交通費(月額)** + **指名バック**。
   - 源泉徴収・社会保険などの控除は未対応（額面まで）。
 - 賃金は分単位で集計し、最後に円へ四捨五入。
 - **週平均（実績）**：月内の各週（月〜日）の実働合計を、勤務のあった週数で平均（`avgWeeklyMin`）。
@@ -47,6 +50,7 @@
 
 - `supabase/migrations/0017_commute_allowance.sql`：`profiles.commute_allowance`（月額交通費）。
 - `supabase/migrations/0027_contracted_hours.sql`：`profiles.contracted_weekly_hours`（週の所定労働時間・社保判定用）。
+- `supabase/migrations/0029_nomination_back.sql`：`profiles.nomination_back_rate`（指名バック単価）＋ `nomination_counts`（月別指名本数）。
 
 ## 関連ファイル
 

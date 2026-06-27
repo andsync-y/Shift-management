@@ -94,6 +94,17 @@ export default function ProfileEditor({
           />
         </div>
         <div className="field">
+          <label>指名バック単価（円/指名）</label>
+          <input
+            name="nomination_back_rate"
+            type="number"
+            min={0}
+            className="input"
+            defaultValue={profile.nomination_back_rate ?? 0}
+            placeholder="例: 500（1指名あたり）"
+          />
+        </div>
+        <div className="field">
           <label>週の最低時間</label>
           <input name="min_hours_per_week" type="number" min={0} className="input" defaultValue={profile.min_hours_per_week} />
         </div>
