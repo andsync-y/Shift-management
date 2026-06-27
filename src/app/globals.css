@@ -2244,6 +2244,53 @@ body {
    ========================================================= */
 .page-wide { max-width: 1360px; }
 
+/* =========================================================
+   タブレット打刻キオスク（/kiosk）
+   ========================================================= */
+.kiosk { min-height: 100vh; padding: 18px 20px 28px; box-sizing: border-box; }
+.kiosk-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+.kiosk-store { font-size: 18px; font-weight: 700; }
+.kiosk-date { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.kiosk-right { display: flex; align-items: center; gap: 14px; }
+.kiosk-cam {
+  width: 92px; height: 69px; object-fit: cover; border-radius: 10px;
+  border: 1px solid var(--line-strong); background: #000; transform: scaleX(-1); /* 鏡像 */
+}
+.kiosk-clock { font-size: 30px; font-weight: 700; letter-spacing: 0.02em; }
+.kiosk-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 14px;
+}
+.kiosk-card {
+  display: grid; grid-template-columns: auto 1fr; grid-template-areas:
+    "dot name" "shift shift" "action action" "state state";
+  align-items: center; gap: 4px 8px;
+  background: #fff; border: 1.5px solid var(--line-strong); border-radius: 16px;
+  padding: 16px 16px 14px; cursor: pointer; text-align: left;
+  transition: border-color .12s, background .12s, transform .05s;
+}
+.kiosk-card:active { transform: scale(0.98); }
+.kiosk-card.open { border-color: color-mix(in oklab, #94560e 45%, transparent); background: color-mix(in oklab, #94560e 5%, #fff); }
+.kiosk-card:disabled { opacity: .6; }
+.kc-dot { grid-area: dot; width: 14px; height: 14px; border-radius: 50%; }
+.kc-name { grid-area: name; font-size: 20px; font-weight: 700; }
+.kc-shift { grid-area: shift; font-size: 13px; color: var(--ink-2); margin-top: 2px; }
+.kc-action {
+  grid-area: action; margin-top: 10px; text-align: center;
+  font-size: 19px; font-weight: 700; color: #fff; background: var(--accent, #2563eb);
+  border-radius: 10px; padding: 12px 0;
+}
+.kiosk-card.open .kc-action { background: #94560e; }
+.kc-state { grid-area: state; margin-top: 8px; font-size: 12.5px; color: var(--ink-3); text-align: center; }
+.kiosk-empty { padding: 80px 20px; text-align: center; color: var(--ink-2); font-size: 16px; }
+.kiosk-toast {
+  position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
+  max-width: 90vw; padding: 18px 26px; border-radius: 14px; font-size: 18px; font-weight: 600;
+  color: #fff; box-shadow: 0 10px 30px rgba(0,0,0,.25); z-index: 50; text-align: center;
+}
+.kiosk-toast.ok { background: #2f7d4f; }
+.kiosk-toast.ng { background: #b5402f; }
+
 .sub-link {
   font-size: 12.5px; color: var(--accent-ink); text-decoration: none;
   border-bottom: 1px solid color-mix(in srgb, var(--accent-ink) 35%, transparent);
@@ -2366,6 +2413,8 @@ body {
 .tc-row.open { background: color-mix(in oklab, oklch(0.62 0.13 152) 4%, #fff); }
 .tc-name { display: flex; align-items: center; gap: 8px; font-size: 12.5px; min-width: 0; }
 .tc-dt { padding: 5px 8px; font-size: 12px; min-width: 0; }
+.tc-photo { font-size: 10px; text-decoration: none; color: var(--accent-ink); white-space: nowrap; padding: 1px 4px; border: 1px solid var(--line-strong); border-radius: 4px; }
+.tc-photo:hover { border-color: var(--accent); }
 .tc-badge { display: flex; justify-content: center; }
 
 .btn-mini {

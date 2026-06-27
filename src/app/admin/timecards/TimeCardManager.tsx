@@ -36,7 +36,7 @@ export default function TimeCardManager({
   month,
 }: {
   staff: Pick<Profile, "id" | "full_name" | "display_color">[];
-  records: (TimeRecord & { staffName: string })[];
+  records: (TimeRecord & { staffName: string; inPhotoUrl?: string | null; outPhotoUrl?: string | null })[];
   month: string;
 }) {
   const router = useRouter();
@@ -217,6 +217,12 @@ export default function TimeCardManager({
                     <span className="tc-ellip">{r.staffName}</span>
                     {r.source === "manual" && (
                       <span className="mk late" style={{ fontSize: 10 }}>手動</span>
+                    )}
+                    {r.inPhotoUrl && (
+                      <a className="tc-photo" href={r.inPhotoUrl} target="_blank" rel="noreferrer" title="出勤時の写真">📷出</a>
+                    )}
+                    {r.outPhotoUrl && (
+                      <a className="tc-photo" href={r.outPhotoUrl} target="_blank" rel="noreferrer" title="退勤時の写真">📷退</a>
                     )}
                   </span>
                   <input

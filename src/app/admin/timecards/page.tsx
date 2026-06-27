@@ -1,4 +1,4 @@
-import { createClient } from "@/lib/supabase/server";
+import { createClient, createAdminClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import TimeCardManager from "./TimeCardManager";
 
@@ -39,9 +39,25 @@ export default async function TimeCardsPage({
 
   const staff = (staffRaw as Profile[] | null) ?? [];
   const staffMap = new Map(staff.map((s) => [s.id, s]));
-  const records = ((recordsRaw as TimeRecord[] | null) ?? []).map((r) => ({
+  const rawRecords = (recordsRaw as TimeRecord[] | null) ?? [];
+
+  // キオスク打刻のセルフィー写真は非公開バケット。署名URLをまとめて発行する。
+  const photoPaths = Array.from(
+    new Set(rawRecords.flatMap((r) => [r.in_photo_url, r.out_photo_url]).filter((p): p is string => !!p))
+  );
+  const signed = new Map<string, string>();
+  if (photoPaths.length) {
+    const { data: urls } = await createAdminClient().storage
+      .from("punch-photos")
+      .createSignedUrls(photoPaths, 3600);
+    for (const u of urls ?? []) if (u.path && u.signedUrl) signed.set(u.path, u.signedUrl);
+  }
+
+  const records = rawRecords.map((r) => ({
     ...r,
     staffName: staffMap.get(r.staff_id)?.full_name ?? "?",
+    inPhotoUrl: r.in_photo_url ? signed.get(r.in_photo_url) ?? null : null,
+    outPhotoUrl: r.out_photo_url ? signed.get(r.out_photo_url) ?? null : null,
   }));
 
   // スタッフ別 集計

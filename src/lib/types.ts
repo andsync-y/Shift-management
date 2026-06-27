@@ -138,9 +138,11 @@ export interface TimeRecord {
   work_date: string; // "YYYY-MM-DD"（JST出勤日）
   clock_in: string | null; // ISO timestamptz
   clock_out: string | null;
-  source: string; // "line" | "manual"
+  source: string; // "line" | "manual" | "liff" | "kiosk"
   in_lat: number | null;
   in_lng: number | null;
+  in_photo_url?: string | null; // 出勤時セルフィー（Storage パス・キオスク打刻）
+  out_photo_url?: string | null; // 退勤時セルフィー（Storage パス・キオスク打刻）
   note: string | null;
   created_at: string;
   updated_at: string;
