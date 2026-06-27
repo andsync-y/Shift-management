@@ -13,6 +13,7 @@ const GROUPS: NavGroup[] = [
       { href: "/admin/timecards", label: "勤怠管理" },
       { href: "/admin/timecards/fc-export", label: "FC本部 転記" },
       { href: "/admin/payroll", label: "給与計算" },
+      { href: "/admin/documents", label: "店舗書類" },
       { href: "/admin/blackouts", label: "個別予定" },
       { href: "/admin/preopen", label: "プレオープン" },
     ],

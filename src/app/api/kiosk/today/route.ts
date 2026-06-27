@@ -83,16 +83,5 @@ export async function GET(req: NextRequest) {
     .filter((x): x is NonNullable<typeof x> => x !== null)
     .sort((a, b) => a.firstStart.localeCompare(b.firstStart));
 
-  // 受付タブレットから印刷する書類のリンク（Googleドライブ・環境変数で上書き可）。
-  // 既定はドライブのフォルダ。更新時はそのフォルダに新ファイルを入れればURLは不変。
-  const links = {
-    counseling:
-      process.env.COUNSELING_SHEET_URL ??
-      "https://drive.google.com/drive/folders/1wqfc4TwLEOlLZNDk2MOWpQB2WdAqeZ3l?usp=drive_link",
-    ticketTerms:
-      process.env.TICKET_TERMS_URL ??
-      "https://drive.google.com/drive/folders/11vXDMdlrAbrFr-0Bpr683b2iBczb3kGb?usp=drive_link",
-  };
-
-  return NextResponse.json({ ok: true, date: today, staff, links });
+  return NextResponse.json({ ok: true, date: today, staff });
 }

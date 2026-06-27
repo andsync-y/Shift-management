@@ -48,10 +48,6 @@ export default function KioskPage() {
     timeOff: TimeOffRequest[];
   } | null>(null);
   const [calMonth, setCalMonth] = useState(""); // 表示中の月 "YYYY-MM"
-  const [links, setLinks] = useState<{ counseling: string | null; ticketTerms: string | null }>({
-    counseling: null,
-    ticketTerms: null,
-  });
   const [ready, setReady] = useState(false); // token 判定済み
 
   // token を URL から取得し、以降は localStorage に保持
@@ -153,7 +149,6 @@ export default function KioskPage() {
       setError(null);
       setStaff(j.staff);
       setDate(j.date);
-      if (j.links) setLinks(j.links);
     } catch {
       setError("通信に失敗しました。ネットワークを確認してください。");
     }
@@ -232,16 +227,8 @@ export default function KioskPage() {
           />
           <div className="kiosk-actions">
             <a href="/kiosk/print" className="kiosk-print-btn">🖨 シフト表</a>
-            {links.counseling && (
-              <a href={links.counseling} target="_blank" rel="noreferrer" className="kiosk-print-btn">
-                📄 カウンセリングシート
-              </a>
-            )}
-            {links.ticketTerms && (
-              <a href={links.ticketTerms} target="_blank" rel="noreferrer" className="kiosk-print-btn">
-                📄 回数券 規約
-              </a>
-            )}
+            <a href="/kiosk/doc/counseling" className="kiosk-print-btn">📄 カウンセリングシート</a>
+            <a href="/kiosk/doc/ticket" className="kiosk-print-btn">📄 回数券 規約</a>
           </div>
           <div className="kiosk-clock en">{clock}</div>
         </div>

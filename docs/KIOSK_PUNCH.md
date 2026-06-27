@@ -25,9 +25,13 @@
   既定は当月。見出し横の**前月/翌月**ボタンで切替できる。データは
   `/api/kiosk/shifts?token=...&month=YYYY-MM`（KIOSK_TOKEN保護・下書き期間は除外）で10分ごとに更新。
 - **当日**は日付の背景に**うすい赤丸**を表示（kiosk画面のみ・日付の位置は不変＝`::before` で背景に敷く）。
-- ヘッダーに**書類印刷ボタン**：環境変数 `COUNSELING_SHEET_URL`（カウンセリングシート）/
-  `TICKET_TERMS_URL`（回数券 規約）に Googleドライブ等の共有URLを設定すると、該当ボタンが出て
-  別タブで開く（そこから印刷）。`/api/kiosk/today` のレスポンス `links` で受け渡し。
+- ヘッダーに**書類印刷ボタン**「📄 カウンセリングシート」「📄 回数券 規約」。アプリに保持した
+  ファイルを全画面表示して印刷する（シフト印刷と同じ使用感）。
+  - 保持先：Storage バケット **`documents`**（非公開・migration 0030）。固定パス
+    `counseling` / `ticket-terms` に upsert で差し替え（URL不変）。
+  - アップロード：管理画面 **「運営 > 店舗書類」**（`/admin/documents`、オーナー専用）。PDF/画像可。
+  - 表示・印刷：`/kiosk/doc/[type]` が `/api/kiosk/doc?token=...&type=...`（KIOSK_TOKEN保護・同一
+    オリジン配信）を iframe 表示 → 「🖨 印刷」で iframe を印刷（Brother iPrint&Scan 等）。
 - token 未設定の端末（例: PCでtoken無しで開いた）では設定案内を表示する。
 - ヘッダーの **「🖨 シフト表を印刷」** → `/kiosk/print`。**kioskと同じカレンダー表示（`ShiftCalendarView`）
   そのまま**を **A4横**で印刷する（ページ専用 `@page { size: A4 landscape }`、印刷時は toolbar 非表示・色保持）。
