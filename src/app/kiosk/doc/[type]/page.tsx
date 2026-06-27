@@ -118,9 +118,11 @@ export default function KioskDocPage() {
       ) : status === "error" ? (
         <div className="kdoc-empty">読み込みに失敗しました。通信状況を確認して再読み込みしてください。</div>
       ) : (
-        <div className="kdoc-pages" ref={containerRef} style={{ padding: "16px 12px 28px", overflow: "auto" }}>
+        <>
           {status === "loading" && <div className="kdoc-empty">読み込み中…</div>}
-        </div>
+          {/* このコンテナは ref で手動描画するため、React の子要素は置かない（競合防止） */}
+          <div className="kdoc-pages" ref={containerRef} style={{ padding: "16px 12px 28px" }} />
+        </>
       )}
     </div>
   );
