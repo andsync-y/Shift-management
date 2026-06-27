@@ -202,11 +202,43 @@ async function extractYesterday(page) {
   try {
     await page.click("text=来店記録", { timeout: 8000 });
     await page.waitForLoadState("networkidle").catch(() => {});
-    await page.waitForTimeout(1000);
-    const [download] = await Promise.all([
-      page.waitForEvent("download", { timeout: 15000 }),
-      page.click("text=CSV", { timeout: 8000 }),
-    ]);
+    await page.waitForTimeout(1500);
+
+    // デバッグ: 来店記録ページのCSV/ダウンロード系ボタンを列挙
+    try {
+      const dl = await page.$$eval("button, a, [role=button]", (els) =>
+        els
+          .map((e) => ({ tag: e.tagName, text: (e.innerText || e.value || "").trim().slice(0, 24), dl: e.getAttribute("download") }))
+          .filter((x) => /csv|ダウンロード|エクスポート|export|download/i.test(x.text) || x.dl !== null)
+          .slice(0, 20)
+      );
+      console.log("来店記録 DOWNLOAD候補:", JSON.stringify(dl));
+    } catch {}
+
+    const dlSelectors = [
+      'a[download]',
+      'button:has-text("CSVダウンロード")',
+      'button:has-text("CSV出力")',
+      'button:has-text("エクスポート")',
+      'a:has-text("CSV")',
+      'button:has-text("ダウンロード")',
+      'button:has-text("CSV")',
+    ];
+    let download = null;
+    for (const sel of dlSelectors) {
+      try {
+        const [d] = await Promise.all([
+          page.waitForEvent("download", { timeout: 8000 }),
+          page.click(sel, { timeout: 3000 }),
+        ]);
+        download = d;
+        console.log("CSVダウンロード成功 selector:", sel);
+        break;
+      } catch {
+        /* 次の候補 */
+      }
+    }
+    if (!download) throw new Error("CSVダウンロードボタンが見つからない");
     const path = await download.path();
     const buf = fs.readFileSync(path);
     const text = Encoding.codeToString(Encoding.convert(buf, { to: "UNICODE", from: "AUTO" }));
@@ -247,6 +279,7 @@ async function main() {
     const month = await extractMonth(page);
     const yesterday = await extractYesterday(page);
     const data = { asOf: ymd(new Date()), month, yesterday };
+    console.log("DATA:", JSON.stringify(data));
 
     if (DRY_RUN) {
       console.log("[dry-run] 送信内容:\n", JSON.stringify(data, null, 2));
