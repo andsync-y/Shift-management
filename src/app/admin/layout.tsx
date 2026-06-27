@@ -14,6 +14,7 @@ const GROUPS: NavGroup[] = [
       { href: "/admin/timecards/fc-export", label: "FC本部 転記" },
       { href: "/admin/payroll", label: "給与計算" },
       { href: "/admin/documents", label: "店舗書類" },
+      { href: "/admin/kpi", label: "店舗KPI" },
       { href: "/admin/blackouts", label: "個別予定" },
       { href: "/admin/preopen", label: "プレオープン" },
     ],

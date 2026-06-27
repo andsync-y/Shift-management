@@ -1,0 +1,29 @@
+name: FC KPI Sync
+
+# 本部システムからKPIを日次取得してアプリへ送る（Vercel外で実行）。
+# 07:00 JST = 22:00 UTC。手動実行も可。
+on:
+  schedule:
+    - cron: "0 22 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/fc-kpi-sync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npm run sync
+        env:
+          FC_LOGIN_URL: ${{ secrets.FC_LOGIN_URL }}
+          FC_USER: ${{ secrets.FC_USER }}
+          FC_PASS: ${{ secrets.FC_PASS }}
+          APP_INGEST_URL: ${{ secrets.APP_INGEST_URL }}
+          KPI_INGEST_SECRET: ${{ secrets.KPI_INGEST_SECRET }}

@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
+import KpiPanel from "./KpiPanel";
 import type { Profile, Shift, TimeOffRequest } from "@/lib/types";
+import type { FcKpiData } from "@/lib/fc-kpi/types";
 
 // タブレット（受付）用の打刻キオスク。
 // 名前ボタンをタップ → 出勤時のみ、その瞬間だけカメラを起動して1枚撮り即停止（オンデマンド）。
@@ -49,6 +51,7 @@ export default function KioskPage() {
   } | null>(null);
   const [calMonth, setCalMonth] = useState(""); // 表示中の月 "YYYY-MM"
   const [ready, setReady] = useState(false); // token 判定済み
+  const [kpi, setKpi] = useState<{ data: FcKpiData; asOf?: string } | null>(null);
 
   // token を URL から取得し、以降は localStorage に保持
   useEffect(() => {
@@ -185,6 +188,24 @@ export default function KioskPage() {
     return () => clearInterval(id);
   }, [token, calMonth, loadCal]);
 
+  // 本部KPI（最新スナップショット）。30分ごと。
+  const loadKpi = useCallback(async (t: string) => {
+    try {
+      const r = await fetch(`/api/kiosk/kpi?token=${encodeURIComponent(t)}`, { cache: "no-store" });
+      const j = await r.json();
+      if (j.ok && j.snapshot?.data) setKpi({ data: j.snapshot.data, asOf: j.snapshot.as_of });
+    } catch {
+      /* 補助表示なので無視 */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!token) return;
+    loadKpi(token);
+    const id = setInterval(() => loadKpi(token), 1800000);
+    return () => clearInterval(id);
+  }, [token, loadKpi]);
+
   const punch = useCallback(
     async (s: StaffState) => {
       if (!token || busy) return;
@@ -264,6 +285,8 @@ export default function KioskPage() {
           ))}
         </div>
       )}
+
+      {kpi && <KpiPanel data={kpi.data} asOf={kpi.asOf} />}
 
       {cal && (
         <div className="kiosk-cal">
