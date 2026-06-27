@@ -65,7 +65,12 @@ export default async function TimeCardsPage({
         <div className="masthead">
           <div className="eyebrow accent">Owner Console</div>
           <h1 className="ttl en" style={{ marginTop: 12 }}>Time Cards</h1>
-          <p className="sub">勤怠・給与集計 — {y}年{m}月</p>
+          <p className="sub">
+            勤怠・給与集計 — {y}年{m}月
+            <a href={`/admin/timecards/fc-export?month=${month}`} className="sub-link" style={{ marginLeft: 12 }}>
+              FC本部 転記 →
+            </a>
+          </p>
         </div>
         <div className="month-nav">
           <a className="btn-outline" href={`/admin/timecards?month=${prev}`}>← 前月</a>

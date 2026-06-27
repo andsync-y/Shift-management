@@ -83,6 +83,8 @@ export async function toggleStaffActive(staffId: string, isActive: boolean) {
 const profileSchema = z.object({
   full_name: z.string().trim().min(1, "氏名を入力してください"),
   display_name: z.string().trim().optional().or(z.literal("")),
+  name_kana: z.string().trim().optional().or(z.literal("")),
+  work_status: z.enum(["active", "on_leave", "retired"]).default("active"),
   employment_type: z.enum(["full_time", "part_time"]),
   phone: z.string().trim().optional().or(z.literal("")),
   hourly_wage: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
@@ -112,6 +114,10 @@ export async function updateStaffProfile(
     .update({
       full_name: d.full_name,
       display_name: d.display_name ? d.display_name : null,
+      name_kana: d.name_kana ? d.name_kana : null,
+      work_status: d.work_status,
+      // 在籍状況に連動して稼働フラグも更新（在籍中のみシフト対象）
+      is_active: d.work_status === "active",
       employment_type: d.employment_type,
       phone: d.phone ? d.phone : null,
       hourly_wage: d.hourly_wage === "" || d.hourly_wage === undefined ? null : d.hourly_wage,

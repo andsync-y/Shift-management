@@ -33,6 +33,7 @@
 | `docs/SMART_LOCK.md` | 入口スマートロック（セサミ）＋ 公式LINEのリッチメニュー |
 | `docs/PAYROLL.md` | 給与計算（実打刻ベース・休憩/残業/深夜・総支給） |
 | `docs/ACCOUNTING.md` | 経理（領収書OCR・カード/EC明細・自動マッチング・監査ログ・月次P&L） |
+| `docs/FC_HQ_EXPORT.md` | FC本部システム連携（勤務時間・スタッフ情報の転記支援＋保護JSON API） |
 | `docs/DEPLOY_AND_DOMAIN.md` | デプロイ・独自ドメイン設定 |
 | `docs/design-brief.md` | デザイン方針 |
 

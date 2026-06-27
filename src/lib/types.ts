@@ -6,11 +6,14 @@ export type AvailabilityPref = "preferred" | "available" | "unavailable";
 export type PeriodStatus = "draft" | "published" | "confirmed";
 export type RequestStatus = "pending" | "approved" | "rejected";
 export type RequestType = "off" | "time_change";
+export type WorkStatus = "active" | "on_leave" | "retired";
 
 export interface Profile {
   id: string;
   full_name: string;
   display_name?: string | null;
+  name_kana?: string | null; // カナ氏名（FC本部フォーム用）
+  work_status?: WorkStatus; // 在籍状況（FC本部フォーム用）
   role: UserRole;
   employment_type: EmploymentType;
   phone: string | null;
@@ -210,6 +213,12 @@ export const ROLE_LABELS_JA: Record<UserRole, string> = {
 export const EMPLOYMENT_LABELS_JA: Record<EmploymentType, string> = {
   full_time: "正社員",
   part_time: "アルバイト",
+};
+
+export const WORK_STATUS_LABELS_JA: Record<WorkStatus, string> = {
+  active: "在籍中",
+  on_leave: "休職中",
+  retired: "退職",
 };
 
 export const PERIOD_STATUS_LABELS_JA: Record<PeriodStatus, string> = {

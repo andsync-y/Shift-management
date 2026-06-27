@@ -2,7 +2,7 @@
 
 import { useActionState } from "react";
 import { updateStaffProfile } from "../actions";
-import { EMPLOYMENT_LABELS_JA, ROLE_LABELS_JA, type Profile } from "@/lib/types";
+import { EMPLOYMENT_LABELS_JA, ROLE_LABELS_JA, WORK_STATUS_LABELS_JA, type Profile } from "@/lib/types";
 
 // 雇用形態・電話・時給・週時間の編集（オーナー専用ページ内）。
 export default function ProfileEditor({
@@ -42,6 +42,24 @@ export default function ProfileEditor({
             defaultValue={profile.display_name ?? ""}
             placeholder="例: AINA（空欄なら苗字で表示）"
           />
+        </div>
+        <div className="field">
+          <label>カナ氏名（FC本部用）</label>
+          <input
+            name="name_kana"
+            type="text"
+            className="input"
+            defaultValue={profile.name_kana ?? ""}
+            placeholder="例: タワダ ユウジン"
+          />
+        </div>
+        <div className="field">
+          <label>在籍状況（FC本部用）</label>
+          <select name="work_status" className="select" defaultValue={profile.work_status ?? "active"}>
+            <option value="active">{WORK_STATUS_LABELS_JA.active}</option>
+            <option value="on_leave">{WORK_STATUS_LABELS_JA.on_leave}</option>
+            <option value="retired">{WORK_STATUS_LABELS_JA.retired}</option>
+          </select>
         </div>
         <div className="field">
           <label>雇用形態</label>
