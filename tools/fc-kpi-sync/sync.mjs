@@ -41,15 +41,59 @@ function ymd(d) {
   return `${j.getUTCFullYear()}-${pad(j.getUTCMonth() + 1)}-${pad(j.getUTCDate())}`;
 }
 
+async function tryClickAny(page, selectors, timeout = 2500) {
+  for (const sel of selectors) {
+    try {
+      await page.click(sel, { timeout });
+      return sel;
+    } catch {
+      /* 次の候補 */
+    }
+  }
+  return null;
+}
+
 async function login(page) {
   if (!FC_LOGIN_URL) throw new Error("FC_LOGIN_URL 未設定");
+  page.setDefaultTimeout(15000);
   await page.goto(FC_LOGIN_URL, { waitUntil: "domcontentloaded" });
-  await page.fill(SELECTORS.user, FC_USER);
-  await page.fill(SELECTORS.pass, FC_PASS);
-  await Promise.all([
-    page.waitForLoadState("networkidle").catch(() => {}),
-    page.click(SELECTORS.submit),
+  await page.waitForTimeout(1500);
+
+  // デバッグ: 入力欄・ボタンを列挙（ログでセレクタを確認するため）
+  try {
+    const fields = await page.$$eval("input", (els) =>
+      els.map((e) => ({ name: e.name, type: e.type, id: e.id, ph: e.placeholder }))
+    );
+    const buttons = await page.$$eval("button, input[type=submit], [role=button], a", (els) =>
+      els.slice(0, 40).map((e) => ({ tag: e.tagName, type: e.type || "", text: (e.innerText || e.value || "").trim().slice(0, 24) }))
+    );
+    console.log("LOGIN URL:", page.url());
+    console.log("LOGIN FIELDS:", JSON.stringify(fields));
+    console.log("LOGIN BUTTONS:", JSON.stringify(buttons));
+  } catch (e) {
+    console.warn("debug dump 失敗:", e.message);
+  }
+
+  await page.fill(SELECTORS.user, FC_USER).catch((e) => console.warn("user fill 失敗:", e.message));
+  await page.fill(SELECTORS.pass, FC_PASS).catch((e) => console.warn("pass fill 失敗:", e.message));
+
+  // 送信：ボタン候補 → ダメなら Enter キー
+  const clicked = await tryClickAny(page, [
+    SELECTORS.submit,
+    'button:has-text("ログイン")',
+    'button:has-text("ログ イン")',
+    'button:has-text("サインイン")',
+    'button:has-text("LOGIN")',
+    'button:has-text("Login")',
+    '[role="button"]:has-text("ログイン")',
+    'a:has-text("ログイン")',
   ]);
+  if (!clicked) {
+    await page.press(SELECTORS.pass, "Enter").catch(() => {});
+  }
+  await page.waitForLoadState("networkidle").catch(() => {});
+  await page.waitForTimeout(2500);
+  console.log("AFTER LOGIN url:", page.url(), "/ title:", await page.title().catch(() => ""));
 }
 
 // ===== 本部ダッシュボードからの読み取り =====
