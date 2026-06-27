@@ -116,12 +116,13 @@ export default function KioskPage() {
     async (s: StaffState) => {
       if (!token || busy) return;
       setBusy(s.id);
-      const photo = capture();
+      const action = s.open ? "out" : "in";
+      const photo = action === "in" ? capture() : undefined; // 写真は出勤時のみ
       try {
         const r = await fetch("/api/kiosk/punch", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ token, staffId: s.id, action: s.open ? "out" : "in", photo }),
+          body: JSON.stringify({ token, staffId: s.id, action, photo }),
         });
         const j = await r.json();
         setToast({ ok: !!j.ok, text: j.message ?? (j.ok ? "記録しました" : "失敗しました") });

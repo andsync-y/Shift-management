@@ -3,6 +3,7 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { pushLineMessage } from "@/lib/line";
 import { appUrl } from "@/lib/app-url";
 import { runShiftReminder } from "@/lib/line/shift-reminder";
+import { purgeOldPunchPhotos } from "@/lib/punch-photos/purge";
 
 export const dynamic = "force-dynamic";
 
@@ -80,5 +81,13 @@ export async function GET(req: NextRequest) {
   const { d } = jstParts();
   const timeoff = d === 8 || d === 10 ? await runTimeoffReminder(admin, d) : { skipped: `day=${d}` };
 
-  return NextResponse.json({ ok: true, shift, timeoff });
+  // 古いキオスク打刻写真の自動削除（90日より前）。新たなcronを足さず日次で実行。
+  let purge: unknown;
+  try {
+    purge = await purgeOldPunchPhotos(admin, 90);
+  } catch (e) {
+    purge = { error: e instanceof Error ? e.message : String(e) };
+  }
+
+  return NextResponse.json({ ok: true, shift, timeoff, purge });
 }
