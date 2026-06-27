@@ -4,6 +4,7 @@ import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
 import { computePayroll, hhmm, type PayrollRecord } from "@/lib/payroll";
 import NominationInput from "./NominationInput";
+import TransferPanel from "./TransferPanel";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -75,6 +76,13 @@ export default async function PayrollPage({
     .filter((r) => r.pay.workedMin > 0 || r.pay.openCount > 0 || r.count > 0);
 
   const totalGross = rows.reduce((sum, r) => sum + r.grossTotal, 0);
+
+  // 振込（全銀）対象：口座情報が揃っていて総支給>0 のスタッフ
+  const bankReady = (s: Profile) => !!(s.bank_code && s.branch_code && s.account_number && s.recipient_kana);
+  const transferRows = rows.filter((r) => r.grossTotal > 0 && bankReady(r.staff));
+  const transferTotal = transferRows.reduce((s, r) => s + r.grossTotal, 0);
+  const missingBank = rows.filter((r) => r.grossTotal > 0 && !bankReady(r.staff)).map((r) => displayName(r.staff));
+  const monthEndDate = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
 
   return (
     <div className="page page-wide">
@@ -199,6 +207,23 @@ export default async function PayrollPage({
           </p>
         </div>
       </div>
+
+      {/* 給与振込（全銀フォーマット） */}
+      {rows.length > 0 && (
+        <div className="section">
+          <div className="section-head">
+            <h2>給与振込データ（全銀フォーマット）</h2>
+            <span className="eyebrow">SMBC 総合振込</span>
+          </div>
+          <TransferPanel
+            month={month}
+            defaultDate={monthEndDate}
+            count={transferRows.length}
+            total={transferTotal}
+            missing={missingBank}
+          />
+        </div>
+      )}
 
       {/* 社会保険 加入判定（所定労働時間ベース＋¥8.8万チェック） */}
       {rows.length > 0 && (

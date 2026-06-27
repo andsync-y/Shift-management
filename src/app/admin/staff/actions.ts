@@ -91,6 +91,11 @@ const profileSchema = z.object({
   commute_allowance: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
   contracted_weekly_hours: z.coerce.number().nonnegative().max(168).optional().or(z.literal("")),
   nomination_back_rate: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
+  bank_code: z.string().trim().optional().or(z.literal("")),
+  branch_code: z.string().trim().optional().or(z.literal("")),
+  account_type: z.enum(["1", "2"]).default("1"),
+  account_number: z.string().trim().optional().or(z.literal("")),
+  recipient_kana: z.string().trim().optional().or(z.literal("")),
   min_hours_per_week: z.coerce.number().int().nonnegative(),
   max_hours_per_week: z.coerce.number().int().positive(),
 });
@@ -131,6 +136,11 @@ export async function updateStaffProfile(
           : d.contracted_weekly_hours,
       nomination_back_rate:
         d.nomination_back_rate === "" || d.nomination_back_rate === undefined ? 0 : d.nomination_back_rate,
+      bank_code: d.bank_code ? d.bank_code : null,
+      branch_code: d.branch_code ? d.branch_code : null,
+      account_type: d.account_type,
+      account_number: d.account_number ? d.account_number : null,
+      recipient_kana: d.recipient_kana ? d.recipient_kana : null,
       min_hours_per_week: d.min_hours_per_week,
       max_hours_per_week: d.max_hours_per_week,
     })

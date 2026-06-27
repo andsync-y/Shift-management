@@ -105,6 +105,29 @@ export default function ProfileEditor({
           />
         </div>
         <div className="field">
+          <label>銀行コード（4桁）</label>
+          <input name="bank_code" type="text" inputMode="numeric" className="input" defaultValue={profile.bank_code ?? ""} placeholder="例: 0009（三井住友）" />
+        </div>
+        <div className="field">
+          <label>支店コード（3桁）</label>
+          <input name="branch_code" type="text" inputMode="numeric" className="input" defaultValue={profile.branch_code ?? ""} placeholder="例: 123" />
+        </div>
+        <div className="field">
+          <label>預金種目</label>
+          <select name="account_type" className="select" defaultValue={profile.account_type ?? "1"}>
+            <option value="1">普通</option>
+            <option value="2">当座</option>
+          </select>
+        </div>
+        <div className="field">
+          <label>口座番号（7桁）</label>
+          <input name="account_number" type="text" inputMode="numeric" className="input" defaultValue={profile.account_number ?? ""} placeholder="例: 1234567" />
+        </div>
+        <div className="field">
+          <label>受取人名（カナ）</label>
+          <input name="recipient_kana" type="text" className="input" defaultValue={profile.recipient_kana ?? ""} placeholder="例: ﾌｸﾀﾞ ｱｲﾅ（全角カナ可・半角に自動変換）" />
+        </div>
+        <div className="field">
           <label>週の最低時間</label>
           <input name="min_hours_per_week" type="number" min={0} className="input" defaultValue={profile.min_hours_per_week} />
         </div>

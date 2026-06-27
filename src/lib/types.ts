@@ -21,6 +21,11 @@ export interface Profile {
   commute_allowance?: number; // 月額交通費（円）
   contracted_weekly_hours?: number | null; // 週の所定労働時間（社保判定用）
   nomination_back_rate?: number; // 指名バック単価（円/指名）
+  bank_code?: string | null; // 振込先 銀行コード(4)
+  branch_code?: string | null; // 振込先 支店コード(3)
+  account_type?: string | null; // 預金種目 1=普通 2=当座
+  account_number?: string | null; // 口座番号
+  recipient_kana?: string | null; // 受取人名カナ
   min_hours_per_week: number;
   max_hours_per_week: number;
   display_color: string;

@@ -51,6 +51,19 @@
 - `supabase/migrations/0017_commute_allowance.sql`：`profiles.commute_allowance`（月額交通費）。
 - `supabase/migrations/0027_contracted_hours.sql`：`profiles.contracted_weekly_hours`（週の所定労働時間・社保判定用）。
 - `supabase/migrations/0029_nomination_back.sql`：`profiles.nomination_back_rate`（指名バック単価）＋ `nomination_counts`（月別指名本数）。
+- `supabase/migrations/0031_bank_account.sql`：`profiles` に振込先口座（銀行/支店コード・預金種目・口座番号・受取人カナ）。
+
+## 給与振込データ（全銀フォーマット・SMBC総合振込）
+
+- 給与画面「給与振込データ（全銀フォーマット）」で、当月の総支給から**総合振込ファイル**を生成
+  （`src/lib/zengin.ts`・固定長120バイト/レコード・Shift_JIS）。ダウンロードして三井住友の
+  ビジネスバンキング（Web21／ValueDoor）にアップロード→実行する（API `/api/payroll/transfer`）。
+- 振込金額＝**総支給（額面）**。口座情報が未登録のスタッフは対象外（画面に警告表示）。
+- 各スタッフの口座は「スタッフ管理」で登録（受取人カナは半角に自動変換）。
+- 委託者情報は環境変数：`ZENGIN_CONSIGNOR_CODE`（委託者コード）/ `ZENGIN_CONSIGNOR_NAME`（依頼人カナ）/
+  `ZENGIN_BRANCH_CODE`（自社支店）/ `ZENGIN_BANK_CODE`（既定0009）/ `ZENGIN_BANK_NAME` / `ZENGIN_BRANCH_NAME`。
+- 拘束/実働：給与一覧に「拘束」（出勤〜退勤合計・勤怠管理と一致）と「実働」（休憩控除・15分丸め後）を併記。
+- ⚠️ 銀行が受け付けるか必ず**少人数で試験送金**して確認すること（フォーマット細部は銀行仕様に依存）。
 
 ## 関連ファイル
 
