@@ -12,6 +12,26 @@ function jstYearMonth(): string {
   return `${j.getUTCFullYear()}-${pad(j.getUTCMonth() + 1)}`;
 }
 const yen = (n: number) => `¥${Math.round(n).toLocaleString()}`;
+const weeklyHours = (min: number) => (min / 60).toFixed(1);
+
+// 週平均労働時間から社保加入の目安タグを返す（最終判定は他要件も要確認）。
+function shahoTag(avgWeeklyMin: number): { label: string; cls: string; title: string } | null {
+  const h = avgWeeklyMin / 60;
+  if (h >= 30)
+    return {
+      label: "社保",
+      cls: "late",
+      title: "週30時間以上：一般被保険者（3/4基準）に該当の可能性。健康保険・厚生年金の加入義務を確認してください。",
+    };
+  if (h >= 20)
+    return {
+      label: "短時間?",
+      cls: "",
+      title:
+        "週20時間以上：短時間労働者の特例に該当の可能性。月額賃金¥88,000以上・2か月超の雇用見込み・学生でない・特定適用事業所(従業員規模)など他要件も確認してください。",
+    };
+  return null;
+}
 
 export default async function PayrollPage({
   searchParams,
@@ -94,6 +114,7 @@ export default async function PayrollPage({
                 <tr>
                   <th>スタッフ</th>
                   <th style={{ textAlign: "right" }}>実働</th>
+                  <th style={{ textAlign: "right" }}>週平均</th>
                   <th style={{ textAlign: "right" }}>うち残業</th>
                   <th style={{ textAlign: "right" }}>うち深夜</th>
                   <th style={{ textAlign: "right" }}>時給</th>
@@ -117,6 +138,17 @@ export default async function PayrollPage({
                       )}
                     </td>
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.workedMin)}</td>
+                    <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      {weeklyHours(pay.avgWeeklyMin)}h
+                      {(() => {
+                        const t = shahoTag(pay.avgWeeklyMin);
+                        return t ? (
+                          <span className={`mk ${t.cls}`} style={{ marginLeft: 6 }} title={t.title}>
+                            {t.label}
+                          </span>
+                        ) : null;
+                      })()}
+                    </td>
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.overtimeMin)}</td>
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.nightMin)}</td>
                     <td className="muted" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
@@ -139,6 +171,12 @@ export default async function PayrollPage({
             休憩自動控除（実働8h超→60分／6h超→45分）・実働は1日ごと15分単位で四捨五入・残業1.25倍（1日8h超）・深夜22:00〜5:00を25%加算で計算。
             時給は期間別（6/8〜6/19は¥1,060／6/20〜7/31は¥1,600・全員一律）、範囲外は各自の時給。
             交通費は「スタッフ管理」で設定。総支給（額面）まで算出（源泉・社保は未控除）。
+          </p>
+          <p className="help" style={{ marginTop: 6, marginBottom: 0 }}>
+            <strong>週平均</strong>は月内の各週（月〜日）の実働合計の平均。社会保険の加入判定の目安に：
+            <span className="mk late" style={{ margin: "0 4px" }}>社保</span>＝週30h以上（3/4基準）、
+            <span className="mk" style={{ margin: "0 4px" }}>短時間?</span>＝週20h以上（月額¥8.8万・2か月超見込み・学生でない・従業員規模等の他要件も要確認）。
+            最終判断は社労士等にご確認ください。
           </p>
         </div>
       </div>

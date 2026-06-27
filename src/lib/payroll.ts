@@ -21,6 +21,14 @@ function round15(min: number): number {
   return Math.round(min / 15) * 15;
 }
 
+// その日付が属する週（月曜始まり）の月曜日を "YYYY-MM-DD" で返す。
+function mondayKey(date: string): string {
+  const d = new Date(date + "T00:00:00Z");
+  const offset = (d.getUTCDay() + 6) % 7; // 月曜からの経過日数
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
+}
+
 export interface PayrollRecord {
   work_date: string; // "YYYY-MM-DD"（JST出勤日）
   clock_in: string | null;
@@ -42,6 +50,8 @@ export interface PayrollResult {
   overtimeMin: number;
   nightMin: number;
   breakMin: number;
+  avgWeeklyMin: number; // 週平均の実働(分)。月内の各週(月〜日)合計の平均。社保加入判定の目安。
+  weekCount: number; // 集計に使った週数(勤務のあった週)
   openCount: number; // 退勤打刻が無い（打刻中）件数
   basePay: number; // 全労働×時給
   overtimePay: number; // 残業割増(+0.25分)
@@ -155,11 +165,24 @@ export function computePayroll(
   const nightPay = Math.round(nightYen);
   const gross = basePay + overtimePay + nightPay + (commute || 0);
 
+  // 週(月〜日)ごとに実働を合算し、勤務のあった週で平均する＝週平均労働時間。
+  const weekTotals = new Map<string, number>();
+  for (const d of days) {
+    const wk = mondayKey(d.date);
+    weekTotals.set(wk, (weekTotals.get(wk) ?? 0) + d.workedMin);
+  }
+  const weekCount = weekTotals.size;
+  const avgWeeklyMin = weekCount
+    ? Math.round([...weekTotals.values()].reduce((a, b) => a + b, 0) / weekCount)
+    : 0;
+
   return {
     workedMin,
     overtimeMin,
     nightMin,
     breakMin: breakTotal,
+    avgWeeklyMin,
+    weekCount,
     openCount,
     basePay,
     overtimePay,
