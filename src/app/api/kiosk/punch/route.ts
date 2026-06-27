@@ -73,6 +73,7 @@ export async function POST(req: NextRequest) {
 
   // セルフィーを Storage に保存（任意・失敗しても打刻は通す）
   let photoPath: string | null = null;
+  let photoNote = "";
   const bytes = decodeDataUrl(body.photo);
   if (bytes && bytes.length > 0) {
     const path = `${dateStr}/${staff.id}-${Date.now()}.jpg`;
@@ -81,6 +82,7 @@ export async function POST(req: NextRequest) {
       upsert: false,
     });
     if (!up.error) photoPath = path;
+    else photoNote = `\n⚠️ 写真は保存できませんでした（${up.error.message}）。punch-photosバケット未作成かもしれません。`;
   }
 
   if (action === "in") {
@@ -94,7 +96,7 @@ export async function POST(req: NextRequest) {
     if (error) {
       return NextResponse.json({ ok: false, message: `記録に失敗しました：${error.message}` }, { status: 500 });
     }
-    return NextResponse.json({ ok: true, action: "in", name, time: hhmm, message: `${name}さん、おはようございます！${hhmm} 出勤を記録しました。` });
+    return NextResponse.json({ ok: true, action: "in", name, time: hhmm, message: `${name}さん、おはようございます！${hhmm} 出勤を記録しました。${photoNote}` });
   }
 
   // out（退勤は写真なし）
