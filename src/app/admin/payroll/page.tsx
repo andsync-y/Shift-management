@@ -119,6 +119,7 @@ export default async function PayrollPage({
               <thead>
                 <tr>
                   <th>スタッフ</th>
+                  <th style={{ textAlign: "right" }}>拘束</th>
                   <th style={{ textAlign: "right" }}>実働</th>
                   <th style={{ textAlign: "right" }}>週平均</th>
                   <th style={{ textAlign: "right" }}>うち残業</th>
@@ -145,6 +146,7 @@ export default async function PayrollPage({
                         </span>
                       )}
                     </td>
+                    <td className="en muted" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.clockedMin)}</td>
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{hhmm(pay.workedMin)}</td>
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       {weeklyHours(pay.avgWeeklyMin)}h
@@ -186,6 +188,7 @@ export default async function PayrollPage({
             </table>
           )}
           <p className="help" style={{ marginBottom: 0 }}>
+拘束＝出勤〜退勤の合計（休憩控除前・勤怠管理と一致）／実働＝休憩控除・15分丸め後（賃金の元）。
             休憩自動控除（実働8h超→60分／6h超→45分）・実働は1日ごと15分単位で四捨五入・残業1.25倍（1日8h超）・深夜22:00〜5:00を25%加算で計算。
             時給は期間別（6/8〜6/19は¥1,060／6/20〜7/31は¥1,600・全員一律）、範囲外は各自の時給。
             交通費は「スタッフ管理」で設定。総支給（額面）まで算出（源泉・社保は未控除）。

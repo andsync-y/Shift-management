@@ -46,6 +46,7 @@ export interface DayBreakdown {
 }
 
 export interface PayrollResult {
+  clockedMin: number; // 拘束合計(出勤〜退勤・休憩控除前・丸めなし)
   workedMin: number; // 実働合計(休憩控除後)
   overtimeMin: number;
   nightMin: number;
@@ -121,6 +122,7 @@ export function computePayroll(
   }
 
   const days: DayBreakdown[] = [];
+  let clockedMin = 0;
   let workedMin = 0;
   let overtimeMin = 0;
   let nightMin = 0;
@@ -150,6 +152,7 @@ export function computePayroll(
     const night = Math.min(round15(dayNight), net); // 深夜も15分丸め・実働を超えないよう抑える
     const wageDay = wageForDate(date, fallback);
 
+    clockedMin += rawMin;
     workedMin += net;
     overtimeMin += ot;
     nightMin += night;
@@ -177,6 +180,7 @@ export function computePayroll(
     : 0;
 
   return {
+    clockedMin,
     workedMin,
     overtimeMin,
     nightMin,
