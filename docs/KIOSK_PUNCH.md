@@ -21,8 +21,10 @@
 - 出勤中の人は「退勤する」、未出勤は「出勤する」を自動判定（`time_records` の未退勤レコード基準）。
 - 打刻すると「◯◯さん、おはようございます！hh:mm 出勤を記録しました」等を表示し、一覧を更新。
 - カメラ不可（権限拒否等）でも打刻は通る（写真なしで記録）。
-- 画面下部に**当月のシフトカレンダー**を表示（管理画面と同じ `ShiftCalendarView`・月/週切替・スタッフ絞り込み）。
-  データは `/api/kiosk/shifts?token=...&month=YYYY-MM`（KIOSK_TOKEN保護・下書き期間は除外）で10分ごとに更新。
+- 画面下部に**シフトカレンダー**を表示（管理画面と同じ `ShiftCalendarView`・月/週切替・スタッフ絞り込み）。
+  既定は当月。見出し横の**前月/翌月**ボタンで切替できる。データは
+  `/api/kiosk/shifts?token=...&month=YYYY-MM`（KIOSK_TOKEN保護・下書き期間は除外）で10分ごとに更新。
+- **当日**は日付の背景に**うすい赤丸**を表示（kiosk画面のみ。`.kiosk-cal .cal-cell.is-today`）。
 - ヘッダーの **「🖨 シフト表を印刷」** → `/kiosk/print`。**kioskと同じカレンダー表示（`ShiftCalendarView`）
   そのまま**を **A4横**で印刷する（ページ専用 `@page { size: A4 landscape }`、印刷時は toolbar 非表示・色保持）。
   `window.print()` で Brother iPrint&Scan 等の印刷サービスを選択。前月/翌月の切替可。

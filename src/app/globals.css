@@ -2298,12 +2298,20 @@ body {
 .kiosk-cal {
   margin-top: 20px; padding-top: 14px; border-top: 1px solid var(--line);
 }
-.kiosk-cal-title { font-size: 14px; font-weight: 700; margin-bottom: 10px; }
+.kiosk-cal-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+.kiosk-cal-title { font-size: 14px; font-weight: 700; }
 /* キオスクのカレンダーは省スペース化（管理画面には影響しない） */
 .kiosk-cal .cal-cell { min-height: 78px; padding: 5px 6px 7px; gap: 3px; }
 .kiosk-cal .cal-daynum { font-size: 11px; }
 .kiosk-cal .cal-toolbar { margin-bottom: 10px; }
 .kiosk-cal .legend { font-size: 12px; }
+/* 当日は日付の背景にうすい赤丸 */
+.kiosk-cal .cal-cell.is-today .cal-daynum {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 21px; height: 21px; padding: 0 5px; border-radius: 999px;
+  background: color-mix(in oklab, #e8380d 16%, transparent);
+  color: var(--accent-ink); font-weight: 700;
+}
 .kiosk-toast {
   position: fixed; left: 50%; bottom: 28px; transform: translateX(-50%);
   max-width: 90vw; padding: 18px 26px; border-radius: 14px; font-size: 18px; font-weight: 600;

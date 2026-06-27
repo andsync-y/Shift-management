@@ -19,6 +19,15 @@ type StaffState = {
   outAt: string | null;
 };
 
+function pad2(n: number) {
+  return String(n).padStart(2, "0");
+}
+function monthShift(month: string, delta: number): string {
+  const [y, m] = month.split("-").map(Number);
+  const d = new Date(y, m - 1 + delta, 1);
+  return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}`;
+}
+
 export default function KioskPage() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -38,6 +47,7 @@ export default function KioskPage() {
     staff: Profile[];
     timeOff: TimeOffRequest[];
   } | null>(null);
+  const [calMonth, setCalMonth] = useState(""); // 表示中の月 "YYYY-MM"
 
   // token を URL から取得し、以降は localStorage に保持
   useEffect(() => {
@@ -149,10 +159,16 @@ export default function KioskPage() {
     return () => clearInterval(id);
   }, [token, load]);
 
-  // 下部のシフトカレンダー（当月）。打刻ほど頻繁でなくてよいので10分ごと。
-  const loadCal = useCallback(async (t: string) => {
+  // 表示月の初期値は当月（JST）。前月/翌月ボタンで切替。
+  useEffect(() => {
+    const j = new Date(Date.now() + 9 * 3600 * 1000);
+    setCalMonth(`${j.getUTCFullYear()}-${pad2(j.getUTCMonth() + 1)}`);
+  }, []);
+
+  // 下部のシフトカレンダー。打刻ほど頻繁でなくてよいので10分ごと。
+  const loadCal = useCallback(async (t: string, mo: string) => {
     try {
-      const r = await fetch(`/api/kiosk/shifts?token=${encodeURIComponent(t)}`, { cache: "no-store" });
+      const r = await fetch(`/api/kiosk/shifts?token=${encodeURIComponent(t)}&month=${mo}`, { cache: "no-store" });
       const j = await r.json();
       if (j.ok) setCal({ year: j.year, month: j.month, shifts: j.shifts, staff: j.staff, timeOff: j.timeOff });
     } catch {
@@ -161,11 +177,11 @@ export default function KioskPage() {
   }, []);
 
   useEffect(() => {
-    if (!token) return;
-    loadCal(token);
-    const id = setInterval(() => loadCal(token), 600000);
+    if (!token || !calMonth) return;
+    loadCal(token, calMonth);
+    const id = setInterval(() => loadCal(token, calMonth), 600000);
     return () => clearInterval(id);
-  }, [token, loadCal]);
+  }, [token, calMonth, loadCal]);
 
   const punch = useCallback(
     async (s: StaffState) => {
@@ -241,8 +257,14 @@ export default function KioskPage() {
 
       {cal && (
         <div className="kiosk-cal">
-          <div className="kiosk-cal-title">
-            {cal.year}年{cal.month}月 のシフト
+          <div className="kiosk-cal-head">
+            <div className="kiosk-cal-title">
+              {cal.year}年{cal.month}月 のシフト
+            </div>
+            <span className="seg" role="group">
+              <button onClick={() => setCalMonth(monthShift(calMonth, -1))}>← 前月</button>
+              <button onClick={() => setCalMonth(monthShift(calMonth, 1))}>翌月 →</button>
+            </span>
           </div>
           <ShiftCalendarView
             year={cal.year}
