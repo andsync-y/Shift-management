@@ -81,6 +81,19 @@ export default function ProfileEditor({
           <input name="commute_allowance" type="number" min={0} className="input" defaultValue={profile.commute_allowance ?? 0} placeholder="例: 5000" />
         </div>
         <div className="field">
+          <label>週の所定労働時間（社保判定用・時間）</label>
+          <input
+            name="contracted_weekly_hours"
+            type="number"
+            min={0}
+            max={168}
+            step={0.5}
+            className="input"
+            defaultValue={profile.contracted_weekly_hours ?? ""}
+            placeholder="例: 20（空欄なら実績で代用）"
+          />
+        </div>
+        <div className="field">
           <label>週の最低時間</label>
           <input name="min_hours_per_week" type="number" min={0} className="input" defaultValue={profile.min_hours_per_week} />
         </div>

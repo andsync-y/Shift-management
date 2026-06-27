@@ -89,6 +89,7 @@ const profileSchema = z.object({
   phone: z.string().trim().optional().or(z.literal("")),
   hourly_wage: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
   commute_allowance: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
+  contracted_weekly_hours: z.coerce.number().nonnegative().max(168).optional().or(z.literal("")),
   min_hours_per_week: z.coerce.number().int().nonnegative(),
   max_hours_per_week: z.coerce.number().int().positive(),
 });
@@ -123,6 +124,10 @@ export async function updateStaffProfile(
       hourly_wage: d.hourly_wage === "" || d.hourly_wage === undefined ? null : d.hourly_wage,
       commute_allowance:
         d.commute_allowance === "" || d.commute_allowance === undefined ? 0 : d.commute_allowance,
+      contracted_weekly_hours:
+        d.contracted_weekly_hours === "" || d.contracted_weekly_hours === undefined
+          ? null
+          : d.contracted_weekly_hours,
       min_hours_per_week: d.min_hours_per_week,
       max_hours_per_week: d.max_hours_per_week,
     })

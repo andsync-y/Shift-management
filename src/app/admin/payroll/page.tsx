@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
-import { computePayroll, hhmm, type PayrollRecord } from "@/lib/payroll";
+import { computePayroll, hhmm, wageForDate, type PayrollRecord } from "@/lib/payroll";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -14,23 +14,33 @@ function jstYearMonth(): string {
 const yen = (n: number) => `¥${Math.round(n).toLocaleString()}`;
 const weeklyHours = (min: number) => (min / 60).toFixed(1);
 
-// 週平均労働時間から社保加入の目安タグを返す（最終判定は他要件も要確認）。
-function shahoTag(avgWeeklyMin: number): { label: string; cls: string; title: string } | null {
-  const h = avgWeeklyMin / 60;
-  if (h >= 30)
-    return {
-      label: "社保",
-      cls: "late",
-      title: "週30時間以上：一般被保険者（3/4基準）に該当の可能性。健康保険・厚生年金の加入義務を確認してください。",
-    };
-  if (h >= 20)
-    return {
-      label: "短時間?",
-      cls: "",
-      title:
-        "週20時間以上：短時間労働者の特例に該当の可能性。月額賃金¥88,000以上・2か月超の雇用見込み・学生でない・特定適用事業所(従業員規模)など他要件も確認してください。",
-    };
-  return null;
+const SHAHO_WAGE_MIN = 88000; // 短時間労働者の特例：所定内月額賃金の下限
+
+type ShahoLevel = "in_34" | "in_short" | "out_wage" | "out";
+interface ShahoJudge {
+  hours: number; // 判定に使った週時間
+  usingContract: boolean; // true=所定労働時間 / false=実績週平均で代用
+  estMonthly: number; // 推定 所定内月額賃金
+  monthlyOk: boolean; // ¥88,000以上か
+  level: ShahoLevel;
+  label: string;
+  cls: string; // バッジ用クラス（late=該当）
+}
+
+// 社会保険の加入判定（目安）。所定労働時間があればそれを、無ければ実績週平均を使う。
+//  - 週30h以上 → 一般被保険者（3/4基準）
+//  - 週20h以上 かつ 所定内月額¥88,000以上 → 短時間労働者の特例（※他要件も要確認）
+function shahoJudge(contractedHrs: number | null, actualAvgMin: number, wage: number): ShahoJudge {
+  const usingContract = contractedHrs != null && contractedHrs > 0;
+  const hours = usingContract ? contractedHrs! : actualAvgMin / 60;
+  const estMonthly = Math.round((hours * wage * 52) / 12); // 週時間×時給×52週÷12か月
+  const monthlyOk = estMonthly >= SHAHO_WAGE_MIN;
+  if (hours >= 30) return { hours, usingContract, estMonthly, monthlyOk, level: "in_34", label: "加入(3/4基準)", cls: "late" };
+  if (hours >= 20) {
+    if (monthlyOk) return { hours, usingContract, estMonthly, monthlyOk, level: "in_short", label: "加入(短時間)", cls: "late" };
+    return { hours, usingContract, estMonthly, monthlyOk, level: "out_wage", label: "対象外(賃金<8.8万)", cls: "" };
+  }
+  return { hours, usingContract, estMonthly, monthlyOk, level: "out", label: "対象外", cls: "" };
 }
 
 export default async function PayrollPage({
@@ -141,10 +151,18 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       {weeklyHours(pay.avgWeeklyMin)}h
                       {(() => {
-                        const t = shahoTag(pay.avgWeeklyMin);
-                        return t ? (
-                          <span className={`mk ${t.cls}`} style={{ marginLeft: 6 }} title={t.title}>
-                            {t.label}
+                        const j = shahoJudge(
+                          s.contracted_weekly_hours ?? null,
+                          pay.avgWeeklyMin,
+                          wageForDate(end, s.hourly_wage ?? 0)
+                        );
+                        return j.cls ? (
+                          <span
+                            className={`mk ${j.cls}`}
+                            style={{ marginLeft: 6 }}
+                            title={`社保: ${j.label}（${j.usingContract ? "所定" : "実績"} ${j.hours.toFixed(1)}h/週）`}
+                          >
+                            社保
                           </span>
                         ) : null;
                       })()}
@@ -173,13 +191,83 @@ export default async function PayrollPage({
             交通費は「スタッフ管理」で設定。総支給（額面）まで算出（源泉・社保は未控除）。
           </p>
           <p className="help" style={{ marginTop: 6, marginBottom: 0 }}>
-            <strong>週平均</strong>は月内の各週（月〜日）の実働合計の平均。社会保険の加入判定の目安に：
-            <span className="mk late" style={{ margin: "0 4px" }}>社保</span>＝週30h以上（3/4基準）、
-            <span className="mk" style={{ margin: "0 4px" }}>短時間?</span>＝週20h以上（月額¥8.8万・2か月超見込み・学生でない・従業員規模等の他要件も要確認）。
-            最終判断は社労士等にご確認ください。
+            <strong>週平均</strong>は月内の各週（月〜日）の実働合計の平均（実績）。社保加入の目安は下の「社会保険 加入判定」を参照。
           </p>
         </div>
       </div>
+
+      {/* 社会保険 加入判定（所定労働時間ベース＋¥8.8万チェック） */}
+      {rows.length > 0 && (
+        <div className="section">
+          <div className="section-head">
+            <h2>社会保険 加入判定</h2>
+            <span className="eyebrow">目安</span>
+          </div>
+          <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
+            <table className="staff-table" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th>スタッフ</th>
+                  <th style={{ textAlign: "right" }}>週所定</th>
+                  <th style={{ textAlign: "right" }}>実績週平均</th>
+                  <th style={{ textAlign: "right" }}>推定所定内月額</th>
+                  <th style={{ textAlign: "center" }}>¥8.8万</th>
+                  <th>判定</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ staff: s, pay }) => {
+                  const wage = wageForDate(end, s.hourly_wage ?? 0);
+                  const j = shahoJudge(s.contracted_weekly_hours ?? null, pay.avgWeeklyMin, wage);
+                  return (
+                    <tr key={s.id}>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className="dot" style={{ background: s.display_color, marginRight: 6 }} />
+                        {displayName(s)}
+                      </td>
+                      <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {s.contracted_weekly_hours != null ? (
+                          `${s.contracted_weekly_hours.toFixed(1)}h`
+                        ) : (
+                          <span className="muted">未設定</span>
+                        )}
+                      </td>
+                      <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {weeklyHours(pay.avgWeeklyMin)}h
+                        {!j.usingContract && (
+                          <span className="mk" style={{ marginLeft: 6 }} title="所定労働時間が未設定のため実績で代用判定">代用</span>
+                        )}
+                      </td>
+                      <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                        {wage > 0 ? yen(j.estMonthly) : <span className="muted">時給未設定</span>}
+                      </td>
+                      <td style={{ textAlign: "center", whiteSpace: "nowrap" }}>
+                        {wage > 0 ? (
+                          <span style={{ color: j.monthlyOk ? "#3d6b4f" : "var(--ink-3)", fontWeight: 600 }}>
+                            {j.monthlyOk ? "✓" : "✕"}
+                          </span>
+                        ) : (
+                          "—"
+                        )}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
+                        <span className={`mk ${j.cls}`}>{j.label}</span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+            <p className="help" style={{ marginBottom: 0 }}>
+              <strong>週所定</strong>＝契約上の週の所定労働時間（「スタッフ管理」で設定。未設定なら実績週平均で<span className="mk" style={{ margin: "0 3px" }}>代用</span>）。
+              <strong>推定所定内月額</strong>＝週時間×時給×52週÷12か月（残業・深夜・交通費は除く）。
+              判定の目安：<span className="mk late" style={{ margin: "0 4px" }}>加入(3/4基準)</span>週30h以上、
+              <span className="mk late" style={{ margin: "0 4px" }}>加入(短時間)</span>週20h以上＋月額¥8.8万以上。
+              短時間特例は他に「2か月超の雇用見込み・学生でない・特定適用事業所(従業員規模)」等の要件があります。最終判断は社労士等にご確認ください。
+            </p>
+          </div>
+        </div>
+      )}
 
       {rows.length > 0 && (
         <div className="section">
