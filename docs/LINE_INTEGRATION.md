@@ -194,8 +194,13 @@ LINE_MESSAGING_CHANNEL_SECRET=...   # Webhook署名検証用（友だち追加�
 
 翌日に公開済みシフトがあるスタッフへ「【明日のシフト】…」をLINEで送る。
 
-- 実体：`/api/cron/shift-reminder`（定時cron。`vercel.json` で毎日 9:00）。ロジックは
+- 実体：`/api/cron/shift-reminder`（定時cron）。ロジックは
   `src/lib/line/shift-reminder.ts` の `runShiftReminder`。
+- **送信時刻＝前日18:00 JST**。`vercel.json` の `"0 9 * * *"` は **Vercel CronがUTC基準**のため
+  09:00 UTC＝**18:00 JST**になる（時刻を変えたい場合はこのcron式をUTCで調整する。例: 19時JST→`"0 10 * * *"`）。
+  - ⚠️ Vercel Hobbyプランはcronが1日1回・実行が遅延しうる。確実に18時台に送りたい場合は外部スケジューラ
+    （cron-job.org 等）から `https://shift.andsync.jp/api/cron/shift-reminder?key=<CRON_SECRET>` を
+    日本時間18:00に叩く構成でもよい。
 - **手動で今すぐ送信**：オーナーの「休み希望」画面 →「人員カバー分析」見出しの
   **「明日のシフトを今すぐ送信」**ボタン（`sendTomorrowShiftReminder`）。
   定時送信が**LINEの送信上限**等で送れなかったときの**再送**に使う。

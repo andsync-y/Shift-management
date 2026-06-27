@@ -62,7 +62,8 @@ async function runTimeoffReminder(admin: Admin, day: number) {
   return { month: `${ny}-${pad(nm)}`, target: staff.length - submitted.size, sent };
 }
 
-// 毎日定時に実行。Vercel Cron（vercel.json）から。手動実行は ?key=<CRON_SECRET>。
+// 毎日定時に実行。Vercel Cron（vercel.json の "0 9 * * *" = 09:00 UTC = 前日18:00 JST）から。
+// ※ Vercel Cron は UTC 基準。手動実行は ?key=<CRON_SECRET>。
 export async function GET(req: NextRequest) {
   const secret = process.env.CRON_SECRET;
   if (!secret) return NextResponse.json({ ok: false, error: "CRON_SECRET が未設定です" }, { status: 500 });
