@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 // タブレット（受付）用の打刻キオスク。
-// 名前ボタンをタップ → その瞬間の前面カメラ映像を1枚キャプチャ（低解像度）→ 出勤/退勤を記録。
-// 顔認証（照合）はしない＝即時。?token=<KIOSK_TOKEN> で保護。初回URLのtokenを端末に保存する。
+// 名前ボタンをタップ → 出勤時のみ、その瞬間だけカメラを起動して1枚撮り即停止（オンデマンド）。
+// 顔認証（照合）はしない。常時カメラONにしないので電池・プライバシーに配慮。
+// ?token=<KIOSK_TOKEN> で保護。初回URLのtokenを端末に保存する。
 
 type StaffState = {
   id: string;
@@ -16,9 +17,45 @@ type StaffState = {
   outAt: string | null;
 };
 
+// 出勤の瞬間だけカメラを起動 → 1コマ取得 → すぐ停止。失敗時は undefined（写真なしで打刻）。
+async function captureOnce(): Promise<string | undefined> {
+  let stream: MediaStream | null = null;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+      audio: false,
+    });
+    const video = document.createElement("video");
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+    await video.play().catch(() => {});
+    // 最初のフレーム待ち（安全のためタイムアウト付き）
+    await new Promise<void>((res) => {
+      if (video.readyState >= 2 && video.videoWidth) return res();
+      video.onloadeddata = () => res();
+      setTimeout(res, 1200);
+    });
+    // 露出が安定するよう少しだけ待つ
+    await new Promise((r) => setTimeout(r, 250));
+    if (!video.videoWidth) return undefined;
+    const W = 480;
+    const H = Math.round((video.videoHeight / video.videoWidth) * W) || 360;
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = H;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return undefined;
+    ctx.drawImage(video, 0, 0, W, H);
+    return canvas.toDataURL("image/jpeg", 0.7);
+  } catch {
+    return undefined;
+  } finally {
+    stream?.getTracks().forEach((t) => t.stop()); // カメラを必ず止める
+  }
+}
+
 export default function KioskPage() {
-  const videoRef = useRef<HTMLVideoElement | null>(null);
-  const streamReady = useRef(false);
   const [token, setToken] = useState<string | null>(null);
   const [staff, setStaff] = useState<StaffState[]>([]);
   const [date, setDate] = useState("");
@@ -26,9 +63,6 @@ export default function KioskPage() {
   const [busy, setBusy] = useState<string | null>(null); // 打刻中のstaffId
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [clock, setClock] = useState("");
-  const [camOn, setCamOn] = useState(false);
-  const [camErr, setCamErr] = useState(false);
-  const streamRef = useRef<MediaStream | null>(null);
 
   // token を URL から取得し、以降は localStorage に保持
   useEffect(() => {
@@ -56,34 +90,6 @@ export default function KioskPage() {
     return () => clearInterval(id);
   }, []);
 
-  // カメラ起動（プレビュー）。失敗しても打刻は写真なしで通す。
-  const startCamera = useCallback(async () => {
-    setCamErr(false);
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-        audio: false,
-      });
-      streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play().catch(() => {});
-      }
-      streamReady.current = true;
-      setCamOn(true);
-    } catch {
-      streamReady.current = false;
-      setCamOn(false);
-      setCamErr(true);
-    }
-  }, []);
-
-  // 画面表示時に一度自動起動を試みる（ブロック時はボタンで再試行）
-  useEffect(() => {
-    startCamera();
-    return () => streamRef.current?.getTracks().forEach((t) => t.stop());
-  }, [startCamera]);
-
   const load = useCallback(async (t: string) => {
     try {
       const r = await fetch(`/api/kiosk/today?token=${encodeURIComponent(t)}`, { cache: "no-store" });
@@ -107,27 +113,12 @@ export default function KioskPage() {
     return () => clearInterval(id);
   }, [token, load]);
 
-  // 現在のカメラ映像を低解像度JPEGで1枚取得
-  const capture = useCallback((): string | undefined => {
-    const v = videoRef.current;
-    if (!v || !streamReady.current || !v.videoWidth) return undefined;
-    const W = 480;
-    const H = Math.round((v.videoHeight / v.videoWidth) * W) || 360;
-    const canvas = document.createElement("canvas");
-    canvas.width = W;
-    canvas.height = H;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return undefined;
-    ctx.drawImage(v, 0, 0, W, H);
-    return canvas.toDataURL("image/jpeg", 0.7);
-  }, []);
-
   const punch = useCallback(
     async (s: StaffState) => {
       if (!token || busy) return;
       setBusy(s.id);
       const action = s.open ? "out" : "in";
-      const photo = action === "in" ? capture() : undefined; // 写真は出勤時のみ
+      const photo = action === "in" ? await captureOnce() : undefined; // 写真は出勤時のみ・撮ったら即カメラOFF
       try {
         const r = await fetch("/api/kiosk/punch", {
           method: "POST",
@@ -144,7 +135,7 @@ export default function KioskPage() {
         setTimeout(() => setToast(null), 3500);
       }
     },
-    [token, busy, capture, load]
+    [token, busy, load]
   );
 
   return (
@@ -155,23 +146,9 @@ export default function KioskPage() {
           <div className="kiosk-date">{date && `${date.slice(5).replace("-", "/")} の出勤予定`}</div>
         </div>
         <div className="kiosk-right">
-          <video ref={videoRef} className={"kiosk-cam" + (camOn ? "" : " off")} muted playsInline />
           <div className="kiosk-clock en">{clock}</div>
         </div>
       </header>
-
-      {!camOn && (
-        <div className="kiosk-note">
-          <span>
-            {camErr
-              ? "カメラがブロックされています。画面の色フィルター（ブルーライト軽減/読書灯/夜間モード）をオフにして、下のボタンを押してください。※写真なしでも打刻はできます。"
-              : "カメラ起動中… 写真なしでも打刻はできます。"}
-          </span>
-          <button type="button" className="btn-outline" style={{ fontSize: 13 }} onClick={startCamera}>
-            カメラを有効にする
-          </button>
-        </div>
-      )}
 
       {error ? (
         <div className="kiosk-empty">{error}</div>
@@ -190,7 +167,7 @@ export default function KioskPage() {
               <span className="kc-name">{s.name}</span>
               <span className="kc-shift">{s.shifts}</span>
               <span className="kc-action">
-                {busy === s.id ? "記録中…" : s.open ? "退勤する" : "出勤する"}
+                {busy === s.id ? (s.open ? "記録中…" : "📷 記録中…") : s.open ? "退勤する" : "出勤する"}
               </span>
               <span className="kc-state">
                 {s.open ? `出勤 ${s.inAt} 〜` : s.outAt ? `退勤済 ${s.outAt}` : "未出勤"}
