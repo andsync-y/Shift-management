@@ -11,6 +11,8 @@
 //
 // ⚠️ 画面のセレクタ（CSS）は実画面に合わせて要調整。下の SELECTORS と extract* を実機で確認して埋める。
 import { chromium } from "playwright";
+import Encoding from "encoding-japanese";
+import fs from "node:fs";
 
 const {
   FC_LOGIN_URL,
@@ -129,19 +131,68 @@ async function readStaffTable(page) {
   return { newSales, nominations };
 }
 
+// "3回券(60分)" → 3
+function parseTicket(s) {
+  const m = /(\d+)\s*回券/.exec(String(s ?? ""));
+  return m ? Number(m[1]) : null;
+}
+// 来店記録CSV（Shift_JIS想定）をパースして行オブジェクト配列に。
+function parseCsvVisits(text) {
+  const lines = text.split(/\r?\n/).filter((l) => l.trim());
+  if (lines.length < 2) return [];
+  const headers = lines[0].split(",").map((h) => h.trim());
+  return lines.slice(1).map((line) => {
+    const cells = line.split(",");
+    const o = {};
+    headers.forEach((h, i) => (o[h] = (cells[i] ?? "").trim()));
+    return o;
+  });
+}
+
 async function extractYesterday(page) {
   const y = new Date();
   y.setUTCDate(y.getUTCDate() - 1);
-  // 表示期間を「昨日」に切替えて担当別を読む。
+  const yStr = ymd(y);
+
+  // 来店記録のCSVをダウンロード → 昨日ぶんを集計（回数券の回数も取れる）。
   try {
-    await page.click("text=昨日", { timeout: 5000 });
+    await page.click("text=来店記録", { timeout: 8000 });
     await page.waitForLoadState("networkidle").catch(() => {});
-    await page.waitForTimeout(1500);
-  } catch {
-    // ボタンが見つからない場合は現在の表示のまま読む（要セレクタ調整）
+    await page.waitForTimeout(1000);
+    const [download] = await Promise.all([
+      page.waitForEvent("download", { timeout: 15000 }),
+      page.click("text=CSV", { timeout: 8000 }),
+    ]);
+    const path = await download.path();
+    const buf = fs.readFileSync(path);
+    const text = Encoding.codeToString(Encoding.convert(buf, { to: "UNICODE", from: "AUTO" }));
+    const rows = parseCsvVisits(text).filter((r) => (r["来店日"] || "").startsWith(yStr));
+
+    const newSales = [];
+    const nomMap = new Map();
+    for (const r of rows) {
+      const staff = (r["担当"] || "").trim();
+      if (!staff) continue;
+      const ticket = parseTicket(r["回数券購入"]);
+      if (r["来店種別"] === "新規" && ticket) newSales.push({ staff, ticket });
+      if ((r["指名"] || "").startsWith("あり")) nomMap.set(staff, (nomMap.get(staff) || 0) + 1);
+    }
+    const nominations = [...nomMap.entries()].map(([staff, count]) => ({ staff, count }));
+    return { date: yStr, newSales, nominations };
+  } catch (e) {
+    console.warn("来店記録CSVの取得に失敗、ダッシュボード(担当別)にフォールバック:", e.message);
+    try {
+      await page.click("text=ダッシュボード", { timeout: 5000 });
+      await page.waitForTimeout(800);
+    } catch {}
+    try {
+      await page.click("text=昨日", { timeout: 5000 });
+      await page.waitForLoadState("networkidle").catch(() => {});
+      await page.waitForTimeout(1500);
+    } catch {}
+    const { newSales, nominations } = await readStaffTable(page);
+    return { date: yStr, newSales, nominations };
   }
-  const { newSales, nominations } = await readStaffTable(page);
-  return { date: ymd(y), newSales, nominations };
 }
 
 async function main() {

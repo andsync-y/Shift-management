@@ -8,6 +8,7 @@
     "dry": "DRY_RUN=1 node sync.mjs"
   },
   "dependencies": {
-    "playwright": "^1.49.0"
+    "playwright": "^1.49.0",
+    "encoding-japanese": "^2.2.0"
   }
 }
