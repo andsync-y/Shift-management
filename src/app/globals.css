@@ -2357,7 +2357,9 @@ body {
   .month-nav { width: 100%; }
   .tc-row {
     grid-template-columns: 1fr 1fr;
-    grid-template-areas: "name badge" "in in" "out out" "act act";
+    grid-template-areas: "name badge" "in out" "act act";
+    column-gap: 10px;
+    row-gap: 6px;
   }
   .tc-row > .tc-name { grid-area: name; }
   .tc-row > .tc-dt:nth-of-type(1) { grid-area: in; }
