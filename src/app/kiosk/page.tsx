@@ -26,6 +26,9 @@ export default function KioskPage() {
   const [busy, setBusy] = useState<string | null>(null); // 打刻中のstaffId
   const [toast, setToast] = useState<{ ok: boolean; text: string } | null>(null);
   const [clock, setClock] = useState("");
+  const [camOn, setCamOn] = useState(false);
+  const [camErr, setCamErr] = useState(false);
+  const streamRef = useRef<MediaStream | null>(null);
 
   // token を URL から取得し、以降は localStorage に保持
   useEffect(() => {
@@ -53,26 +56,33 @@ export default function KioskPage() {
     return () => clearInterval(id);
   }, []);
 
-  // カメラ常時ON（プレビュー）
-  useEffect(() => {
-    let stream: MediaStream | null = null;
-    (async () => {
-      try {
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
-          audio: false,
-        });
-        if (videoRef.current) {
-          videoRef.current.srcObject = stream;
-          await videoRef.current.play().catch(() => {});
-          streamReady.current = true;
-        }
-      } catch {
-        streamReady.current = false; // カメラ不可でも打刻は通す（写真なし）
+  // カメラ起動（プレビュー）。失敗しても打刻は写真なしで通す。
+  const startCamera = useCallback(async () => {
+    setCamErr(false);
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user", width: { ideal: 640 }, height: { ideal: 480 } },
+        audio: false,
+      });
+      streamRef.current = stream;
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        await videoRef.current.play().catch(() => {});
       }
-    })();
-    return () => stream?.getTracks().forEach((t) => t.stop());
+      streamReady.current = true;
+      setCamOn(true);
+    } catch {
+      streamReady.current = false;
+      setCamOn(false);
+      setCamErr(true);
+    }
   }, []);
+
+  // 画面表示時に一度自動起動を試みる（ブロック時はボタンで再試行）
+  useEffect(() => {
+    startCamera();
+    return () => streamRef.current?.getTracks().forEach((t) => t.stop());
+  }, [startCamera]);
 
   const load = useCallback(async (t: string) => {
     try {
@@ -145,10 +155,23 @@ export default function KioskPage() {
           <div className="kiosk-date">{date && `${date.slice(5).replace("-", "/")} の出勤予定`}</div>
         </div>
         <div className="kiosk-right">
-          <video ref={videoRef} className="kiosk-cam" muted playsInline />
+          <video ref={videoRef} className={"kiosk-cam" + (camOn ? "" : " off")} muted playsInline />
           <div className="kiosk-clock en">{clock}</div>
         </div>
       </header>
+
+      {!camOn && (
+        <div className="kiosk-note">
+          <span>
+            {camErr
+              ? "カメラがブロックされています。画面の色フィルター（ブルーライト軽減/読書灯/夜間モード）をオフにして、下のボタンを押してください。※写真なしでも打刻はできます。"
+              : "カメラ起動中… 写真なしでも打刻はできます。"}
+          </span>
+          <button type="button" className="btn-outline" style={{ fontSize: 13 }} onClick={startCamera}>
+            カメラを有効にする
+          </button>
+        </div>
+      )}
 
       {error ? (
         <div className="kiosk-empty">{error}</div>

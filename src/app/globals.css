@@ -2257,6 +2257,13 @@ body {
   border: 1px solid var(--line-strong); background: #000; transform: scaleX(-1); /* 鏡像 */
 }
 .kiosk-clock { font-size: 30px; font-weight: 700; letter-spacing: 0.02em; }
+.kiosk-cam.off { opacity: 0.35; }
+.kiosk-note {
+  display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+  background: color-mix(in oklab, #94560e 8%, #fff); border: 1px solid color-mix(in oklab, #94560e 30%, transparent);
+  color: #7a4e0e; border-radius: 10px; padding: 10px 14px; font-size: 13.5px; margin-bottom: 14px;
+}
+.kiosk-note button { flex: none; }
 .kiosk-grid {
   display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
   gap: 14px;
