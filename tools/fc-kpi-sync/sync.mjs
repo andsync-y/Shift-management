@@ -59,21 +59,6 @@ async function login(page) {
   await page.goto(FC_LOGIN_URL, { waitUntil: "domcontentloaded" });
   await page.waitForTimeout(1500);
 
-  // デバッグ: 入力欄・ボタンを列挙（ログでセレクタを確認するため）
-  try {
-    const fields = await page.$$eval("input", (els) =>
-      els.map((e) => ({ name: e.name, type: e.type, id: e.id, ph: e.placeholder }))
-    );
-    const buttons = await page.$$eval("button, input[type=submit], [role=button], a", (els) =>
-      els.slice(0, 40).map((e) => ({ tag: e.tagName, type: e.type || "", text: (e.innerText || e.value || "").trim().slice(0, 24) }))
-    );
-    console.log("LOGIN URL:", page.url());
-    console.log("LOGIN FIELDS:", JSON.stringify(fields));
-    console.log("LOGIN BUTTONS:", JSON.stringify(buttons));
-  } catch (e) {
-    console.warn("debug dump 失敗:", e.message);
-  }
-
   await page.fill(SELECTORS.user, FC_USER).catch((e) => console.warn("user fill 失敗:", e.message));
   await page.fill(SELECTORS.pass, FC_PASS).catch((e) => console.warn("pass fill 失敗:", e.message));
 
@@ -204,23 +189,12 @@ async function extractYesterday(page) {
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.waitForTimeout(1500);
 
-    // デバッグ: 来店記録ページのCSV/ダウンロード系ボタンを列挙
-    try {
-      const dl = await page.$$eval("button, a, [role=button]", (els) =>
-        els
-          .map((e) => ({ tag: e.tagName, text: (e.innerText || e.value || "").trim().slice(0, 24), dl: e.getAttribute("download") }))
-          .filter((x) => /csv|ダウンロード|エクスポート|export|download/i.test(x.text) || x.dl !== null)
-          .slice(0, 20)
-      );
-      console.log("来店記録 DOWNLOAD候補:", JSON.stringify(dl));
-    } catch {}
-
+    // 「CSVダウンロード」ボタン（確認済み）を優先。念のため候補も並べる。
     const dlSelectors = [
-      'a[download]',
       'button:has-text("CSVダウンロード")',
+      'a[download]',
       'button:has-text("CSV出力")',
       'button:has-text("エクスポート")',
-      'a:has-text("CSV")',
       'button:has-text("ダウンロード")',
       'button:has-text("CSV")',
     ];
