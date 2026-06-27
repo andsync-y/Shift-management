@@ -21,13 +21,21 @@ type Data = { year: number; month: number; shifts: Shift[]; staff: Profile[]; ti
 // このページ専用の印刷CSS（A4横・toolbar非表示・色を保持）。
 const PRINT_CSS = `
 @media print {
-  @page { size: A4 landscape; margin: 7mm; }
+  @page { size: A4 landscape; margin: 6mm; }
   body { background: #fff; }
   .no-print { display: none !important; }
-  .kprint-cal .cal-toolbar { display: none !important; }
+  .kprint { padding: 0 !important; }
+  .kprint-head { margin: 0 0 5px !important; }
+  .kprint-head h1 { font-size: 14px !important; }
+  /* 1枚に収めるため圧縮＋凡例は省略 */
+  .kprint-cal .cal-toolbar, .kprint-cal .legend { display: none !important; }
   .kprint-cal .cal-scroll, .kprint-cal .cal-grid, .kprint-cal .cal-weeks { overflow: visible !important; }
-  .kprint-cal .cal-cell { min-height: 0 !important; padding: 3px 4px 4px !important; }
-  .kprint-cal .evt { font-size: 9px !important; padding: 2px 4px !important; }
+  .kprint-cal .cal-dow { font-size: 9px !important; }
+  .kprint-cal .cal-cell { min-height: 0 !important; padding: 2px 3px 3px !important; gap: 1px !important; }
+  .kprint-cal .cal-daynum { font-size: 10px !important; }
+  .kprint-cal .cal-events { gap: 1px !important; }
+  .kprint-cal .evt { font-size: 8px !important; padding: 1px 3px !important; line-height: 1.2 !important; border-left-width: 2px !important; }
+  .kprint-cal .evt .mk { font-size: 7px !important; }
   .kprint, .kprint * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
 }
 `;
