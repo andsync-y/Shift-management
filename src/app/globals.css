@@ -2357,15 +2357,20 @@ body {
   .month-nav { width: 100%; }
   .tc-row {
     grid-template-columns: 1fr 1fr;
-    grid-template-areas: "name badge" "in out" "act act";
-    column-gap: 10px;
+    grid-template-areas: "name badge" "in out" "save del";
+    column-gap: 8px;
     row-gap: 6px;
   }
   .tc-row > .tc-name { grid-area: name; }
-  .tc-row > .tc-dt:nth-of-type(1) { grid-area: in; }
-  .tc-row > .arrow { display: none; }
-  .tc-row > .tc-dt:nth-of-type(2) { grid-area: out; }
   .tc-row > .tc-badge { grid-area: badge; justify-content: flex-end; }
+  .tc-row > .arrow { display: none; }
+  .tc-row > .tc-dt:nth-of-type(1) { grid-area: in; }
+  .tc-row > .tc-dt:nth-of-type(2) { grid-area: out; }
+  /* 入力欄・ボタンとも列幅いっぱいに揃える（出勤=保存の上 / 退勤=削除の上） */
+  .tc-row > .tc-dt { width: 100%; box-sizing: border-box; }
+  .tc-row > .btn-mini:not(.ink) { grid-area: save; }
+  .tc-row > .btn-mini.ink { grid-area: del; }
+  .tc-row > .btn-mini { width: 100%; box-sizing: border-box; }
 }
 
 /* LIFF 打刻ページ */
