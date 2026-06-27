@@ -5,6 +5,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { pushLineMessage, pushLineDetailed } from "@/lib/line";
 import { startOfferForApprovedRequest } from "@/lib/offers/engine";
+import { runShiftReminder } from "@/lib/line/shift-reminder";
 
 // LINE通知の疎通テスト（オーナー自身へ送る）。原因切り分け用。
 export async function testLinePush(): Promise<{ ok: boolean; message: string }> {
@@ -38,6 +39,23 @@ export async function testLinePush(): Promise<{ ok: boolean; message: string }> 
         ? "→ 400: 送信先userIdが不正、または『LINEログイン』と『Messaging API』のチャネルが別プロバイダ、もしくは公式アカウントを友だち未追加の可能性。"
         : "";
   return { ok: false, message: `送信失敗（status=${res.status ?? "?"}）：${res.error ?? ""}\n${hint}` };
+}
+
+// 「明日のシフト」連絡を今すぐ手動送信する（オーナー用）。
+// 定時cronが送れなかった（LINE上限等）ときの再送に使う。※二重送信の抑止は無い。
+export async function sendTomorrowShiftReminder(): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  try {
+    const r = await runShiftReminder(createAdminClient());
+    if (r.sent === 0) {
+      const why = r.note ?? (r.noLine ? `LINE未連携 ${r.noLine}名` : "送信対象なし");
+      return { ok: false, message: `送信0件（${r.date}）：${why}` };
+    }
+    const extra = r.noLine ? `（LINE未連携 ${r.noLine}名は除く）` : "";
+    return { ok: true, message: `${r.label} のシフトを ${r.sent}名へ送信しました${extra}。` };
+  } catch (e) {
+    return { ok: false, message: `送信失敗：${e instanceof Error ? e.message : String(e)}` };
+  }
 }
 
 export async function reviewRequest(

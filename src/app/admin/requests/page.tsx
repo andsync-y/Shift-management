@@ -12,6 +12,7 @@ import {
 import RequestActions from "./RequestActions";
 import CleanupShiftsButton from "./CleanupShiftsButton";
 import LineTestButton from "./LineTestButton";
+import ShiftReminderButton from "./ShiftReminderButton";
 
 function fmtRange(r: TimeOffRequest): string {
   if (!r.start_time || !r.end_time) return "終日";
@@ -171,7 +172,8 @@ export default async function AdminRequestsPage({
       <div className="section">
         <div className="section-head">
           <h2>人員カバー分析</h2>
-          <span style={{ display: "flex", alignItems: "center", gap: 12 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <ShiftReminderButton />
             <LineTestButton />
             <span className="eyebrow">Coverage Alert</span>
           </span>
