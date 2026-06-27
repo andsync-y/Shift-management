@@ -51,10 +51,10 @@ const STAFF = [
     min: 28,
     max: 40,
     color: "#e8380d",
-    // 遅番(13-22)希望・土日可・週4〜5
+    // 遅番(12:30-22)希望・土日可・週4〜5
     availability: [0, 1, 2, 3, 4, 5, 6].map((d) => ({
       day_of_week: d,
-      start_time: "13:00",
+      start_time: "12:30",
       end_time: "22:00",
       preference: "preferred",
     })),
@@ -84,7 +84,7 @@ const STAFF = [
     // 遅番中心・週3〜5（体力配慮で当面は下限）
     availability: [0, 1, 2, 3, 4, 5, 6].map((d) => ({
       day_of_week: d,
-      start_time: "13:00",
+      start_time: "12:30",
       end_time: "22:00",
       preference: "available",
     })),
@@ -113,11 +113,11 @@ const STAFF = [
     min: 20,
     max: 25,
     color: "#0891b2",
-    // 火木金:早短10-15 / 水:遅番13-22 / 日:出勤可 / 土:不可（月は登録しない）
+    // 火木金:早短9:30-15 / 水:遅番12:30-22 / 日:出勤可 / 土:不可（月は登録しない）
     availability: [
       { day_of_week: 0, start_time: "09:30", end_time: "19:00", preference: "available" }, // 日(日による)
       { day_of_week: 2, start_time: "09:30", end_time: "15:00", preference: "available" }, // 火 早短
-      { day_of_week: 3, start_time: "13:00", end_time: "22:00", preference: "preferred" }, // 水 遅番
+      { day_of_week: 3, start_time: "12:30", end_time: "22:00", preference: "preferred" }, // 水 遅番
       { day_of_week: 4, start_time: "09:30", end_time: "15:00", preference: "available" }, // 木 早短
       { day_of_week: 5, start_time: "09:30", end_time: "15:00", preference: "available" }, // 金 早短
     ],

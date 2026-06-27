@@ -42,7 +42,7 @@ const supabase = createClient(url, serviceKey, {
 // シフト種別 → 時刻
 const SHIFT = {
   early: { start: "09:30", end: "19:00" }, // 早番
-  late: { start: "13:00", end: "22:00" }, // 遅番
+  late: { start: "12:30", end: "22:00" }, // 遅番
   short_5h: { start: "09:30", end: "15:00" }, // 早短5h
   short_6h: { start: "09:30", end: "16:00" }, // 早短6h
 };

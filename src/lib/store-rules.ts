@@ -80,7 +80,7 @@ function json<T>(key: string, fallback: T): T {
 // --- 既定値（環境変数未設定時のフォールバック） ----------------------
 const DEFAULT_SHIFT_TYPES: ShiftTypeRule[] = [
   { id: "early", name: "早番", start: "09:30", end: "19:00", workHours: 8, breakMinutes: 60 },
-  { id: "late", name: "遅番", start: "13:00", end: "22:00", workHours: 8, breakMinutes: 60 },
+  { id: "late", name: "遅番", start: "12:30", end: "22:00", workHours: 8, breakMinutes: 60 },
   { id: "short_5h", name: "早短5h", start: "09:30", end: "15:00", workHours: 5, breakMinutes: 0 },
   { id: "short_6h", name: "早短6h", start: "09:30", end: "16:00", workHours: 6, breakMinutes: 0 },
 ];

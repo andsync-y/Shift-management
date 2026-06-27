@@ -80,11 +80,11 @@ export async function deleteRequirement(id: string, periodId: string) {
 }
 
 // 基本パターン（全曜日: 早番2名・遅番2名）の必要人数を組み立てる。
-// 時間帯は店舗ルールの早番/遅番（既定 10:00–19:00 / 13:00–22:00）を使う。
+// 時間帯は店舗ルールの早番/遅番（既定 09:30–19:00 / 12:30–22:00）を使う。
 function defaultRequirementRows(periodId: string) {
   const rules = getStoreRules();
-  const early = rules.shiftTypes.find((t) => t.id === "early") ?? { start: "10:00", end: "19:00" };
-  const late = rules.shiftTypes.find((t) => t.id === "late") ?? { start: "13:00", end: "22:00" };
+  const early = rules.shiftTypes.find((t) => t.id === "early") ?? { start: "09:30", end: "19:00" };
+  const late = rules.shiftTypes.find((t) => t.id === "late") ?? { start: "12:30", end: "22:00" };
   const slots = [
     { start: early.start, end: early.end, required: 2 }, // 早番 2名
     { start: late.start, end: late.end, required: 2 }, // 遅番 2名
