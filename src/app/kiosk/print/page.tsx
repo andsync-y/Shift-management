@@ -1,11 +1,11 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { DAY_LABELS_JA, type Profile, type Shift, type TimeOffRequest } from "@/lib/types";
-import { displayName } from "@/lib/display-name";
+import ShiftCalendarView from "@/components/ShiftCalendarView";
+import type { Profile, Shift, TimeOffRequest } from "@/lib/types";
 
-// タブレット（キオスク）からのシフト表印刷。/api/kiosk/shifts を取得し、
-// スタッフ×日のマトリクスを印刷レイアウトで表示 → window.print()（Brother iPrint&Scan 等で印刷）。
+// タブレット（キオスク）からのシフト表印刷。
+// kioskに出ているカレンダー表示（ShiftCalendarView）そのままを A4横で印刷する。
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -17,6 +17,20 @@ function monthShift(month: string, delta: number): string {
 }
 
 type Data = { year: number; month: number; shifts: Shift[]; staff: Profile[]; timeOff: TimeOffRequest[] };
+
+// このページ専用の印刷CSS（A4横・toolbar非表示・色を保持）。
+const PRINT_CSS = `
+@media print {
+  @page { size: A4 landscape; margin: 7mm; }
+  body { background: #fff; }
+  .no-print { display: none !important; }
+  .kprint-cal .cal-toolbar { display: none !important; }
+  .kprint-cal .cal-scroll, .kprint-cal .cal-grid, .kprint-cal .cal-weeks { overflow: visible !important; }
+  .kprint-cal .cal-cell { min-height: 0 !important; padding: 3px 4px 4px !important; }
+  .kprint-cal .evt { font-size: 9px !important; padding: 2px 4px !important; }
+  .kprint, .kprint * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+}
+`;
 
 export default function KioskPrintPage() {
   const [token, setToken] = useState<string | null>(null);
@@ -52,38 +66,10 @@ export default function KioskPrintPage() {
     if (token && month) load(token, month);
   }, [token, month, load]);
 
-  // マトリクス構築
-  const [y, m] = month ? month.split("-").map(Number) : [0, 0];
-  const lastDay = y ? new Date(y, m, 0).getDate() : 0;
-  const days = Array.from({ length: lastDay }, (_, i) => `${y}-${pad(m)}-${pad(i + 1)}`);
-
-  const shiftByKey = new Map<string, Shift[]>();
-  for (const s of data?.shifts ?? []) {
-    const k = `${s.staff_id}|${s.work_date}`;
-    (shiftByKey.get(k) ?? shiftByKey.set(k, []).get(k)!).push(s);
-  }
-  const offByKey = new Set<string>();
-  for (const t of data?.timeOff ?? []) {
-    if (t.request_type === "off" && !t.start_time && !t.end_time) offByKey.add(`${t.staff_id}|${t.off_date}`);
-  }
-  const staffWithShift = (data?.staff ?? []).filter((s) => (data?.shifts ?? []).some((sh) => sh.staff_id === s.id));
-
-  function cell(staffId: string, date: string): string {
-    const ss = shiftByKey.get(`${staffId}|${date}`);
-    if (ss && ss.length) {
-      return ss
-        .sort((a, b) => a.start_time.localeCompare(b.start_time))
-        .map((s) => `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`)
-        .join(" / ");
-    }
-    if (offByKey.has(`${staffId}|${date}`)) return "休";
-    return "";
-  }
-  const weekday = (date: string) => DAY_LABELS_JA[new Date(date + "T00:00:00").getDay()];
-  const dnum = (date: string) => Number(date.slice(8, 10));
-
   return (
-    <div className="print-root">
+    <div className="kprint" style={{ padding: "14px 18px 28px" }}>
+      <style>{PRINT_CSS}</style>
+
       <div className="print-controls no-print">
         <a href="/kiosk" className="btn-outline">← 戻る</a>
         <span className="seg" role="group">
@@ -92,60 +78,30 @@ export default function KioskPrintPage() {
         </span>
         <button className="btn-fill" onClick={() => window.print()}>🖨 印刷</button>
         <span className="help" style={{ margin: 0 }}>
-          Brother iPrint&amp;Scan 等で印刷（横向き A4 推奨）
+          A4横で印刷（Brother iPrint&amp;Scan 等）。向きが縦のときは印刷ダイアログで「横」を選んでください。
         </span>
+      </div>
+
+      <div className="kprint-head" style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", margin: "8px 2px 12px" }}>
+        <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>
+          {data ? `${data.year}年${data.month}月` : month} シフト表
+        </h1>
+        <span style={{ fontSize: 13, color: "var(--ink-2)" }}>全力ストレッチ岐阜長良店</span>
       </div>
 
       {err ? (
         <div style={{ padding: 40, textAlign: "center", color: "var(--ink-2)" }}>{err}</div>
       ) : !data ? (
         <div style={{ padding: 40, textAlign: "center", color: "var(--ink-2)" }}>読み込み中…</div>
-      ) : staffWithShift.length === 0 ? (
-        <div style={{ padding: 40, textAlign: "center", color: "var(--ink-2)" }}>
-          {y}年{m}月のシフトはありません。
-        </div>
       ) : (
-        <div className="print-sheet landscape">
-          <div className="print-head">
-            <h1>
-              {y}年{m}月 シフト表
-            </h1>
-            <div className="print-store">全力ストレッチ岐阜長良店</div>
-          </div>
-          <table className="print-table">
-            <thead>
-              <tr>
-                <th className="pt-name">スタッフ</th>
-                {days.map((d) => {
-                  const w = weekday(d);
-                  const cls = w === "日" ? "sun" : w === "土" ? "sat" : "";
-                  return (
-                    <th key={d} className={cls}>
-                      {dnum(d)}
-                      <span className="pt-w">{w}</span>
-                    </th>
-                  );
-                })}
-              </tr>
-            </thead>
-            <tbody>
-              {staffWithShift.map((s) => (
-                <tr key={s.id}>
-                  <th className="pt-name">{displayName(s)}</th>
-                  {days.map((d) => {
-                    const v = cell(s.id, d);
-                    const w = weekday(d);
-                    const cls = (w === "日" ? "sun" : w === "土" ? "sat" : "") + (v === "休" ? " off" : "");
-                    return (
-                      <td key={d} className={cls}>
-                        {v}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="kprint-cal">
+          <ShiftCalendarView
+            year={data.year}
+            month={data.month}
+            shifts={data.shifts}
+            staff={data.staff}
+            timeOff={data.timeOff}
+          />
         </div>
       )}
     </div>
