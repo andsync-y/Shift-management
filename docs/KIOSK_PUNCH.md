@@ -30,8 +30,10 @@
   - 保持先：Storage バケット **`documents`**（非公開・migration 0030）。固定パス
     `counseling` / `ticket-terms` に upsert で差し替え（URL不変）。
   - アップロード：管理画面 **「運営 > 店舗書類」**（`/admin/documents`、オーナー専用）。PDF/画像可。
-  - 表示・印刷：`/kiosk/doc/[type]` が `/api/kiosk/doc?token=...&type=...`（KIOSK_TOKEN保護・同一
-    オリジン配信）を iframe 表示 → 「🖨 印刷」で iframe を印刷（Brother iPrint&Scan 等）。
+  - 表示・印刷：`/kiosk/doc/[type]`。`/api/kiosk/doc?token=...&type=...`（KIOSK_TOKEN保護・同一
+    オリジン配信）を取得し、**PDFは PDF.js で各ページを canvas に描画**してページ内に表示、画像は
+    `<img>` で表示 → 「🖨 印刷」で `window.print()`（Brother iPrint&Scan 等）。
+    ※ Android Chrome は PDF を iframe 表示できないため、PDF.js で描画している（worker は jsDelivr CDN）。
 - token 未設定の端末（例: PCでtoken無しで開いた）では設定案内を表示する。
 - ヘッダーの **「🖨 シフト表を印刷」** → `/kiosk/print`。**kioskと同じカレンダー表示（`ShiftCalendarView`）
   そのまま**を **A4横**で印刷する（ページ専用 `@page { size: A4 landscape }`、印刷時は toolbar 非表示・色保持）。
