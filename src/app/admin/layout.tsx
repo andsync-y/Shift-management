@@ -23,6 +23,7 @@ const GROUPS: NavGroup[] = [
     label: "経理",
     items: [
       { href: "/admin/accounting", label: "月次P&L" },
+      { href: "/admin/accounting/fixed-costs", label: "固定費" },
       { href: "/admin/accounting/sales", label: "売上入力" },
       { href: "/admin/accounting/cards", label: "カード明細" },
       { href: "/admin/accounting/receipts", label: "領収書" },

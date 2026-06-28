@@ -65,6 +65,20 @@
 - Supabase Storage に **`receipts` バケット**（非公開）を作成。
 - マイグレーション 0020→0021→0022→0023→0024 を適用。
 
+## 固定費と経常利益（migration 0033）
+
+毎月の定額費用（家賃・ロイヤリティ・広告・光熱費・借入返済 等）を `fixed_costs` に登録し、月次P&Lに反映する。
+
+- テーブル `fixed_costs`：`name / amount / category / pl_expense / start_month / end_month / sort_order`。
+  - `pl_expense=false`（借入返済など）は**経常利益から除外**し、キャッシュ収支でのみ控除。
+  - `start_month`〜`end_month` で適用月を限定（例：リジョブ〜2026-07、公庫2026-08〜）。
+- 管理画面「経理 > 固定費」（`/admin/accounting/fixed-costs`）で追加・編集・削除。
+- 月次P&L（`/admin/accounting`）に列を追加：
+  - **経常利益 ＝ 売上 − 販管費(カード) − 固定費(経費) − 人件費**
+  - **月次収支 ＝ 経常利益 − 借入返済**（現金ベースの手残り目安）
+- 集計ヘルパー：`src/lib/accounting/fixed-costs.ts`（`isActiveFixedCost` / `sumFixedCosts`）。
+- ⚠️ カード明細に既にある費用を固定費にも入れると**二重計上**になる（どちらか一方に）。
+
 ## 未実装・今後
 
 - 管理画面UI（領収書アップロード/確認・カード明細CSV取込・EC注文取込・P&Lダッシュボード）。
