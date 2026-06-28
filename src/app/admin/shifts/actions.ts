@@ -45,7 +45,7 @@ export async function createPeriod(_prev: unknown, formData: FormData) {
     };
   }
 
-  // 新しい月は基本パターン（早番2名・遅番2名 × 全曜日）を自動で入れておく。
+  // 新しい月は基本パターン（曜日別・火木薄め・土日厚め）を自動で入れておく。
   await supabase.from("shift_requirements").insert(defaultRequirementRows(created.id));
 
   revalidatePath("/admin/shifts");
@@ -79,27 +79,21 @@ export async function deleteRequirement(id: string, periodId: string) {
   revalidatePath(`/admin/shifts/${periodId}`);
 }
 
-// 基本パターン（全曜日: 早番2名・遅番2名）の必要人数を組み立てる。
+// 基本パターン（曜日別の必要人数）。1週間の実績＋スタッフ稼働制約から、
+// 火木は薄め(早1遅1)、平日他は早2遅1、土日(特に新規多い日曜)は厚め、で組む。
 // 時間帯は店舗ルールの早番/遅番（既定 09:30–19:00 / 12:30–22:00）を使う。
+// day_of_week: 0=日 1=月 2=火 3=水 4=木 5=金 6=土
+const EARLY_BY_DOW: Record<number, number> = { 0: 2, 1: 2, 2: 1, 3: 2, 4: 1, 5: 2, 6: 2 };
+const LATE_BY_DOW: Record<number, number> = { 0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2 };
+
 function defaultRequirementRows(periodId: string) {
   const rules = getStoreRules();
   const early = rules.shiftTypes.find((t) => t.id === "early") ?? { start: "09:30", end: "19:00" };
   const late = rules.shiftTypes.find((t) => t.id === "late") ?? { start: "12:30", end: "22:00" };
-  const slots = [
-    { start: early.start, end: early.end, required: 2 }, // 早番 2名
-    { start: late.start, end: late.end, required: 2 }, // 遅番 2名
-  ];
   const rows = [];
   for (let dow = 0; dow < 7; dow++) {
-    for (const s of slots) {
-      rows.push({
-        period_id: periodId,
-        day_of_week: dow,
-        start_time: s.start,
-        end_time: s.end,
-        required_staff: s.required,
-      });
-    }
+    rows.push({ period_id: periodId, day_of_week: dow, start_time: early.start, end_time: early.end, required_staff: EARLY_BY_DOW[dow] });
+    rows.push({ period_id: periodId, day_of_week: dow, start_time: late.start, end_time: late.end, required_staff: LATE_BY_DOW[dow] });
   }
   return rows;
 }
@@ -111,7 +105,7 @@ export async function applyDefaultRequirements(periodId: string) {
   await supabase.from("shift_requirements").delete().eq("period_id", periodId);
   await supabase.from("shift_requirements").insert(defaultRequirementRows(periodId));
   revalidatePath(`/admin/shifts/${periodId}`);
-  return { ok: true, message: "基本パターン（早番2名・遅番2名 × 全曜日）を設定しました。" };
+  return { ok: true, message: "基本パターン（火木は早1遅1・平日他は早2遅1・土日は厚め）を設定しました。" };
 }
 
 // 最低人数パターン：店に誰もいない時間を作らない最小構成。

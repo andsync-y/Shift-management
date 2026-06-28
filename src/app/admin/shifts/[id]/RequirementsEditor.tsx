@@ -27,7 +27,7 @@ export default function RequirementsEditor({
   function handleApplyDefault() {
     if (
       !confirm(
-        "現在の必要人数を消して、基本パターン（早番2名・遅番2名 × 全曜日）を設定します。よろしいですか？"
+        "現在の必要人数を消して、基本パターン（曜日別：火木は早1遅1・平日他は早2遅1・土日は厚め）を設定します。よろしいですか？"
       )
     )
       return;
@@ -91,7 +91,7 @@ export default function RequirementsEditor({
           className="btn-outline"
           disabled={pending}
         >
-          基本パターンを適用（早番2・遅番2 × 全曜日）
+          基本パターンを適用（曜日別：火木薄め・土日厚め）
         </button>
       </form>
 
