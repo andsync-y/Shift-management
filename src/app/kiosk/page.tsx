@@ -133,8 +133,8 @@ export default function KioskPage() {
       stopCamera();
       return undefined;
     }
-    // 撮影後もプレビューを約3秒残してからカメラを止める
-    hideTimer.current = setTimeout(stopCamera, 3000);
+    // 撮影後もプレビューを約2秒残してからカメラを止める
+    hideTimer.current = setTimeout(stopCamera, 2000);
     return dataUrl;
   }, [stopCamera]);
 
