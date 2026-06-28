@@ -24,28 +24,19 @@ export default function KpiPanel({ data, asOf }: { data: FcKpiData; asOf?: strin
 
       {hasMonth && (
         <div className="kpi-stats">
-          <div className="kpi-card">
+          <div className="kpi-card kpi-sales">
             <div className="kpi-k">当月 売上</div>
-            <div className="kpi-v">{yen(m.sales)}</div>
+            <div className="kpi-sales-row">
+              <div className="kpi-v">{yen(m.sales)}</div>
+              {(m.treatmentSales != null || m.couponSales != null || m.designationSales != null) && (
+                <div className="kpi-breakdown">
+                  {m.treatmentSales != null && <div>施術売上 {yen(m.treatmentSales)}</div>}
+                  {m.couponSales != null && <div>回数券売上 {yen(m.couponSales)}</div>}
+                  {m.designationSales != null && <div>指名 {yen(m.designationSales)}</div>}
+                </div>
+              )}
+            </div>
           </div>
-          {m.treatmentSales != null && (
-            <div className="kpi-card">
-              <div className="kpi-k">施術売上</div>
-              <div className="kpi-v">{yen(m.treatmentSales)}</div>
-            </div>
-          )}
-          {m.couponSales != null && (
-            <div className="kpi-card">
-              <div className="kpi-k">回数券売上</div>
-              <div className="kpi-v">{yen(m.couponSales)}</div>
-            </div>
-          )}
-          {m.designationSales != null && (
-            <div className="kpi-card">
-              <div className="kpi-k">指名売上</div>
-              <div className="kpi-v">{yen(m.designationSales)}</div>
-            </div>
-          )}
           <div className="kpi-card">
             <div className="kpi-k">新規販売</div>
             <div className="kpi-v">
