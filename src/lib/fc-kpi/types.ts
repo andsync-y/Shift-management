@@ -16,6 +16,7 @@ export interface FcKpiData {
     newRate?: number; // 新規販売率 0-1
     nominationCount?: number; // 指名数
     nominationRate?: number; // 指名率 0-1
+    staffNominations?: { name: string; count: number }[]; // 担当別の指名数（給与の指名本数 取込用）
   };
 }
 

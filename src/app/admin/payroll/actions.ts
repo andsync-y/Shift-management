@@ -23,3 +23,49 @@ export async function setNominationCount(
   revalidatePath("/admin/payroll");
   return { ok: true };
 }
+
+// 本部KPI（最新スナップショット）の担当別 指名数を、当月の指名本数として一括取込する。
+export async function applyFcNominations(
+  month: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+  const supabase = await createClient();
+
+  const { data: snap } = await supabase
+    .from("fc_kpi")
+    .select("data")
+    .order("as_of", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const m = (snap as { data?: { month?: { month?: string; staffNominations?: { name: string; count: number }[] } } } | null)?.data?.month;
+  if (!m || m.month !== month || !Array.isArray(m.staffNominations)) {
+    return {
+      ok: false,
+      message: `本部の${month}の指名数データがありません。先に「店舗KPI」の取得（日次ジョブ）を実行してください。`,
+    };
+  }
+
+  const { data: staff } = await supabase.from("profiles").select("id, full_name, display_name").eq("role", "staff");
+  const byName = new Map<string, string>();
+  for (const s of (staff ?? []) as { id: string; full_name: string; display_name: string | null }[]) {
+    if (s.display_name) byName.set(s.display_name.trim(), s.id);
+    byName.set(s.full_name.trim(), s.id);
+  }
+
+  const rows: { staff_id: string; month: string; count: number }[] = [];
+  const unmatched: string[] = [];
+  for (const x of m.staffNominations) {
+    const id = byName.get((x.name ?? "").trim());
+    if (id) rows.push({ staff_id: id, month, count: Math.max(0, Math.round(x.count) || 0) });
+    else if (x.name) unmatched.push(x.name);
+  }
+  if (rows.length) {
+    const { error } = await supabase.from("nomination_counts").upsert(rows, { onConflict: "staff_id,month" });
+    if (error) return { ok: false, message: `取込に失敗: ${error.message}` };
+  }
+
+  revalidatePath("/admin/payroll");
+  const warn = unmatched.length ? `（未一致: ${unmatched.join("・")}）` : "";
+  return { ok: true, message: `FCの指名数を ${rows.length}名 取り込みました${warn}。` };
+}

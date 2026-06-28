@@ -5,6 +5,7 @@ import { displayName } from "@/lib/display-name";
 import { computePayroll, hhmm, type PayrollRecord } from "@/lib/payroll";
 import NominationInput from "./NominationInput";
 import TransferPanel from "./TransferPanel";
+import FinalizeButton from "./FinalizeButton";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -115,7 +116,13 @@ export default async function PayrollPage({
       <div className="section">
         <div className="section-head">
           <h2>スタッフ別 給与</h2>
-          <span className="eyebrow">合計 {yen(totalGross)}</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <FinalizeButton month={month} />
+            <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px" }} href={`/admin/payroll/print?month=${month}`}>
+              🖨 給与明細を印刷
+            </a>
+            <span className="eyebrow">合計 {yen(totalGross)}</span>
+          </span>
         </div>
         <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
           {rows.length === 0 ? (

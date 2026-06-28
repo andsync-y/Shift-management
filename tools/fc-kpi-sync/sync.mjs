@@ -144,6 +144,18 @@ async function extractMonth(page) {
     designationSales = toNum(gb("指名"));
   }
 
+  // 担当別の指名数（給与の指名本数 自動入力用）
+  const staffNominations = [];
+  const ts = await readTable(page, ["担当", "指名数"]);
+  if (ts) {
+    const iN = colIndex(ts.headers, "担当");
+    const iNom = colIndex(ts.headers, "指名数");
+    for (const r of ts.rows) {
+      const name = (r[iN] || "").replace(/\s+/g, " ").trim();
+      if (name) staffNominations.push({ name, count: toNum(r[iNom]) ?? 0 });
+    }
+  }
+
   return {
     month,
     sales: toNum(get("売上")),
@@ -154,6 +166,7 @@ async function extractMonth(page) {
     newRate: toRate(get("新規販売率")),
     nominationCount: toNum(get("指名数")),
     nominationRate: toRate(get("指名率")),
+    staffNominations,
   };
 }
 
