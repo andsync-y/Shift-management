@@ -36,6 +36,9 @@ export default function KpiForm({ initial, asOf }: { initial: FcKpiData; asOf: s
           <div className="profile-grid">
             <div className="field"><label>対象月(YYYY-MM)</label><input name="month" className="input en" defaultValue={m.month ?? ""} placeholder="2026-06" /></div>
             <div className="field"><label>売上（円）</label><input name="sales" type="number" className="input" defaultValue={m.sales ?? ""} /></div>
+            <div className="field"><label>施術売上（円）</label><input name="treatmentSales" type="number" className="input" defaultValue={m.treatmentSales ?? ""} /></div>
+            <div className="field"><label>回数券売上（円）</label><input name="couponSales" type="number" className="input" defaultValue={m.couponSales ?? ""} /></div>
+            <div className="field"><label>指名売上（円）</label><input name="designationSales" type="number" className="input" defaultValue={m.designationSales ?? ""} /></div>
             <div className="field"><label>新規販売数</label><input name="newCount" type="number" className="input" defaultValue={m.newCount ?? ""} /></div>
             <div className="field"><label>新規販売率（%）</label><input name="newRate" type="number" step="0.1" className="input" defaultValue={pctVal(m.newRate)} /></div>
             <div className="field"><label>指名数</label><input name="nominationCount" type="number" className="input" defaultValue={m.nominationCount ?? ""} /></div>

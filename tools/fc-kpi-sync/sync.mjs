@@ -130,9 +130,26 @@ async function extractMonth(page) {
   if (!t || t.rows.length === 0) return { month, sales: null, newCount: null, newRate: null, nominationCount: null, nominationRate: null };
   const r = t.rows[0];
   const get = (name) => r[colIndex(t.headers, name)];
+
+  // 売上内訳（施術 / 回数券 / 指名）を別テーブルから読む。
+  let treatmentSales = null,
+    couponSales = null,
+    designationSales = null;
+  const tb = await readTable(page, ["施術", "回数券"]);
+  if (tb && tb.rows.length) {
+    const rb = tb.rows[0];
+    const gb = (name) => rb[colIndex(tb.headers, name)];
+    treatmentSales = toNum(gb("施術"));
+    couponSales = toNum(gb("回数券"));
+    designationSales = toNum(gb("指名"));
+  }
+
   return {
     month,
     sales: toNum(get("売上")),
+    treatmentSales,
+    couponSales,
+    designationSales,
     newCount: toNum(get("新規販売数")),
     newRate: toRate(get("新規販売率")),
     nominationCount: toNum(get("指名数")),

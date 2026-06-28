@@ -28,6 +28,24 @@ export default function KpiPanel({ data, asOf }: { data: FcKpiData; asOf?: strin
             <div className="kpi-k">当月 売上</div>
             <div className="kpi-v">{yen(m.sales)}</div>
           </div>
+          {m.treatmentSales != null && (
+            <div className="kpi-card">
+              <div className="kpi-k">施術売上</div>
+              <div className="kpi-v">{yen(m.treatmentSales)}</div>
+            </div>
+          )}
+          {m.couponSales != null && (
+            <div className="kpi-card">
+              <div className="kpi-k">回数券売上</div>
+              <div className="kpi-v">{yen(m.couponSales)}</div>
+            </div>
+          )}
+          {m.designationSales != null && (
+            <div className="kpi-card">
+              <div className="kpi-k">指名売上</div>
+              <div className="kpi-v">{yen(m.designationSales)}</div>
+            </div>
+          )}
           <div className="kpi-card">
             <div className="kpi-k">新規販売</div>
             <div className="kpi-v">

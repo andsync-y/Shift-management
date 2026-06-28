@@ -9,6 +9,9 @@ export interface FcKpiData {
   month?: {
     month?: string; // "YYYY-MM"
     sales?: number; // 売上（円）
+    treatmentSales?: number; // 施術売上
+    couponSales?: number; // 回数券売上
+    designationSales?: number; // 指名売上
     newCount?: number; // 新規販売数
     newRate?: number; // 新規販売率 0-1
     nominationCount?: number; // 指名数

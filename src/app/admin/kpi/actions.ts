@@ -36,6 +36,9 @@ export async function saveKpi(
     month: {
       month: g("month") || undefined,
       sales: numOr("sales"),
+      treatmentSales: numOr("treatmentSales"),
+      couponSales: numOr("couponSales"),
+      designationSales: numOr("designationSales"),
       newCount: numOr("newCount"),
       newRate: pctOr("newRate"),
       nominationCount: numOr("nominationCount"),
