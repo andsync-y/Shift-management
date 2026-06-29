@@ -312,7 +312,8 @@ export interface ExpandFixedActionResult {
 }
 
 export async function expandFixedShifts(
-  periodId: string
+  periodId: string,
+  ignoreTimeOff = false
 ): Promise<ExpandFixedActionResult> {
   await requireAdmin();
   const supabase = await createClient();
@@ -374,8 +375,8 @@ export async function expandFixedShifts(
     for (const f of fixedList) {
       if (f.day_of_week !== dow) continue;
 
-      // 希望休チェック（終日 or 時間帯重複）
-      const offs = offIndex.get(`${f.staff_id}|${date}`);
+      // 希望休チェック（終日 or 時間帯重複）。ignoreTimeOff のときは無視して全員出勤。
+      const offs = ignoreTimeOff ? null : offIndex.get(`${f.staff_id}|${date}`);
       let isOff = false;
       if (offs) {
         for (const o of offs) {
@@ -416,7 +417,9 @@ export async function expandFixedShifts(
   revalidatePath(`/admin/shifts/${periodId}`);
   return {
     ok: true,
-    message: `固定シフトを展開しました（${rows.length}件作成 / 希望休で${skippedOff}件除外）。`,
+    message: ignoreTimeOff
+      ? `固定シフトを展開しました（${rows.length}件作成 / 希望休を無視して全員出勤）。`
+      : `固定シフトを展開しました（${rows.length}件作成 / 希望休で${skippedOff}件除外）。`,
     created: rows.length,
     skippedOff,
   };
