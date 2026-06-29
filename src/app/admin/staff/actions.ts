@@ -88,7 +88,6 @@ const profileSchema = z.object({
   employment_type: z.enum(["full_time", "part_time"]),
   phone: z.string().trim().optional().or(z.literal("")),
   hourly_wage: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
-  commute_allowance: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
   commute_distance_km: z.coerce.number().nonnegative().max(999).optional().or(z.literal("")),
   contracted_weekly_hours: z.coerce.number().nonnegative().max(168).optional().or(z.literal("")),
   nomination_back_rate: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
@@ -129,8 +128,6 @@ export async function updateStaffProfile(
       employment_type: d.employment_type,
       phone: d.phone ? d.phone : null,
       hourly_wage: d.hourly_wage === "" || d.hourly_wage === undefined ? null : d.hourly_wage,
-      commute_allowance:
-        d.commute_allowance === "" || d.commute_allowance === undefined ? 0 : d.commute_allowance,
       commute_distance_km:
         d.commute_distance_km === "" || d.commute_distance_km === undefined ? null : d.commute_distance_km,
       contracted_weekly_hours:
