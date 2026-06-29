@@ -66,6 +66,9 @@ export interface PayrollResult {
 // 交通費の距離単価（円/km・片道1km）。往復で×2される。
 export const COMMUTE_RATE_PER_KM = 15;
 
+// 指名バック単価（円/指名）。全スタッフ共通の固定額。
+export const NOMINATION_BACK_RATE = 3300;
+
 function overlap(a1: number, a2: number, b1: number, b2: number): number {
   return Math.max(0, Math.min(a2, b2) - Math.max(b1, a1));
 }

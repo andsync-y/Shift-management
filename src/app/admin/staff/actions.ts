@@ -90,7 +90,6 @@ const profileSchema = z.object({
   hourly_wage: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
   commute_distance_km: z.coerce.number().nonnegative().max(999).optional().or(z.literal("")),
   contracted_weekly_hours: z.coerce.number().nonnegative().max(168).optional().or(z.literal("")),
-  nomination_back_rate: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
   bank_code: z.string().trim().optional().or(z.literal("")),
   branch_code: z.string().trim().optional().or(z.literal("")),
   account_type: z.enum(["1", "2"]).default("1"),
@@ -134,8 +133,6 @@ export async function updateStaffProfile(
         d.contracted_weekly_hours === "" || d.contracted_weekly_hours === undefined
           ? null
           : d.contracted_weekly_hours,
-      nomination_back_rate:
-        d.nomination_back_rate === "" || d.nomination_back_rate === undefined ? 0 : d.nomination_back_rate,
       bank_code: d.bank_code ? d.bank_code : null,
       branch_code: d.branch_code ? d.branch_code : null,
       account_type: d.account_type,

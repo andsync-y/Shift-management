@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
-import { computePayroll, hhmm, type PayrollRecord } from "@/lib/payroll";
+import { computePayroll, hhmm, NOMINATION_BACK_RATE, type PayrollRecord } from "@/lib/payroll";
 import NominationInput from "./NominationInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
@@ -69,7 +69,7 @@ export default async function PayrollPage({
   const rows = staff
     .map((s) => {
       const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
-      const rate = s.nomination_back_rate ?? 0;
+      const rate = NOMINATION_BACK_RATE;
       const count = nomCounts.get(s.id) ?? 0;
       const nominationBack = rate * count;
       return { staff: s, pay, rate, count, nominationBack, grossTotal: pay.gross + nominationBack };
@@ -206,8 +206,8 @@ export default async function PayrollPage({
 拘束＝出勤〜退勤の合計（休憩控除前・勤怠管理と一致）／実働＝休憩控除・15分丸め後（賃金の元）。
             休憩自動控除（実働8h超→60分／6h超→45分）・実働は1日ごと15分単位で四捨五入・残業1.25倍（1日8h超）・深夜22:00〜5:00を25%加算で計算。
             時給は期間別（6/8〜6/19は¥1,060／6/20〜7/31は¥1,600・全員一律）、範囲外は各自の時給。
-            交通費は「スタッフ管理」で設定。総支給（額面）まで算出（源泉・社保は未控除）。
-            <strong>指名バック＝指名本数×単価</strong>を総支給に加算（本数はこの表で入力＝自動保存／単価は「スタッフ管理」で設定）。
+            交通費は片道距離(km)から自動計算（「スタッフ管理」で設定）。総支給（額面）まで算出（源泉・社保は未控除）。
+            <strong>指名バック＝指名本数×3,300円（固定）</strong>を総支給に加算（本数はこの表で入力＝自動保存）。
           </p>
           <p className="help" style={{ marginTop: 6, marginBottom: 0 }}>
             <strong>週平均</strong>は月内の各週（月〜日）の実働合計の平均（実績）。社保加入の目安は下の「社会保険 加入判定」を参照。

@@ -97,17 +97,6 @@ export default function ProfileEditor({
           />
         </div>
         <div className="field">
-          <label>指名バック単価（円/指名）</label>
-          <input
-            name="nomination_back_rate"
-            type="number"
-            min={0}
-            className="input"
-            defaultValue={profile.nomination_back_rate ?? 0}
-            placeholder="例: 500（1指名あたり）"
-          />
-        </div>
-        <div className="field">
           <label>銀行コード（4桁）</label>
           <input name="bank_code" type="text" inputMode="numeric" className="input" defaultValue={profile.bank_code ?? ""} placeholder="例: 0009（三井住友）" />
         </div>

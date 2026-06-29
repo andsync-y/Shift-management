@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
-import { computePayroll, hhmm, type PayrollRecord } from "@/lib/payroll";
+import { computePayroll, hhmm, NOMINATION_BACK_RATE, type PayrollRecord } from "@/lib/payroll";
 import PrintBar from "./PrintBar";
 
 function pad(n: number) {
@@ -63,7 +63,7 @@ export default async function PayslipPrintPage({
   const rows = staff
     .map((s) => {
       const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
-      const rate = s.nomination_back_rate ?? 0;
+      const rate = NOMINATION_BACK_RATE;
       const count = nom.get(s.id) ?? 0;
       const back = rate * count;
       return { s, pay, rate, count, back, gross: pay.gross + back };
