@@ -1815,6 +1815,33 @@ body {
   font-size: 14px;
 }
 
+/* 権限・ログインID の読み取り専用メタ枠（編集フォームと分離） */
+.profile-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 48px;
+  padding: 13px 18px;
+  margin-bottom: 22px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+}
+.profile-meta .k {
+  font-size: 11px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin-bottom: 3px;
+}
+.profile-meta .v {
+  font-size: 15px;
+  color: var(--ink);
+  font-weight: 500;
+}
+.profile-meta .v.mono {
+  font-weight: 400;
+  font-size: 14px;
+}
+
 /* カテゴリ分け・コンパクトなプロフィール編集レイアウト */
 .profile-cats {
   display: flex;

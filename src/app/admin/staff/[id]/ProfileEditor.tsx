@@ -17,19 +17,23 @@ export default function ProfileEditor({
 
   return (
     <form action={formAction}>
+      {/* 読み取り専用：権限・ログインID（編集フォームとは別枠） */}
+      <div className="profile-meta">
+        <div>
+          <div className="k">権限</div>
+          <div className="v">{ROLE_LABELS_JA[profile.role]}</div>
+        </div>
+        <div>
+          <div className="k">ログインID</div>
+          <div className="v mono">{loginId ?? "—"}</div>
+        </div>
+      </div>
+
       <div className="profile-cats">
         {/* 基本情報 */}
         <section>
           <h3 className="profile-cat-h">基本情報</h3>
           <div className="profile-cols">
-            <div className="profile-item">
-              <div className="k">権限</div>
-              <div className="v">{ROLE_LABELS_JA[profile.role]}</div>
-            </div>
-            <div className="profile-item">
-              <div className="k">ログインID</div>
-              <div className="v mono">{loginId ?? "—"}</div>
-            </div>
             <div className="field">
               <label>氏名</label>
               <input name="full_name" type="text" className="input" defaultValue={profile.full_name} placeholder="例: 多和田 雄仁" required />
