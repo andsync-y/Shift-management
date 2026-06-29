@@ -165,7 +165,7 @@ export async function generatePeriodShifts(
 
   const [{ data: staff }, { data: availability }, { data: requirements }, { data: timeOff }] =
     await Promise.all([
-      supabase.from("profiles").select("*").eq("is_active", true),
+      supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true),
       supabase.from("availability_preferences").select("*"),
       supabase.from("shift_requirements").select("*").eq("period_id", periodId),
       supabase
@@ -250,7 +250,7 @@ export async function generatePeriodShiftsWithClaude(
   if (!period) return { ok: false, message: "期間が見つかりません。" };
 
   const [{ data: staff }, { data: availability }, { data: timeOff }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("is_active", true),
+    supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true),
     supabase.from("availability_preferences").select("*"),
     supabase
       .from("time_off_requests")
@@ -330,7 +330,7 @@ export async function expandFixedShifts(
   const monthEnd = `${period.year}-${pad(period.month)}-${pad(lastDay)}`;
 
   const [{ data: staff }, { data: fixed }, { data: timeOff }] = await Promise.all([
-    supabase.from("profiles").select("id,is_active").eq("is_active", true),
+    supabase.from("profiles").select("id,is_active").eq("role", "staff").eq("is_active", true),
     supabase.from("fixed_shifts").select("*"),
     supabase
       .from("time_off_requests")
