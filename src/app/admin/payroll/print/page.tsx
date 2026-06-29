@@ -62,7 +62,7 @@ export default async function PayslipPrintPage({
 
   const rows = staff
     .map((s) => {
-      const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0);
+      const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
       const rate = s.nomination_back_rate ?? 0;
       const count = nom.get(s.id) ?? 0;
       const back = rate * count;
@@ -93,7 +93,7 @@ export default async function PayslipPrintPage({
               <tr><td className="k">基本給</td><td className="v">{yen(pay.basePay)}</td></tr>
               <tr><td className="k">残業割増</td><td className="v">{yen(pay.overtimePay)}</td></tr>
               <tr><td className="k">深夜割増</td><td className="v">{yen(pay.nightPay)}</td></tr>
-              <tr><td className="k">交通費</td><td className="v">{yen(pay.commute)}</td></tr>
+              <tr><td className="k">交通費{s.commute_distance_km ? `（${s.commute_distance_km}km×2×15円×${pay.workedDays}日）` : ""}</td><td className="v">{yen(pay.commute)}</td></tr>
               <tr><td className="k">指名バック（{count}本 × {yen(rate)}）</td><td className="v">{yen(back)}</td></tr>
               <tr className="ps-total"><td>総支給（額面）</td><td className="v">{yen(gross)}</td></tr>
             </tbody>

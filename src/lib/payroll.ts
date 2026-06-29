@@ -57,10 +57,14 @@ export interface PayrollResult {
   basePay: number; // 全労働×時給
   overtimePay: number; // 残業割増(+0.25分)
   nightPay: number; // 深夜割増(+0.25分)
-  commute: number; // 交通費(月額)
+  commute: number; // 交通費(当月)
+  workedDays: number; // 当月の勤務日数(実打刻で出退勤がそろった日)
   gross: number; // 総支給(額面)
   days: DayBreakdown[];
 }
+
+// 交通費の距離単価（円/km・片道1km）。往復で×2される。
+export const COMMUTE_RATE_PER_KM = 15;
 
 function overlap(a1: number, a2: number, b1: number, b2: number): number {
   return Math.max(0, Math.min(a2, b2) - Math.max(b1, a1));
@@ -109,7 +113,9 @@ export function wageForDate(date: string, fallback: number): number {
 export function computePayroll(
   records: PayrollRecord[],
   wage: number | null,
-  commute = 0
+  commuteFlat = 0,
+  commuteDistanceKm = 0,
+  commuteRatePerKm = COMMUTE_RATE_PER_KM
 ): PayrollResult {
   // 日付ごとに集計
   const byDate = new Map<string, PayrollRecord[]>();
@@ -166,7 +172,13 @@ export function computePayroll(
   const basePay = Math.round(baseYen);
   const overtimePay = Math.round(overtimeYen);
   const nightPay = Math.round(nightYen);
-  const gross = basePay + overtimePay + nightPay + (commute || 0);
+  // 交通費：片道距離が設定されていれば 片道×2×単価×勤務日数、無ければ月額固定。
+  const workedDays = days.length;
+  const commute =
+    commuteDistanceKm > 0
+      ? Math.round(commuteDistanceKm * 2 * commuteRatePerKm * workedDays)
+      : commuteFlat || 0;
+  const gross = basePay + overtimePay + nightPay + commute;
 
   // 週(月〜日)ごとに実働を合算し、勤務のあった週で平均する＝週平均労働時間。
   const weekTotals = new Map<string, number>();
@@ -192,6 +204,7 @@ export function computePayroll(
     overtimePay,
     nightPay,
     commute: commute || 0,
+    workedDays,
     gross,
     days,
   };

@@ -77,8 +77,18 @@ export default function ProfileEditor({
           <input name="hourly_wage" type="number" min={0} className="input" defaultValue={profile.hourly_wage ?? ""} placeholder="例: 1100" />
         </div>
         <div className="field">
-          <label>交通費（月額・円）</label>
+          <label>片道距離（km）</label>
+          <input name="commute_distance_km" type="number" min={0} step="0.1" className="input" defaultValue={profile.commute_distance_km ?? ""} placeholder="例: 4.5" />
+          <p className="help" style={{ margin: "4px 0 0" }}>
+            入力すると交通費＝片道×2×15円×勤務日数で自動計算（給与計算に反映）。
+          </p>
+        </div>
+        <div className="field">
+          <label>交通費（月額・円／距離未設定時のみ）</label>
           <input name="commute_allowance" type="number" min={0} className="input" defaultValue={profile.commute_allowance ?? 0} placeholder="例: 5000" />
+          <p className="help" style={{ margin: "4px 0 0" }}>
+            定期券など固定額の場合に使用。片道距離が入っていればそちらが優先されます。
+          </p>
         </div>
         <div className="field">
           <label>週の所定労働時間（社保判定用・時間）</label>

@@ -18,7 +18,8 @@ export interface Profile {
   employment_type: EmploymentType;
   phone: string | null;
   hourly_wage: number | null;
-  commute_allowance?: number; // 月額交通費（円）
+  commute_allowance?: number; // 月額交通費（円・固定。距離未設定時のフォールバック）
+  commute_distance_km?: number | null; // 片道距離(km)。設定時は 片道×2×15円×勤務日数 で自動計算
   contracted_weekly_hours?: number | null; // 週の所定労働時間（社保判定用）
   nomination_back_rate?: number; // 指名バック単価（円/指名）
   bank_code?: string | null; // 振込先 銀行コード(4)

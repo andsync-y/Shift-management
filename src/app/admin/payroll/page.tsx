@@ -68,7 +68,7 @@ export default async function PayrollPage({
 
   const rows = staff
     .map((s) => {
-      const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0);
+      const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
       const rate = s.nomination_back_rate ?? 0;
       const count = nomCounts.get(s.id) ?? 0;
       const nominationBack = rate * count;

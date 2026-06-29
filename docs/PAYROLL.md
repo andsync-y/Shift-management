@@ -22,8 +22,12 @@
   - **「FC指名数を取込んで給与確定」ボタン**で、本部KPIスナップショットの担当別 指名数を当月の指名本数に
     一括取込できる（`applyFcNominations`・表示名で突合）。
 - **給与明細の印刷**：「🖨 給与明細を印刷」→ `/admin/payroll/print?month=`（A4縦・1人1枚・`window.print()`）。
-- **総支給** = 基本(全労働×時給) + 残業割増 + 深夜割増 + **交通費(月額)** + **指名バック**。
+- **総支給** = 基本(全労働×時給) + 残業割増 + 深夜割増 + **交通費** + **指名バック**。
   - 源泉徴収・社会保険などの控除は未対応（額面まで）。
+- **交通費（距離ベース・推奨）**：スタッフに **片道距離(km)** を設定すると、
+  `交通費 = 片道距離 × 2(往復) × 15円/km × 当月の勤務日数(実打刻で出退勤がそろった日)` で自動計算。
+  単価は `COMMUTE_RATE_PER_KM`（`src/lib/payroll.ts`・既定15）。片道距離が空のときだけ
+  従来の月額固定 `commute_allowance`（定期券など）を使う。勤務日数は `computePayroll` の `workedDays`。
 - 賃金は分単位で集計し、最後に円へ四捨五入。
 - **週平均（実績）**：月内の各週（月〜日）の実働合計を、勤務のあった週数で平均（`avgWeeklyMin`）。
   一覧の `週平均` 列に表示。
@@ -47,11 +51,12 @@
 - 管理ナビ「給与計算」→ `/admin/payroll`。月セレクタで対象月を切替。
 - スタッフ別の集計表（実働/残業/深夜/基本/各割増/交通費/総支給）と、
   名前をタップで開く**日別明細**（出退勤・実働・休憩・残業・深夜）。
-- **時給・交通費（月額）は「スタッフ管理」→ スタッフ編集**で設定（`hourly_wage` / `commute_allowance`）。
+- **時給・交通費は「スタッフ管理」→ スタッフ編集**で設定（`hourly_wage` / 片道距離 `commute_distance_km` / 月額 `commute_allowance`）。
 
 ## DBマイグレーション（要適用）
 
 - `supabase/migrations/0017_commute_allowance.sql`：`profiles.commute_allowance`（月額交通費）。
+- `supabase/migrations/0034_commute_distance.sql`：`profiles.commute_distance_km`（片道距離・距離ベース交通費）。
 - `supabase/migrations/0027_contracted_hours.sql`：`profiles.contracted_weekly_hours`（週の所定労働時間・社保判定用）。
 - `supabase/migrations/0029_nomination_back.sql`：`profiles.nomination_back_rate`（指名バック単価）＋ `nomination_counts`（月別指名本数）。
 - `supabase/migrations/0031_bank_account.sql`：`profiles` に振込先口座（銀行/支店コード・預金種目・口座番号・受取人カナ）。
