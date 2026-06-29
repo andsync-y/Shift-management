@@ -8,8 +8,13 @@
 
 ## 構成（取得→保存→表示）
 1. **取得（別ランナー）**：`tools/fc-kpi-sync`（Playwright）が本部にログイン→数値を読み取り→
-   `POST /api/kpi/ingest`（`KPI_INGEST_SECRET` で認証）。**Vercel不可**。GitHub Actions（日次cron・
+   `POST /api/kpi/ingest`（`KPI_INGEST_SECRET` で認証）。**Vercel不可**。GitHub Actions（
    `.github/workflows/fc-kpi-sync.yml`）/ ローカル / VPS で実行。
+   - **起動（定期実行）**：GitHub の `schedule` は遅延・スキップが多く不安定なので、**主トリガは
+     Vercel Cron**（`/api/cron/kpi-sync`・`vercel.json`・07:30 JST）。これが GitHub の
+     `workflow_dispatch` を叩いてスクレイパを確実に起動する。要 `GITHUB_DISPATCH_TOKEN`（PAT・
+     対象リポジトリの Actions:write）。ワークフロー側の `schedule`（07:00/13:00/19:00 JST）は
+     **バックアップ＋日中の当月売上の再取得**用（ingestは取得日キーで冪等＝上書き）。
 2. **保存**：`fc_kpi` テーブル（migration 0032・JSONスナップショット・オーナーのみRLS）。
 3. **表示**：kioskが `GET /api/kiosk/kpi`（KIOSK_TOKEN保護）で最新を読み、`KpiPanel` で表示。
 4. **手入力フォールバック**：管理画面「運営 > 店舗KPI」（`/admin/kpi`）で手入力すればkioskに反映

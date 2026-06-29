@@ -1,10 +1,15 @@
 name: FC KPI Sync
 
-# 本部システムからKPIを日次取得してアプリへ送る（Vercel外で実行）。
-# 07:00 JST = 22:00 UTC。手動実行も可。
+# 本部システムからKPIを取得してアプリへ送る（Vercel外で実行）。
+# 主トリガは Vercel Cron → workflow_dispatch（時間に正確）。
+# 下の schedule は GitHub 単体のバックアップ＋日中の再取得（当月売上を最新化）。
+#   GitHub の schedule は遅延・スキップが多いので複数時刻を並べて取りこぼしを防ぐ。
+#   07:00 / 13:00 / 19:00 JST = 22:00 / 04:00 / 10:00 UTC。手動実行(workflow_dispatch)も可。
 on:
   schedule:
     - cron: "0 22 * * *"
+    - cron: "0 4 * * *"
+    - cron: "0 10 * * *"
   workflow_dispatch:
 
 jobs:
