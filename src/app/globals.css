@@ -1815,6 +1815,35 @@ body {
   font-size: 14px;
 }
 
+/* カテゴリ分け・コンパクトなプロフィール編集レイアウト */
+.profile-cats {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+.profile-cat-h {
+  font-family: "Archivo", sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin: 0 0 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--line);
+}
+.profile-cols {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(185px, 1fr));
+  gap: 14px 18px;
+  align-items: start;
+}
+@media (max-width: 560px) {
+  .profile-cols {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
 .day-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
