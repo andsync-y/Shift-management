@@ -6,8 +6,12 @@ import { displayName } from "@/lib/display-name";
 function toMin(t: string) {
   return Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
 }
+// 1シフトの実働（休憩自動控除後）時間。給与計算・シフト表と同ルール：8h超-60分/6h超-45分。
 function hours(s: Shift) {
-  return (toMin(s.end_time) - toMin(s.start_time)) / 60;
+  const dur = toMin(s.end_time) - toMin(s.start_time);
+  if (dur <= 0) return 0;
+  const brk = dur > 480 ? 60 : dur > 360 ? 45 : 0;
+  return Math.max(0, dur - brk) / 60;
 }
 function hm(t: string) {
   return t.slice(0, 5);
@@ -242,7 +246,7 @@ export default function DashboardInsights({
               <div className="eyebrow">Total Hours</div>
               <div className="total-num en">
                 {totalHours.toFixed(0)}
-                <small>時間</small>
+                <small>時間（実働）</small>
               </div>
             </div>
             <div className="total-item">
