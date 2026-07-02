@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
-import { computePayroll, hhmm, NOMINATION_BACK_RATE, type PayrollRecord } from "@/lib/payroll";
+import { computePayroll, hhmm, NOMINATION_BACK_RATE, kaisukenBack, kaisukenBackRate, type PayrollRecord } from "@/lib/payroll";
 import PrintBar from "./PrintBar";
 
 function pad(n: number) {
@@ -49,14 +49,16 @@ export default async function PayslipPrintPage({
   const end = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
+    supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
   ]);
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
   const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
+  const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const byStaff = new Map<string, PayrollRecord[]>();
   for (const r of records) (byStaff.get(r.staff_id) ?? byStaff.set(r.staff_id, []).get(r.staff_id)!).push(r);
 
@@ -66,16 +68,19 @@ export default async function PayslipPrintPage({
       const rate = NOMINATION_BACK_RATE;
       const count = nom.get(s.id) ?? 0;
       const back = rate * count;
-      return { s, pay, rate, count, back, gross: pay.gross + back };
+      const kaisCount = kais.get(s.id) ?? 0;
+      const kaisBack = kaisukenBack(kaisCount);
+      const kaisRate = kaisukenBackRate(kaisCount);
+      return { s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross: pay.gross + back + kaisBack };
     })
-    .filter((r) => r.pay.workedMin > 0 || r.count > 0);
+    .filter((r) => r.pay.workedMin > 0 || r.count > 0 || r.kaisCount > 0);
 
   return (
     <div className="print-root" style={{ padding: "14px 18px 28px" }}>
       <style>{PRINT_CSS}</style>
       <PrintBar label={`${y}年${m}月 給与明細`} />
 
-      {rows.map(({ s, pay, rate, count, back, gross }) => (
+      {rows.map(({ s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross }) => (
         <div className="payslip" key={s.id}>
           <div className="ps-head">
             <div>
@@ -95,11 +100,12 @@ export default async function PayslipPrintPage({
               <tr><td className="k">深夜割増</td><td className="v">{yen(pay.nightPay)}</td></tr>
               <tr><td className="k">交通費{s.commute_distance_km ? `（${s.commute_distance_km}km×2×15円×${pay.workedDays}日）` : ""}</td><td className="v">{yen(pay.commute)}</td></tr>
               <tr><td className="k">指名バック（{count}本 × {yen(rate)}）</td><td className="v">{yen(back)}</td></tr>
+              <tr><td className="k">回数券バック（{kaisCount}本{kaisRate ? ` × ${yen(kaisRate)}` : ""}）</td><td className="v">{yen(kaisBack)}</td></tr>
               <tr className="ps-total"><td>総支給（額面）</td><td className="v">{yen(gross)}</td></tr>
             </tbody>
           </table>
           <p className="ps-note">
-            ※ 源泉徴収・社会保険料等は未控除の額面です。時給は期間別（6/8〜6/19 ¥1,060／6/20〜7/31 ¥1,600）。
+            ※ 源泉徴収・社会保険料等は未控除の額面です。時給は期間別（6/8〜6/19 ¥1,060／6/20〜 ¥1,600フロア）。回数券バックは本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）。
           </p>
         </div>
       ))}

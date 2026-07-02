@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { computePayroll, NOMINATION_BACK_RATE, type PayrollRecord } from "@/lib/payroll";
+import { computePayroll, NOMINATION_BACK_RATE, kaisukenBack, type PayrollRecord } from "@/lib/payroll";
 import { buildZenginData, type ZenginTransfer } from "@/lib/zengin";
 import type { Profile, TimeRecord } from "@/lib/types";
 
@@ -48,14 +48,16 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
+    supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
   ]);
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
   const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
+  const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
 
   const byStaff = new Map<string, PayrollRecord[]>();
   for (const r of records) (byStaff.get(r.staff_id) ?? byStaff.set(r.staff_id, []).get(r.staff_id)!).push(r);
@@ -65,7 +67,8 @@ export async function GET(req: NextRequest) {
     if (!s.bank_code || !s.branch_code || !s.account_number || !s.recipient_kana) continue; // 口座未登録は除外
     const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
     const back = NOMINATION_BACK_RATE * (nom.get(s.id) ?? 0);
-    const amount = pay.gross + back;
+    const kaisBack = kaisukenBack(kais.get(s.id) ?? 0);
+    const amount = pay.gross + back + kaisBack;
     if (amount <= 0) continue;
     transfers.push({
       bankCode: s.bank_code,

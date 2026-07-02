@@ -2,8 +2,9 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
-import { computePayroll, hhmm, NOMINATION_BACK_RATE, type PayrollRecord } from "@/lib/payroll";
+import { computePayroll, hhmm, NOMINATION_BACK_RATE, kaisukenBack, type PayrollRecord } from "@/lib/payroll";
 import NominationInput from "./NominationInput";
+import KaisukenInput from "./KaisukenInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
 
@@ -49,16 +50,20 @@ export default async function PayrollPage({
   const next = m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
+    supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
   ]);
 
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
   const nomCounts = new Map(
     ((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count])
+  );
+  const kaisCounts = new Map(
+    ((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count])
   );
   const byStaff = new Map<string, PayrollRecord[]>();
   for (const r of records) {
@@ -72,9 +77,20 @@ export default async function PayrollPage({
       const rate = NOMINATION_BACK_RATE;
       const count = nomCounts.get(s.id) ?? 0;
       const nominationBack = rate * count;
-      return { staff: s, pay, rate, count, nominationBack, grossTotal: pay.gross + nominationBack };
+      const kaisCount = kaisCounts.get(s.id) ?? 0;
+      const kaisukenBackYen = kaisukenBack(kaisCount);
+      return {
+        staff: s,
+        pay,
+        rate,
+        count,
+        nominationBack,
+        kaisCount,
+        kaisukenBackYen,
+        grossTotal: pay.gross + nominationBack + kaisukenBackYen,
+      };
     })
-    .filter((r) => r.pay.workedMin > 0 || r.pay.openCount > 0 || r.count > 0);
+    .filter((r) => r.pay.workedMin > 0 || r.pay.openCount > 0 || r.count > 0 || r.kaisCount > 0);
 
   const totalGross = rows.reduce((sum, r) => sum + r.grossTotal, 0);
 
@@ -146,11 +162,13 @@ export default async function PayrollPage({
                   <th style={{ textAlign: "right" }}>交通費</th>
                   <th style={{ textAlign: "right" }}>指名本数</th>
                   <th style={{ textAlign: "right" }}>指名バック</th>
+                  <th style={{ textAlign: "right" }}>回数券本数</th>
+                  <th style={{ textAlign: "right" }}>回数券バック</th>
                   <th style={{ textAlign: "right" }}>総支給</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ staff: s, pay, count, nominationBack, grossTotal }) => (
+                {rows.map(({ staff: s, pay, count, nominationBack, kaisCount, kaisukenBackYen, grossTotal }) => (
                   <tr key={s.id}>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <span className="dot" style={{ background: s.display_color, marginRight: 6 }} />
@@ -196,6 +214,12 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right" }}>
                       {nominationBack > 0 ? yen(nominationBack) : <span className="muted">—</span>}
                     </td>
+                    <td style={{ textAlign: "right" }}>
+                      <KaisukenInput staffId={s.id} month={month} initial={kaisCount} />
+                    </td>
+                    <td className="en" style={{ textAlign: "right" }}>
+                      {kaisukenBackYen > 0 ? yen(kaisukenBackYen) : <span className="muted">—</span>}
+                    </td>
                     <td className="en" style={{ textAlign: "right", fontWeight: 700 }}>{yen(grossTotal)}</td>
                   </tr>
                 ))}
@@ -205,9 +229,10 @@ export default async function PayrollPage({
           <p className="help" style={{ marginBottom: 0 }}>
 拘束＝出勤〜退勤の合計（休憩控除前・勤怠管理と一致）／実働＝休憩控除・15分丸め後（賃金の元）。
             休憩自動控除（実働8h超→60分／6h超→45分）・実働は1日ごと15分単位で四捨五入・残業1.25倍（1日8h超）・深夜22:00〜5:00を25%加算で計算。
-            時給は期間別（6/8〜6/19は¥1,060／6/20〜7/31は¥1,600・全員一律）、範囲外は各自の時給。
+            時給は期間別（6/8〜6/19は¥1,060／6/20〜は¥1,600フロア・全員一律／80万超の売上連動UPは売上接続後に反映）、範囲外は各自の時給。
             交通費は片道距離(km)から自動計算（「スタッフ管理」で設定）。総支給（額面）まで算出（源泉・社保は未控除）。
             <strong>指名バック＝指名本数×3,300円（固定）</strong>を総支給に加算（本数はこの表で入力＝自動保存）。
+            <strong>回数券バック＝本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）×本数</strong>を加算（新規＋更新の合計本数をこの表で入力）。
           </p>
           <p className="help" style={{ marginTop: 6, marginBottom: 0 }}>
             <strong>週平均</strong>は月内の各週（月〜日）の実働合計の平均（実績）。社保加入の目安は下の「社会保険 加入判定」を参照。

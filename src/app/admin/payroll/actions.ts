@@ -24,6 +24,26 @@ export async function setNominationCount(
   return { ok: true };
 }
 
+// 月ごとの回数券販売本数を保存（オーナーのみ）。回数券バック＝本数連動の段階単価×本数 が総支給に加算される。
+export async function setKaisukenCount(
+  staffId: string,
+  month: string,
+  count: number
+): Promise<{ ok: boolean; message?: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+  const n = Math.max(0, Math.round(count) || 0);
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from("kaisuken_counts")
+    .upsert({ staff_id: staffId, month, count: n }, { onConflict: "staff_id,month" });
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath("/admin/payroll");
+  return { ok: true };
+}
+
 // 本部KPI（最新スナップショット）の担当別 指名数を、当月の指名本数として一括取込する。
 export async function applyFcNominations(
   month: string

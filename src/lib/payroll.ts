@@ -69,6 +69,55 @@ export const COMMUTE_RATE_PER_KM = 15;
 // 指名バック単価（円/指名）。全スタッフ共通の固定額。
 export const NOMINATION_BACK_RATE = 3300;
 
+// 回数券バック（本数連動の段階単価・円/本）。
+// 当月の回数券販売本数（新規＋更新）に応じて 1本あたりの単価が上がる。
+// 判定は「販売率(%)」ではなく「本数（絶対数）」＝多く売るほど単価UP・新規を取る動機と同方向。
+export interface KaisukenTier {
+  min: number; // この本数以上で
+  rate: number; // 1本あたり(円)
+}
+export const KAISUKEN_BACK_TIERS: KaisukenTier[] = [
+  { min: 8, rate: 3000 },
+  { min: 4, rate: 2000 },
+  { min: 1, rate: 1000 },
+];
+
+// 回数券バックの1本あたり単価（本数で決まる）。0本なら0。
+export function kaisukenBackRate(count: number): number {
+  for (const t of KAISUKEN_BACK_TIERS) if (count >= t.min) return t.rate;
+  return 0;
+}
+
+// 回数券バック総額 = 単価(本数で決まる) × 本数。
+export function kaisukenBack(count: number): number {
+  const n = Math.max(0, Math.round(count) || 0);
+  return kaisukenBackRate(n) * n;
+}
+
+// 売上連動の時給テーブル（個人の月間売上=指名抜き に応じた時給）。
+// フロア¥1,600（〜80万）。基本給からの減額はしない方針＝これが最低保証。
+// ⚠️ 現状 computePayroll は WAGE_SCHEDULE（期間別フラット・下記）で¥1,600フロアを適用する。
+//    80万超の上位段は、個人別の月間売上（FC KPI 担当別売上 / サロンボード / Square）を
+//    給与計算に接続した段階で wageForSales を用いて反映する。
+export interface SalesWageTier {
+  upTo: number | null; // 売上上限(円・含む)。null=上限なし（最上段）
+  wage: number;
+}
+export const SALES_WAGE_TABLE: SalesWageTier[] = [
+  { upTo: 800000, wage: 1600 },
+  { upTo: 900000, wage: 1800 },
+  { upTo: 1000000, wage: 2000 },
+  { upTo: 1100000, wage: 2200 },
+  { upTo: 1200000, wage: 2400 },
+  { upTo: null, wage: 2600 },
+];
+
+// 個人の月間売上(指名抜き・円)に応じた時給。フロア¥1,600。
+export function wageForSales(monthlySales: number): number {
+  for (const t of SALES_WAGE_TABLE) if (t.upTo == null || monthlySales <= t.upTo) return t.wage;
+  return 1600;
+}
+
 function overlap(a1: number, a2: number, b1: number, b2: number): number {
   return Math.max(0, Math.min(a2, b2) - Math.max(b1, a1));
 }
@@ -101,8 +150,10 @@ export interface WageRange {
   wage: number;
 }
 export const WAGE_SCHEDULE: WageRange[] = [
-  { from: "2026-06-08", to: "2026-06-19", wage: 1060 },
-  { from: "2026-06-20", to: "2026-07-31", wage: 1600 },
+  { from: "2026-06-08", to: "2026-06-19", wage: 1060 }, // 講習期間（最低賃金）
+  { from: "2026-06-20", to: "2026-07-31", wage: 1600 }, // 営業研修期間（¥1,600保証）
+  // 8/1〜 は時給フロア¥1,600（恒久・減額なし）。80万超の売上連動UPは wageForSales で反映（売上接続後）。
+  { from: "2026-08-01", to: "2099-12-31", wage: 1600 },
 ];
 
 // その日の時給。期間スケジュールに該当すればその額、無ければ各自の時給(fallback)。
