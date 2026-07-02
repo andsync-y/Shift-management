@@ -28,16 +28,22 @@ export async function GET(req: NextRequest) {
   const end = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
 
   const admin = createAdminClient();
-  const [{ data: shiftsRaw }, { data: staffRaw }, { data: offRaw }] = await Promise.all([
-    admin.from("shifts").select("*").gte("work_date", start).lte("work_date", end),
-    admin.from("profiles").select("*").eq("role", "staff").order("full_name"),
-    admin
-      .from("time_off_requests")
-      .select("*")
-      .eq("status", "approved")
-      .gte("off_date", start)
-      .lte("off_date", end),
-  ]);
+  const [{ data: shiftsRaw }, { data: staffRaw }, { data: offRaw }, { data: eventsRaw }] =
+    await Promise.all([
+      admin.from("shifts").select("*").gte("work_date", start).lte("work_date", end),
+      admin.from("profiles").select("*").eq("role", "staff").order("full_name"),
+      admin
+        .from("time_off_requests")
+        .select("*")
+        .eq("status", "approved")
+        .gte("off_date", start)
+        .lte("off_date", end),
+      admin
+        .from("store_events")
+        .select("*")
+        .gte("event_date", start)
+        .lte("event_date", end),
+    ]);
 
   const shifts = (shiftsRaw ?? []) as Shift[];
   // 下書き期間のシフトは除外
@@ -51,5 +57,13 @@ export async function GET(req: NextRequest) {
   }
   const visible = shifts.filter((s) => okPeriods.has(s.period_id));
 
-  return NextResponse.json({ ok: true, year: y, month: m, shifts: visible, staff: staffRaw ?? [], timeOff: offRaw ?? [] });
+  return NextResponse.json({
+    ok: true,
+    year: y,
+    month: m,
+    shifts: visible,
+    staff: staffRaw ?? [],
+    timeOff: offRaw ?? [],
+    storeEvents: eventsRaw ?? [],
+  });
 }

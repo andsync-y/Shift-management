@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import KpiPanel from "./KpiPanel";
-import type { Profile, Shift, TimeOffRequest } from "@/lib/types";
+import type { Profile, Shift, StoreEvent, TimeOffRequest } from "@/lib/types";
 import type { FcKpiData } from "@/lib/fc-kpi/types";
 
 // タブレット（受付）用の打刻キオスク。
@@ -48,6 +48,7 @@ export default function KioskPage() {
     shifts: Shift[];
     staff: Profile[];
     timeOff: TimeOffRequest[];
+    storeEvents: StoreEvent[];
   } | null>(null);
   const [calMonth, setCalMonth] = useState(""); // 表示中の月 "YYYY-MM"
   const [ready, setReady] = useState(false); // token 判定済み
@@ -175,7 +176,7 @@ export default function KioskPage() {
     try {
       const r = await fetch(`/api/kiosk/shifts?token=${encodeURIComponent(t)}&month=${mo}`, { cache: "no-store" });
       const j = await r.json();
-      if (j.ok) setCal({ year: j.year, month: j.month, shifts: j.shifts, staff: j.staff, timeOff: j.timeOff });
+      if (j.ok) setCal({ year: j.year, month: j.month, shifts: j.shifts, staff: j.staff, timeOff: j.timeOff, storeEvents: j.storeEvents ?? [] });
     } catch {
       /* カレンダーは補助表示なので失敗は無視 */
     }
@@ -305,6 +306,7 @@ export default function KioskPage() {
             shifts={cal.shifts}
             staff={cal.staff}
             timeOff={cal.timeOff}
+            storeEvents={cal.storeEvents}
           />
         </div>
       )}

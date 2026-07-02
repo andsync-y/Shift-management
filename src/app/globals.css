@@ -2164,6 +2164,74 @@ body {
   background: color-mix(in oklab, #94560e 7%, transparent);
 }
 
+/* 店休・お知らせバナー（月/週 共通） */
+.cal-note {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  border-left: 3px solid #3f6ea5;
+  background: color-mix(in oklab, #3f6ea5 9%, transparent);
+  color: #2b466b;
+  min-width: 0;
+  overflow: hidden;
+}
+.cal-note.closed {
+  border-left-color: #b0413e;
+  background: color-mix(in oklab, #b0413e 10%, transparent);
+  color: #862f2c;
+}
+.cal-note .cn-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cal-note .cn-tag {
+  flex: none;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2px 4px;
+  border-radius: 2px;
+  color: #fff;
+  background: #3f6ea5;
+  font-family: "Zen Kaku Gothic New", sans-serif;
+}
+.cal-note.closed .cn-tag {
+  background: #b0413e;
+}
+.cal-note .cn-title {
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.25;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-note .cn-sub {
+  font-size: 9.5px;
+  line-height: 1.25;
+  opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* 週ビューでは1行フルに使い、少しゆとりを持たせる */
+.tl-notes {
+  padding: 8px 12px 2px;
+}
+.tl-notes .cal-note {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 8px;
+}
+.tl-notes .cal-note .cn-sub {
+  opacity: 0.75;
+}
+
 /* =========================================================
    Design handoff additions — Schedule / Requests / TimeOff
    ========================================================= */

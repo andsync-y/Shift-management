@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
-import type { Profile, Shift, TimeOffRequest } from "@/lib/types";
+import type { Profile, Shift, StoreEvent, TimeOffRequest } from "@/lib/types";
 
 // タブレット（キオスク）からのシフト表印刷。
 // kioskに出ているカレンダー表示（ShiftCalendarView）そのままを A4横で印刷する。
@@ -16,7 +16,7 @@ function monthShift(month: string, delta: number): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}`;
 }
 
-type Data = { year: number; month: number; shifts: Shift[]; staff: Profile[]; timeOff: TimeOffRequest[] };
+type Data = { year: number; month: number; shifts: Shift[]; staff: Profile[]; timeOff: TimeOffRequest[]; storeEvents: StoreEvent[] };
 
 // このページ専用の印刷CSS（A4横・toolbar非表示・色を保持）。
 const PRINT_CSS = `
@@ -64,7 +64,7 @@ export default function KioskPrintPage() {
         return;
       }
       setErr(null);
-      setData({ year: j.year, month: j.month, shifts: j.shifts, staff: j.staff, timeOff: j.timeOff });
+      setData({ year: j.year, month: j.month, shifts: j.shifts, staff: j.staff, timeOff: j.timeOff, storeEvents: j.storeEvents ?? [] });
     } catch {
       setErr("通信に失敗しました。");
     }
@@ -109,6 +109,7 @@ export default function KioskPrintPage() {
             shifts={data.shifts}
             staff={data.staff}
             timeOff={data.timeOff}
+            storeEvents={data.storeEvents}
           />
         </div>
       )}

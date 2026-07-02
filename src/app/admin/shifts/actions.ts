@@ -520,3 +520,53 @@ export async function deleteShift(shiftId: string, periodId: string) {
   await supabase.from("shifts").delete().eq("id", shiftId);
   revalidatePath(`/admin/shifts/${periodId}`);
 }
+
+// --- 店休・お知らせ（日単位イベント） -------------------------------
+const storeEventSchema = z.object({
+  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付を確認してください"),
+  kind: z.enum(["closed", "note"]),
+  title: z.string().trim().min(1, "内容を入力してください").max(100),
+  body: z.string().trim().max(500).optional(),
+  start_time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional()
+    .or(z.literal("")),
+  end_time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional()
+    .or(z.literal("")),
+});
+
+export async function addStoreEvent(periodId: string, formData: FormData) {
+  await requireAdmin();
+  const parsed = storeEventSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  const d = parsed.data;
+  if (d.start_time && d.end_time && d.start_time >= d.end_time) {
+    return { ok: false, message: "終了時刻は開始時刻より後にしてください。" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("store_events").insert({
+    event_date: d.event_date,
+    kind: d.kind,
+    title: d.title,
+    body: d.body || null,
+    start_time: d.start_time || null,
+    end_time: d.end_time || null,
+    all_hands: formData.get("all_hands") === "on",
+  });
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return { ok: true, message: "店休・お知らせを追加しました。" };
+}
+
+export async function deleteStoreEvent(id: string, periodId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("store_events").delete().eq("id", id);
+  revalidatePath(`/admin/shifts/${periodId}`);
+}

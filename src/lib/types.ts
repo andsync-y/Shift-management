@@ -213,6 +213,26 @@ export interface CardTransaction {
   updated_at: string;
 }
 
+export type StoreEventKind = "closed" | "note";
+
+// 店休・店舗お知らせ（日単位イベント）。カレンダーの該当日にバナー表示する。
+export interface StoreEvent {
+  id: string;
+  event_date: string; // "YYYY-MM-DD"
+  kind: StoreEventKind; // closed=店休 / note=お知らせ
+  title: string;
+  body: string | null;
+  start_time: string | null; // "HH:MM:SS"
+  end_time: string | null;
+  all_hands: boolean; // ※基本的に全員参加
+  created_at: string;
+}
+
+export const STORE_EVENT_KIND_LABELS_JA: Record<StoreEventKind, string> = {
+  closed: "店休",
+  note: "お知らせ",
+};
+
 export const DAY_LABELS_JA = ["日", "月", "火", "水", "木", "金", "土"] as const;
 
 export const ROLE_LABELS_JA: Record<UserRole, string> = {

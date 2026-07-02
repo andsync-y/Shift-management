@@ -7,7 +7,7 @@ import {
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import DashboardInsights from "@/components/DashboardInsights";
-import type { ShiftRequirement, TimeOffRequest } from "@/lib/types";
+import type { ShiftRequirement, StoreEvent, TimeOffRequest } from "@/lib/types";
 
 export default async function AdminDashboard({
   searchParams,
@@ -88,12 +88,13 @@ export default async function AdminDashboard({
   // 表示中の期間の必要人数（人手不足アラート用）と承認済み休み
   let requirements: ShiftRequirement[] = [];
   let timeOff: TimeOffRequest[] = [];
+  let storeEvents: StoreEvent[] = [];
   if (latest) {
     const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
     const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-${String(
       new Date(latest.year, latest.month, 0).getDate()
     ).padStart(2, "0")}`;
-    const [{ data: reqs }, { data: offs }] = await Promise.all([
+    const [{ data: reqs }, { data: offs }, { data: events }] = await Promise.all([
       supabase.from("shift_requirements").select("*").eq("period_id", latest.id),
       supabase
         .from("time_off_requests")
@@ -101,9 +102,15 @@ export default async function AdminDashboard({
         .eq("status", "approved")
         .gte("off_date", monthStart)
         .lte("off_date", monthEnd),
+      supabase
+        .from("store_events")
+        .select("*")
+        .gte("event_date", monthStart)
+        .lte("event_date", monthEnd),
     ]);
     requirements = (reqs ?? []) as ShiftRequirement[];
     timeOff = (offs ?? []) as TimeOffRequest[];
+    storeEvents = (events ?? []) as StoreEvent[];
   }
 
   return (
@@ -201,6 +208,7 @@ export default async function AdminDashboard({
                   shifts={latestShifts}
                   staff={staffList}
                   timeOff={timeOff}
+                  storeEvents={storeEvents}
                 />
               </>
             ) : (
