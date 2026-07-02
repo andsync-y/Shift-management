@@ -66,8 +66,8 @@ export interface PayrollResult {
 // 交通費の距離単価（円/km・片道1km）。往復で×2される。
 export const COMMUTE_RATE_PER_KM = 15;
 
-// 指名バック単価（円/指名）。全スタッフ共通の固定額。
-export const NOMINATION_BACK_RATE = 3300;
+// 指名バック単価（円/指名）。全スタッフ共通の固定額（指名料の税抜相当・税引後100%還元）。
+export const NOMINATION_BACK_RATE = 3000;
 
 // 回数券バック（本数連動の段階単価・円/本）。
 // 当月の回数券販売本数（新規＋更新）に応じて 1本あたりの単価が上がる。
