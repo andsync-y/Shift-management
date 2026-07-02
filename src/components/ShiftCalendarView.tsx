@@ -45,6 +45,7 @@ export default function ShiftCalendarView({
   highlightStaffId,
   timeOff = [],
   storeEvents = [],
+  showHours = false,
 }: {
   year: number;
   month: number;
@@ -53,6 +54,7 @@ export default function ShiftCalendarView({
   highlightStaffId?: string;
   timeOff?: TimeOffRequest[];
   storeEvents?: StoreEvent[];
+  showHours?: boolean; // 月間総労働時間バーを出す（管理者のシフト表のみ）
 }) {
   const [mode, setMode] = useState<ViewMode>("month");
   // 週ビューの基準日。既定は「最初にシフトがある日」を含む週。
@@ -83,6 +85,35 @@ export default function ShiftCalendarView({
   }, [firstShiftYmd, year, month]);
 
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
+
+  // 月間の総労働時間（実働＝休憩自動控除後・給与計算と同じルール：8h超-60分/6h超-45分）と、
+  // スタッフ別内訳。shifts から算出するのでシフトを直すとそのまま反映される。
+  const hours = useMemo(() => {
+    let grossMin = 0;
+    let netMin = 0;
+    const per = new Map<string, number>();
+    for (const s of shifts) {
+      const dur = toMin(s.end_time) - toMin(s.start_time);
+      if (dur <= 0) continue;
+      const brk = dur > 480 ? 60 : dur > 360 ? 45 : 0;
+      const net = Math.max(0, dur - brk);
+      grossMin += dur;
+      netMin += net;
+      per.set(s.staff_id, (per.get(s.staff_id) ?? 0) + net);
+    }
+    const perStaff = [...per.entries()]
+      .map(([id, min]) => {
+        const p = staffMap.get(id);
+        return {
+          id,
+          name: p ? displayName(p) : "?",
+          color: p?.display_color ?? "#8e897f",
+          hours: min / 60,
+        };
+      })
+      .sort((a, b) => b.hours - a.hours);
+    return { gross: grossMin / 60, net: netMin / 60, perStaff };
+  }, [shifts, staffMap]);
 
   const staffInShifts = useMemo(() => {
     const ids = new Set(shifts.map((s) => s.staff_id));
@@ -389,6 +420,42 @@ export default function ShiftCalendarView({
 
   return (
     <div>
+      {showHours && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "baseline",
+            gap: "6px 16px",
+            marginBottom: 12,
+            paddingBottom: 12,
+            borderBottom: "1px solid var(--line)",
+          }}
+        >
+          <span style={{ fontSize: 15 }}>
+            総労働時間{" "}
+            <b className="en" style={{ fontSize: 21 }}>
+              {hours.net.toFixed(1)}h
+            </b>
+            <span className="muted" style={{ fontSize: 12, marginLeft: 4 }}>
+              （休憩控除後）
+            </span>
+          </span>
+          <span className="muted en" style={{ fontSize: 13 }}>
+            拘束 {hours.gross.toFixed(1)}h
+          </span>
+          {hours.perStaff.length > 0 && (
+            <span style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 12.5 }}>
+              {hours.perStaff.map((p) => (
+                <span key={p.id} style={{ whiteSpace: "nowrap" }}>
+                  <span className="dot" style={{ background: p.color, marginRight: 4 }} />
+                  {p.name} <b className="en">{p.hours.toFixed(1)}h</b>
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
       <div className="cal-toolbar">
         <div className="cal-filter">
           <select

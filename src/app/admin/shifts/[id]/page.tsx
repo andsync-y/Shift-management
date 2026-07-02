@@ -237,6 +237,7 @@ export default async function PeriodDetailPage({
                 staff={staffList}
                 timeOff={timeOffList}
                 storeEvents={storeEventList}
+                showHours
               />
             </>
           ) : (
