@@ -109,7 +109,9 @@ export const SALES_WAGE_TABLE: SalesWageTier[] = [
   { upTo: 1000000, wage: 2000 },
   { upTo: 1100000, wage: 2200 },
   { upTo: 1200000, wage: 2400 },
-  { upTo: null, wage: 2600 },
+  { upTo: 1300000, wage: 2600 },
+  { upTo: 1400000, wage: 2800 },
+  { upTo: null, wage: 3000 },
 ];
 
 // 個人の月間売上(指名抜き・円)に応じた時給。フロア¥1,600。
