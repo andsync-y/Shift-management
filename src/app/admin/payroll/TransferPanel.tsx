@@ -48,9 +48,9 @@ export default function TransferPanel({
   return (
     <div className="section-body" style={{ paddingTop: 14 }}>
       <p className="help" style={{ marginTop: 0 }}>
-        当月の総支給から<strong>総合振込データ（全銀フォーマット）</strong>を作成します。ダウンロードして
+        当月の給与から<strong>総合振込データ（全銀フォーマット）</strong>を作成します。ダウンロードして
         三井住友のビジネスバンキング（Web21／ValueDoor）にアップロード → 内容確認のうえ実行してください。
-        金額は<strong>総支給（額面）</strong>です。
+        金額は<strong>差引支給（手取り・控除後）</strong>です。源泉「要入力」が残っていると暫定額になるため、先に上の表で確定してください。
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>

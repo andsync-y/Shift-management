@@ -44,6 +44,36 @@ export async function setKaisukenCount(
   return { ok: true };
 }
 
+// 月ごとの源泉所得税の手入力（オーナーのみ）。自動計算できない区分の上書き。
+// null（空欄）を渡すと削除＝自動計算に戻す。
+export async function setIncomeTaxOverride(
+  staffId: string,
+  month: string,
+  amount: number | null
+): Promise<{ ok: boolean; message?: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+
+  const supabase = await createClient();
+  if (amount == null) {
+    const { error } = await supabase
+      .from("income_tax_overrides")
+      .delete()
+      .eq("staff_id", staffId)
+      .eq("month", month);
+    if (error) return { ok: false, message: error.message };
+  } else {
+    const n = Math.max(0, Math.round(amount) || 0);
+    const { error } = await supabase
+      .from("income_tax_overrides")
+      .upsert({ staff_id: staffId, month, amount: n }, { onConflict: "staff_id,month" });
+    if (error) return { ok: false, message: error.message };
+  }
+
+  revalidatePath("/admin/payroll");
+  return { ok: true };
+}
+
 // 本部KPI（最新スナップショット）の担当別 指名数を、当月の指名本数として一括取込する。
 export async function applyFcNominations(
   month: string

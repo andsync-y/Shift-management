@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { computePayroll, NOMINATION_BACK_RATE, kaisukenBack, type PayrollRecord } from "@/lib/payroll";
+import { computeDeductions } from "@/lib/deductions";
 import { buildZenginData, type ZenginTransfer } from "@/lib/zengin";
 import type { Profile, TimeRecord } from "@/lib/types";
 
@@ -11,7 +12,7 @@ function pad(n: number) {
   return String(n).padStart(2, "0");
 }
 
-// 当月の給与（総支給）から全銀フォーマット（総合振込）ファイルを生成してダウンロードさせる。
+// 当月の給与（差引支給＝手取り）から全銀フォーマット（総合振込）ファイルを生成してダウンロードさせる。
 //   GET /api/payroll/transfer?month=YYYY-MM&date=YYYY-MM-DD（振込指定日）
 export async function GET(req: NextRequest) {
   await requireAdmin();
@@ -48,16 +49,18 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
     supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
+    supabase.from("income_tax_overrides").select("staff_id, amount").eq("month", month),
   ]);
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
   const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
+  const taxOverrides = new Map(((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount]));
 
   const byStaff = new Map<string, PayrollRecord[]>();
   for (const r of records) (byStaff.get(r.staff_id) ?? byStaff.set(r.staff_id, []).get(r.staff_id)!).push(r);
@@ -68,7 +71,19 @@ export async function GET(req: NextRequest) {
     const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
     const back = NOMINATION_BACK_RATE * (nom.get(s.id) ?? 0);
     const kaisBack = kaisukenBack(kais.get(s.id) ?? 0);
-    const amount = pay.gross + back + kaisBack;
+    const grossTotal = pay.gross + back + kaisBack;
+    // 振込額は控除後の差引支給（手取り）。源泉未確定（要入力）の分は源泉¥0の暫定値になる点に注意。
+    const ded = computeDeductions({
+      gross: grossTotal,
+      commute: pay.commute,
+      taxColumn: s.tax_column ?? "otsu",
+      dependents: s.dependents_count ?? 0,
+      empInsuranceEnrolled: s.emp_insurance_enrolled ?? true,
+      shahoEnrolled: s.shaho_enrolled ?? false,
+      kaigoApplicable: s.kaigo_applicable ?? false,
+      taxOverride: taxOverrides.get(s.id) ?? null,
+    });
+    const amount = ded.net;
     if (amount <= 0) continue;
     transfers.push({
       bankCode: s.bank_code,

@@ -96,6 +96,43 @@ export default function ProfileEditor({
           </div>
         </section>
 
+        {/* 税・社会保険 */}
+        <section>
+          <h3 className="profile-cat-h">税・社会保険</h3>
+          <div className="profile-cols">
+            <div className="field">
+              <label>源泉の税区分</label>
+              <select name="tax_column" className="select" defaultValue={profile.tax_column ?? "otsu"}>
+                <option value="otsu">乙欄（扶養控除等申告書 未提出／他社が本業）</option>
+                <option value="kou">甲欄（扶養控除等申告書 提出済み）</option>
+              </select>
+              <p className="help" style={{ margin: "4px 0 0" }}>申告書を当店に提出したら「甲欄」に変更。提出先は1社のみ。</p>
+            </div>
+            <div className="field">
+              <label>扶養親族等の数（甲欄用）</label>
+              <input name="dependents_count" type="number" min={0} max={20} className="input" defaultValue={profile.dependents_count ?? 0} />
+            </div>
+            <div className="field">
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input name="emp_insurance_enrolled" type="checkbox" defaultChecked={profile.emp_insurance_enrolled ?? true} />
+                雇用保険 加入（週20h以上）
+              </label>
+            </div>
+            <div className="field">
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input name="shaho_enrolled" type="checkbox" defaultChecked={profile.shaho_enrolled ?? false} />
+                社会保険（健保・厚年）加入
+              </label>
+            </div>
+            <div className="field">
+              <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input name="kaigo_applicable" type="checkbox" defaultChecked={profile.kaigo_applicable ?? false} />
+                介護保険 第2号（40〜64歳）
+              </label>
+            </div>
+          </div>
+        </section>
+
         {/* 振込先口座 */}
         <section>
           <h3 className="profile-cat-h">振込先口座</h3>

@@ -3,6 +3,7 @@ import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
 import { computePayroll, hhmm, NOMINATION_BACK_RATE, kaisukenBack, kaisukenBackRate, type PayrollRecord } from "@/lib/payroll";
+import { computeDeductions } from "@/lib/deductions";
 import PrintBar from "./PrintBar";
 
 function pad(n: number) {
@@ -49,16 +50,18 @@ export default async function PayslipPrintPage({
   const end = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
     supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
+    supabase.from("income_tax_overrides").select("staff_id, amount").eq("month", month),
   ]);
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
   const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
+  const taxOverrides = new Map(((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount]));
   const byStaff = new Map<string, PayrollRecord[]>();
   for (const r of records) (byStaff.get(r.staff_id) ?? byStaff.set(r.staff_id, []).get(r.staff_id)!).push(r);
 
@@ -71,7 +74,18 @@ export default async function PayslipPrintPage({
       const kaisCount = kais.get(s.id) ?? 0;
       const kaisBack = kaisukenBack(kaisCount);
       const kaisRate = kaisukenBackRate(kaisCount);
-      return { s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross: pay.gross + back + kaisBack };
+      const gross = pay.gross + back + kaisBack;
+      const ded = computeDeductions({
+        gross,
+        commute: pay.commute,
+        taxColumn: s.tax_column ?? "otsu",
+        dependents: s.dependents_count ?? 0,
+        empInsuranceEnrolled: s.emp_insurance_enrolled ?? true,
+        shahoEnrolled: s.shaho_enrolled ?? false,
+        kaigoApplicable: s.kaigo_applicable ?? false,
+        taxOverride: taxOverrides.get(s.id) ?? null,
+      });
+      return { s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross, ded };
     })
     .filter((r) => r.pay.workedMin > 0 || r.count > 0 || r.kaisCount > 0);
 
@@ -80,7 +94,7 @@ export default async function PayslipPrintPage({
       <style>{PRINT_CSS}</style>
       <PrintBar label={`${y}年${m}月 給与明細`} />
 
-      {rows.map(({ s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross }) => (
+      {rows.map(({ s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross, ded }) => (
         <div className="payslip" key={s.id}>
           <div className="ps-head">
             <div>
@@ -101,11 +115,17 @@ export default async function PayslipPrintPage({
               <tr><td className="k">交通費{s.commute_distance_km ? `（${s.commute_distance_km}km×2×15円×${pay.workedDays}日）` : ""}</td><td className="v">{yen(pay.commute)}</td></tr>
               <tr><td className="k">指名バック（{count}本 × {yen(rate)}）</td><td className="v">{yen(back)}</td></tr>
               <tr><td className="k">回数券バック（{kaisCount}本{kaisRate ? ` × ${yen(kaisRate)}` : ""}）</td><td className="v">{yen(kaisBack)}</td></tr>
-              <tr className="ps-total"><td>総支給（額面）</td><td className="v">{yen(gross)}</td></tr>
+              <tr><td className="k" style={{ fontWeight: 700 }}>総支給（額面）</td><td className="v" style={{ fontWeight: 700 }}>{yen(gross)}</td></tr>
+              {ded.empInsurance > 0 && <tr><td className="k">雇用保険料</td><td className="v">−{yen(ded.empInsurance)}</td></tr>}
+              {ded.healthInsurance > 0 && <tr><td className="k">健康保険料{s.kaigo_applicable ? "（介護保険含む）" : ""}</td><td className="v">−{yen(ded.healthInsurance)}</td></tr>}
+              {ded.pension > 0 && <tr><td className="k">厚生年金保険料</td><td className="v">−{yen(ded.pension)}</td></tr>}
+              <tr><td className="k">源泉所得税（{(s.tax_column ?? "otsu") === "kou" ? "甲欄" : "乙欄"}{ded.taxNeedsInput ? "・暫定" : ""}）</td><td className="v">−{yen(ded.incomeTax)}</td></tr>
+              <tr className="ps-total"><td>差引支給額（手取り）</td><td className="v">{yen(ded.net)}</td></tr>
             </tbody>
           </table>
           <p className="ps-note">
-            ※ 源泉徴収・社会保険料等は未控除の額面です。時給は期間別（6/8〜6/19 ¥1,060／6/20〜 ¥1,600フロア）。回数券バックは本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）。
+            ※ 時給は期間別（6/8〜6/19 ¥1,060／6/20〜 ¥1,600フロア）。回数券バックは本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）。
+            交通費は非課税として課税対象から除外。{ded.taxNeedsInput ? "源泉所得税は未確定（暫定¥0）です。" : ""}
           </p>
         </div>
       ))}

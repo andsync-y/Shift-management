@@ -3,8 +3,10 @@ import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
 import { computePayroll, hhmm, NOMINATION_BACK_RATE, kaisukenBack, type PayrollRecord } from "@/lib/payroll";
+import { computeDeductions, TAX_COLUMN_LABELS_JA } from "@/lib/deductions";
 import NominationInput from "./NominationInput";
 import KaisukenInput from "./KaisukenInput";
+import TaxInput from "./TaxInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
 
@@ -50,11 +52,12 @@ export default async function PayrollPage({
   const next = m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
     supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
+    supabase.from("income_tax_overrides").select("staff_id, amount").eq("month", month),
   ]);
 
   const staff = (staffRaw as Profile[] | null) ?? [];
@@ -64,6 +67,9 @@ export default async function PayrollPage({
   );
   const kaisCounts = new Map(
     ((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count])
+  );
+  const taxOverrides = new Map(
+    ((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount])
   );
   const byStaff = new Map<string, PayrollRecord[]>();
   for (const r of records) {
@@ -79,6 +85,17 @@ export default async function PayrollPage({
       const nominationBack = rate * count;
       const kaisCount = kaisCounts.get(s.id) ?? 0;
       const kaisukenBackYen = kaisukenBack(kaisCount);
+      const grossTotal = pay.gross + nominationBack + kaisukenBackYen;
+      const ded = computeDeductions({
+        gross: grossTotal,
+        commute: pay.commute,
+        taxColumn: s.tax_column ?? "otsu",
+        dependents: s.dependents_count ?? 0,
+        empInsuranceEnrolled: s.emp_insurance_enrolled ?? true,
+        shahoEnrolled: s.shaho_enrolled ?? false,
+        kaigoApplicable: s.kaigo_applicable ?? false,
+        taxOverride: taxOverrides.get(s.id) ?? null,
+      });
       return {
         staff: s,
         pay,
@@ -87,18 +104,21 @@ export default async function PayrollPage({
         nominationBack,
         kaisCount,
         kaisukenBackYen,
-        grossTotal: pay.gross + nominationBack + kaisukenBackYen,
+        grossTotal,
+        ded,
       };
     })
     .filter((r) => r.pay.workedMin > 0 || r.pay.openCount > 0 || r.count > 0 || r.kaisCount > 0);
 
   const totalGross = rows.reduce((sum, r) => sum + r.grossTotal, 0);
+  const totalNet = rows.reduce((sum, r) => sum + r.ded.net, 0);
+  const taxPending = rows.filter((r) => r.ded.taxNeedsInput).map((r) => displayName(r.staff));
 
-  // 振込（全銀）対象：口座情報が揃っていて総支給>0 のスタッフ
+  // 振込（全銀）対象：口座情報が揃っていて差引支給>0 のスタッフ。振込額は手取り。
   const bankReady = (s: Profile) => !!(s.bank_code && s.branch_code && s.account_number && s.recipient_kana);
-  const transferRows = rows.filter((r) => r.grossTotal > 0 && bankReady(r.staff));
-  const transferTotal = transferRows.reduce((s, r) => s + r.grossTotal, 0);
-  const missingBank = rows.filter((r) => r.grossTotal > 0 && !bankReady(r.staff)).map((r) => displayName(r.staff));
+  const transferRows = rows.filter((r) => r.ded.net > 0 && bankReady(r.staff));
+  const transferTotal = transferRows.reduce((s, r) => s + r.ded.net, 0);
+  const missingBank = rows.filter((r) => r.ded.net > 0 && !bankReady(r.staff)).map((r) => displayName(r.staff));
   const monthEndDate = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
 
   return (
@@ -137,7 +157,7 @@ export default async function PayrollPage({
             <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px" }} href={`/admin/payroll/print?month=${month}`}>
               🖨 給与明細を印刷
             </a>
-            <span className="eyebrow">合計 {yen(totalGross)}</span>
+            <span className="eyebrow">総支給合計 {yen(totalGross)}</span>
           </span>
         </div>
         <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
@@ -230,7 +250,7 @@ export default async function PayrollPage({
 拘束＝出勤〜退勤の合計（休憩控除前・勤怠管理と一致）／実働＝休憩控除・15分丸め後（賃金の元）。
             休憩自動控除（実働8h超→60分／6h超→45分）・実働は1日ごと15分単位で四捨五入・残業1.25倍（1日8h超）・深夜22:00〜5:00を25%加算で計算。
             時給は期間別（6/8〜6/19は¥1,060／6/20〜は¥1,600フロア・全員一律／80万超の売上連動UPは売上接続後に反映）、範囲外は各自の時給。
-            交通費は片道距離(km)から自動計算（「スタッフ管理」で設定）。総支給（額面）まで算出（源泉・社保は未控除）。
+            交通費は片道距離(km)から自動計算（「スタッフ管理」で設定）。控除（源泉・雇用保険・社保）と手取りは下の「控除・差引支給」を参照。
             <strong>指名バック＝指名本数×3,000円（税抜・固定）</strong>を総支給に加算（本数はこの表で入力＝自動保存）。
             <strong>回数券バック＝本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）×本数</strong>を加算（新規＋更新の合計本数をこの表で入力）。
           </p>
@@ -239,6 +259,73 @@ export default async function PayrollPage({
           </p>
         </div>
       </div>
+
+      {/* 控除 → 差引支給（手取り） */}
+      {rows.length > 0 && (
+        <div className="section">
+          <div className="section-head">
+            <h2>控除・差引支給（手取り）</h2>
+            <span className="eyebrow">手取り合計 {yen(totalNet)}</span>
+          </div>
+          <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
+            <table className="staff-table" style={{ fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th>スタッフ</th>
+                  <th>税区分</th>
+                  <th style={{ textAlign: "right" }}>総支給</th>
+                  <th style={{ textAlign: "right" }}>課税対象</th>
+                  <th style={{ textAlign: "right" }}>雇用保険</th>
+                  <th style={{ textAlign: "right" }}>健康保険</th>
+                  <th style={{ textAlign: "right" }}>厚生年金</th>
+                  <th style={{ textAlign: "right" }}>源泉所得税</th>
+                  <th style={{ textAlign: "right" }}>差引支給</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map(({ staff: s, ded, grossTotal }) => (
+                  <tr key={s.id}>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span className="dot" style={{ background: s.display_color, marginRight: 6 }} />
+                      {displayName(s)}
+                    </td>
+                    <td style={{ whiteSpace: "nowrap" }}>
+                      <span className={`mk ${(s.tax_column ?? "otsu") === "otsu" ? "late" : ""}`} title={TAX_COLUMN_LABELS_JA[s.tax_column ?? "otsu"]}>
+                        {(s.tax_column ?? "otsu") === "kou" ? `甲${(s.dependents_count ?? 0) > 0 ? `・扶${s.dependents_count}` : ""}` : "乙"}
+                      </span>
+                    </td>
+                    <td className="en" style={{ textAlign: "right" }}>{yen(grossTotal)}</td>
+                    <td className="en muted" style={{ textAlign: "right" }}>{yen(ded.taxableBase)}</td>
+                    <td className="en" style={{ textAlign: "right" }}>{ded.empInsurance ? `−${yen(ded.empInsurance)}` : <span className="muted">—</span>}</td>
+                    <td className="en" style={{ textAlign: "right" }}>{ded.healthInsurance ? `−${yen(ded.healthInsurance)}` : <span className="muted">—</span>}</td>
+                    <td className="en" style={{ textAlign: "right" }}>{ded.pension ? `−${yen(ded.pension)}` : <span className="muted">—</span>}</td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <TaxInput staffId={s.id} month={month} initial={taxOverrides.get(s.id) ?? null} auto={ded.incomeTaxAuto} />
+                      {ded.taxNeedsInput && (
+                        <span className="mk late" style={{ marginLeft: 4 }} title="税額表の上位区分のため自動計算できません。令和8年分の税額表で確認して入力してください。">要入力</span>
+                      )}
+                    </td>
+                    <td className="en" style={{ textAlign: "right", fontWeight: 700 }}>{yen(ded.net)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            <p className="help" style={{ marginBottom: 0 }}>
+              <strong>税区分</strong>：甲＝扶養控除等申告書を当店に提出済み／乙＝未提出（他社が本業のダブルワーク等）。「スタッフ管理」で設定。
+              <strong>源泉所得税</strong>は 乙欄フラット域（課税対象 &lt; ¥105,000 → 3.063%）と甲欄¥0域（扶養0・課税対象 ≦ ¥105,000）を自動計算。
+              それ以外（<span className="mk late" style={{ margin: "0 3px" }}>要入力</span>）は令和8年分の税額表（月額表）を確認して手入力（入力があれば常に優先・空欄で自動に戻る）。
+              <strong>雇用保険</strong>＝総支給×0.5%（交通費込・50銭以下切捨/超切上）。<strong>社会保険</strong>は加入設定したスタッフのみ、
+              当月報酬から標準報酬月額を求める簡易方式（本来は資格取得時・定時決定で固定＝目安。健保料率は協会けんぽ岐阜の当年度告示に要更新）。
+              差引支給（手取り）＝総支給−雇用保険−社保−源泉。
+            </p>
+            {taxPending.length > 0 && (
+              <p className="help" style={{ marginTop: 6, marginBottom: 0, color: "#9a3a30" }}>
+                ⚠ 源泉が未確定（要入力）: {taxPending.join("・")} — 確定するまで差引支給は源泉¥0の暫定値です。
+              </p>
+            )}
+          </div>
+        </div>
+      )}
 
       {/* 給与振込（全銀フォーマット） */}
       {rows.length > 0 && (
