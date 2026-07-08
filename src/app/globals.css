@@ -1984,8 +1984,8 @@ body {
     padding-right: 20px;
   }
 
-  /* table -> cards */
-  .staff-table {
+  /* table -> cards（カード代替がある表だけ隠す。他の .staff-table は横スクロールで表示） */
+  .staff-table.sm-cards {
     display: none;
   }
   .staff-cards {

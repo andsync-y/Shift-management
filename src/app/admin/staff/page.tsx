@@ -71,7 +71,7 @@ export default async function StaffPage() {
           </p>
 
           {/* PC table */}
-          <table className="staff-table">
+          <table className="staff-table sm-cards">
             <thead>
               <tr>
                 <th>氏名</th>

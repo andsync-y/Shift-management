@@ -275,7 +275,7 @@ export default async function AdminRequestsPage({
             </p>
           ) : (
             <>
-              <table className="staff-table req-table">
+              <table className="staff-table sm-cards req-table">
                 <thead>
                   <tr>
                     <th>スタッフ</th>
