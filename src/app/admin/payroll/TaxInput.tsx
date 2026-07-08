@@ -4,17 +4,18 @@ import { useState, useTransition } from "react";
 import { setIncomeTaxOverride } from "./actions";
 
 // 源泉所得税の月次手入力（フォーカスを外すと保存）。
-// 自動計算できない区分（税額表の上位区分）で使う。空欄に戻すと自動計算に復帰。
+// 通常は税額表（令和8年分）の自動計算値が使われる。個別事情の上書き用。
+// 空欄に戻すと自動計算に復帰。
 export default function TaxInput({
   staffId,
   month,
-  initial, // 手入力済みの額（無ければ null）
-  auto, // 自動計算できた額（不能なら null）
+  initial, // 手入力済みの額（無ければ null＝自動計算）
+  auto, // 税額表による自動計算値
 }: {
   staffId: string;
   month: string;
   initial: number | null;
-  auto: number | null;
+  auto: number;
 }) {
   const [val, setVal] = useState(initial == null ? "" : String(initial));
   const [pending, start] = useTransition();
@@ -40,7 +41,7 @@ export default function TaxInput({
         min={0}
         value={val}
         disabled={pending}
-        placeholder={auto == null ? "要入力" : String(auto)}
+        placeholder={String(auto)}
         onChange={(e) => setVal(e.target.value)}
         onBlur={save}
         onKeyDown={(e) => {
@@ -48,7 +49,7 @@ export default function TaxInput({
         }}
         className="input en"
         style={{ width: 76, textAlign: "right", padding: "4px 6px", fontSize: 12.5 }}
-        title="空欄=自動計算。税額表の上位区分は自動計算できないため手入力してください。"
+        title="空欄=税額表（令和8年分）で自動計算。個別事情があるときだけ手入力で上書き。"
       />
       {saved && <span style={{ color: "#3d6b4f", fontSize: 11 }}>✓</span>}
     </span>

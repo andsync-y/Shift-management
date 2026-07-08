@@ -119,13 +119,13 @@ export default async function PayslipPrintPage({
               {ded.empInsurance > 0 && <tr><td className="k">雇用保険料</td><td className="v">−{yen(ded.empInsurance)}</td></tr>}
               {ded.healthInsurance > 0 && <tr><td className="k">健康保険料{s.kaigo_applicable ? "（介護保険含む）" : ""}</td><td className="v">−{yen(ded.healthInsurance)}</td></tr>}
               {ded.pension > 0 && <tr><td className="k">厚生年金保険料</td><td className="v">−{yen(ded.pension)}</td></tr>}
-              <tr><td className="k">源泉所得税（{(s.tax_column ?? "otsu") === "kou" ? "甲欄" : "乙欄"}{ded.taxNeedsInput ? "・暫定" : ""}）</td><td className="v">−{yen(ded.incomeTax)}</td></tr>
+              <tr><td className="k">源泉所得税（{(s.tax_column ?? "otsu") === "kou" ? "甲欄" : "乙欄"}）</td><td className="v">−{yen(ded.incomeTax)}</td></tr>
               <tr className="ps-total"><td>差引支給額（手取り）</td><td className="v">{yen(ded.net)}</td></tr>
             </tbody>
           </table>
           <p className="ps-note">
             ※ 時給は期間別（6/8〜6/19 ¥1,060／6/20〜 ¥1,600フロア）。回数券バックは本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）。
-            交通費は非課税として課税対象から除外。{ded.taxNeedsInput ? "源泉所得税は未確定（暫定¥0）です。" : ""}
+            交通費は非課税として課税対象から除外。源泉所得税は令和8年分 税額表（月額表）による。
           </p>
         </div>
       ))}

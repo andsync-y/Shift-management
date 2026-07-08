@@ -112,7 +112,6 @@ export default async function PayrollPage({
 
   const totalGross = rows.reduce((sum, r) => sum + r.grossTotal, 0);
   const totalNet = rows.reduce((sum, r) => sum + r.ded.net, 0);
-  const taxPending = rows.filter((r) => r.ded.taxNeedsInput).map((r) => displayName(r.staff));
 
   // 振込（全銀）対象：口座情報が揃っていて差引支給>0 のスタッフ。振込額は手取り。
   const bankReady = (s: Profile) => !!(s.bank_code && s.branch_code && s.account_number && s.recipient_kana);
@@ -301,8 +300,8 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right" }}>{ded.pension ? `−${yen(ded.pension)}` : <span className="muted">—</span>}</td>
                     <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       <TaxInput staffId={s.id} month={month} initial={taxOverrides.get(s.id) ?? null} auto={ded.incomeTaxAuto} />
-                      {ded.taxNeedsInput && (
-                        <span className="mk late" style={{ marginLeft: 4 }} title="税額表の上位区分のため自動計算できません。令和8年分の税額表で確認して入力してください。">要入力</span>
+                      {taxOverrides.has(s.id) && (
+                        <span className="mk" style={{ marginLeft: 4 }} title={`手入力で上書き中（自動計算は ${yen(ded.incomeTaxAuto)}）。空欄に戻すと自動に復帰。`}>上書</span>
                       )}
                     </td>
                     <td className="en" style={{ textAlign: "right", fontWeight: 700 }}>{yen(ded.net)}</td>
@@ -312,17 +311,12 @@ export default async function PayrollPage({
             </table>
             <p className="help" style={{ marginBottom: 0 }}>
               <strong>税区分</strong>：甲＝扶養控除等申告書を当店に提出済み／乙＝未提出（他社が本業のダブルワーク等）。「スタッフ管理」で設定。
-              <strong>源泉所得税</strong>は 乙欄フラット域（課税対象 &lt; ¥105,000 → 3.063%）と甲欄¥0域（扶養0・課税対象 ≦ ¥105,000）を自動計算。
-              それ以外（<span className="mk late" style={{ margin: "0 3px" }}>要入力</span>）は令和8年分の税額表（月額表）を確認して手入力（入力があれば常に優先・空欄で自動に戻る）。
+              <strong>源泉所得税</strong>は<strong>令和8年分 税額表（月額表・甲欄/乙欄・扶養数対応）で自動計算</strong>。
+              個別事情があるときだけ手入力で上書き（入力があれば常に優先・空欄に戻すと自動に復帰）。
               <strong>雇用保険</strong>＝総支給×0.5%（交通費込・50銭以下切捨/超切上）。<strong>社会保険</strong>は加入設定したスタッフのみ、
               当月報酬から標準報酬月額を求める簡易方式（本来は資格取得時・定時決定で固定＝目安。健保料率は協会けんぽ岐阜の当年度告示に要更新）。
               差引支給（手取り）＝総支給−雇用保険−社保−源泉。
             </p>
-            {taxPending.length > 0 && (
-              <p className="help" style={{ marginTop: 6, marginBottom: 0, color: "#9a3a30" }}>
-                ⚠ 源泉が未確定（要入力）: {taxPending.join("・")} — 確定するまで差引支給は源泉¥0の暫定値です。
-              </p>
-            )}
           </div>
         </div>
       )}

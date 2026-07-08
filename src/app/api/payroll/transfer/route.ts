@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     const back = NOMINATION_BACK_RATE * (nom.get(s.id) ?? 0);
     const kaisBack = kaisukenBack(kais.get(s.id) ?? 0);
     const grossTotal = pay.gross + back + kaisBack;
-    // 振込額は控除後の差引支給（手取り）。源泉未確定（要入力）の分は源泉¥0の暫定値になる点に注意。
+    // 振込額は控除後の差引支給（手取り）。源泉は令和8年分税額表で自動計算（手入力があれば優先）。
     const ded = computeDeductions({
       gross: grossTotal,
       commute: pay.commute,
