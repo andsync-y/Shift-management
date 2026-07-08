@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { extractReceipts } from "@/lib/accounting/receipt-ocr";
+import { splitDuplicateReceipts } from "@/lib/accounting/receipt-dedup";
 
 export const dynamic = "force-dynamic";
 
@@ -13,8 +14,9 @@ const EXT = {
 } as const;
 type Media = keyof typeof EXT;
 
-// 領収書画像をアップロード → Storage保存 → Claudeで複数領収書を抽出 → receipts に登録。
-// multipart/form-data: file（画像）。返却: { ok, path, receipts, inserted }
+// 領収書画像をアップロード → Storage保存 → Claudeで複数領収書を抽出（勘定科目のAI提案つき）→
+// 重複（過去に取込済みの同じ領収書）を除いて receipts に登録（判定は receipt-dedup.ts）。
+// multipart/form-data: file（画像）。返却: { ok, path, receipts, inserted, skipped, skippedItems }
 export async function POST(req: NextRequest) {
   await requireAdmin();
 
@@ -43,22 +45,39 @@ export async function POST(req: NextRequest) {
   const res = await extractReceipts(bytes.toString("base64"), media);
   if (!res.ok) return NextResponse.json({ ok: false, error: res.message, path }, { status: 502 });
 
-  // receipts へ登録（オーナーセッション＝監査ログに記録）。検出0件でも画像1件は残す。
   const supabase = await createClient();
+  const { fresh, skipped: skippedItems } = await splitDuplicateReceipts(supabase, res.receipts);
+
+  // receipts へ登録（オーナーセッション＝監査ログに記録）。
+  // 検出0件のときは画像1件だけ残す。全件が重複スキップなら行は作らない。
   const rows =
-    res.receipts.length > 0
-      ? res.receipts.map((r) => ({
+    fresh.length > 0
+      ? fresh.map((r) => ({
           image_url: path,
           detected_date: r.date,
           detected_amount: r.amount,
           detected_merchant: r.merchant,
+          suggested_account: r.account,
           status: "pending" as const,
         }))
-      : [{ image_url: path, status: "pending" as const }];
-  const { error, count } = await supabase.from("receipts").insert(rows, { count: "exact" });
-  if (error) {
-    return NextResponse.json({ ok: false, error: error.message, path, receipts: res.receipts }, { status: 500 });
+      : res.receipts.length === 0
+        ? [{ image_url: path, status: "pending" as const }]
+        : [];
+  let inserted = 0;
+  if (rows.length > 0) {
+    const { error, count } = await supabase.from("receipts").insert(rows, { count: "exact" });
+    if (error) {
+      return NextResponse.json({ ok: false, error: error.message, path, receipts: res.receipts }, { status: 500 });
+    }
+    inserted = count ?? rows.length;
   }
 
-  return NextResponse.json({ ok: true, path, receipts: res.receipts, inserted: count ?? rows.length });
+  return NextResponse.json({
+    ok: true,
+    path,
+    receipts: res.receipts,
+    inserted,
+    skipped: skippedItems.length,
+    skippedItems,
+  });
 }

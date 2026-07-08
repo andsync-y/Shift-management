@@ -37,6 +37,7 @@ export default function ReceiptManager({
     start(async () => {
       let ok = 0;
       let detected = 0;
+      let skipped = 0;
       for (const file of Array.from(files)) {
         const fd = new FormData();
         fd.append("file", file);
@@ -45,12 +46,14 @@ export default function ReceiptManager({
         if (j.ok) {
           ok++;
           detected += j.inserted ?? 0;
+          skipped += j.skipped ?? 0;
         } else {
           setMsg({ ok: false, text: j.error ?? "アップロードに失敗しました。" });
         }
       }
       if (ok > 0) {
-        setMsg({ ok: true, text: `${ok}枚アップロード、${detected}件の領収書を取り込みました。内容を確認してください。` });
+        const skipNote = skipped > 0 ? `（取込済みと重複した${skipped}件はスキップ）` : "";
+        setMsg({ ok: true, text: `${ok}枚アップロード、${detected}件の領収書を取り込みました${skipNote}。勘定科目はAI提案済み — 内容を確認して確定してください。` });
         router.refresh();
       }
     });
@@ -106,7 +109,8 @@ export default function ReceiptManager({
             </p>
           )}
           <p className="help" style={{ marginBottom: 0 }}>
-            複数の領収書を並べて撮った1枚でもOK（AIが1枚ずつ日付・金額・支払先を読み取ります）。読み取り後、内容を確認して「確定」してください。
+            複数の領収書を並べて撮った1枚でもOK（AIが1枚ずつ日付・金額・支払先・<strong>勘定科目</strong>を読み取り・提案します）。
+            過去に取り込んだ領収書（日付＋金額＋支払先が同じ）は自動でスキップ。読み取り後、内容を確認して「確定」してください。
           </p>
         </div>
       </div>

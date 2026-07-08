@@ -25,7 +25,15 @@
 
 - 入力: `{ path, bucket="receipts", insert? }`（Storageの画像パス）。`requireAdmin` でオーナー限定。
 - 処理: Storageから画像取得（service role）→ **Claude ビジョン**（既存 `ANTHROPIC_API_KEY`・`src/lib/accounting/receipt-ocr.ts`）→
-  各領収書を `{date, amount, merchant}` で配列返却。`insert:true` で `receipts` に `status='pending'` 登録（オーナーセッションでinsert＝監査ログに記録）。
+  各領収書を `{date, amount, merchant, account}` で配列返却。`insert:true` で `receipts` に `status='pending'` 登録（オーナーセッションでinsert＝監査ログに記録）。
+- **勘定科目のAI提案**：OCR時に店名・品目から勘定科目を推定し（候補は `src/lib/accounting/accounts.ts` の
+  `ACCOUNTS` のみ・候補外の文字列は破棄）、`receipts.suggested_account` に保存。領収書一覧の勘定科目欄に
+  最初から入った状態になる（人が確認・修正して確定する運用は従来どおり）。
+- **重複取込の防止**（`src/lib/accounting/receipt-dedup.ts`・アップロード/OCR両ルートに適用）：
+  取込前に既存の領収書と照合し、**日付＋金額が一致し支払先が矛盾しない**（どちらかが読取不能 or
+  正規化一致）ものはスキップ。同日同額でも支払先が明確に別なら取り込む（誤スキップ防止）。
+  同じ画像内・同バッチの二重検出も除外。スキップ件数は画面メッセージに表示（APIは `skipped` /
+  `skippedItems` を返却）。日付か金額が読めなかったものは判定不能として取り込み、人の確認に回す。
 - **追加の鍵は不要**（本体と同じ `ANTHROPIC_API_KEY`。モデルは `RECEIPT_OCR_MODEL` で上書き可、既定 `claude-opus-4-8`）。
 - ※ 当初仕様の Gemini + Supabase Edge Function は、既存スタックに合わせ **Claude + Next.js ルート**へ変更。
 
