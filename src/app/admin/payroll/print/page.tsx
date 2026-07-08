@@ -106,7 +106,7 @@ export default async function PayslipPrintPage({
           <table className="ps-table">
             <tbody>
               <tr><td className="k">拘束時間</td><td className="v">{hhmm(pay.clockedMin)}</td></tr>
-              <tr><td className="k">実働時間（休憩控除・15分丸め後）</td><td className="v">{hhmm(pay.workedMin)}</td></tr>
+              <tr><td className="k">実働時間（休憩控除後・1分単位）</td><td className="v">{hhmm(pay.workedMin)}</td></tr>
               <tr><td className="k">うち残業</td><td className="v">{hhmm(pay.overtimeMin)}</td></tr>
               <tr><td className="k">うち深夜</td><td className="v">{hhmm(pay.nightMin)}</td></tr>
               <tr><td className="k">基本給</td><td className="v">{yen(pay.basePay)}</td></tr>
