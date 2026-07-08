@@ -8,6 +8,30 @@ import { ACCOUNTS } from "@/lib/accounting/accounts";
 
 const yen = (n: number | null) => (n == null ? "—" : `¥${Math.round(n).toLocaleString()}`);
 
+// アップロード前にブラウザで縮小・再圧縮する。
+// スマホのフル解像度写真（4〜6MB）は Vercel のリクエスト上限(4.5MB)と
+// Claude の画像サイズ上限を超えるため。長辺2200px・JPEG品質0.85はレシートOCRに十分。
+async function downscaleImage(file: File, maxDim = 2200, quality = 0.85): Promise<Blob> {
+  if (file.size < 1.5 * 1024 * 1024) return file; // 小さいものはそのまま
+  try {
+    const bmp = await createImageBitmap(file); // EXIFの向きは既定で反映される
+    const scale = Math.min(1, maxDim / Math.max(bmp.width, bmp.height));
+    const w = Math.round(bmp.width * scale);
+    const h = Math.round(bmp.height * scale);
+    const canvas = document.createElement("canvas");
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return file;
+    ctx.drawImage(bmp, 0, 0, w, h);
+    bmp.close();
+    const blob = await new Promise<Blob | null>((res) => canvas.toBlob(res, "image/jpeg", quality));
+    return blob && blob.size < file.size ? blob : file;
+  } catch {
+    return file; // デコードできない形式はそのまま送ってサーバ側のエラーに任せる
+  }
+}
+
 export default function ReceiptManager({
   receipts,
   cardByReceipt,
@@ -39,8 +63,9 @@ export default function ReceiptManager({
       let detected = 0;
       let skipped = 0;
       for (const file of Array.from(files)) {
+        const blob = await downscaleImage(file);
         const fd = new FormData();
-        fd.append("file", file);
+        fd.append("file", blob, blob === file ? file.name : "receipt.jpg");
         const res = await fetch("/api/accounting/receipt-upload", { method: "POST", body: fd });
         const j = await res.json().catch(() => ({}));
         if (j.ok) {

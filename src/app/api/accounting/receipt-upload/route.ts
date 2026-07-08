@@ -28,6 +28,14 @@ export async function POST(req: NextRequest) {
   const media = (file.type in EXT ? file.type : "image/jpeg") as Media;
   const bytes = Buffer.from(await file.arrayBuffer());
   if (bytes.length === 0) return NextResponse.json({ ok: false, error: "空のファイルです。" }, { status: 400 });
+  // 画面側で縮小してから送る想定（downscaleImage）。それでも大きい場合は明確に伝える。
+  // ※ 4.5MB超はこのコードに届く前にホスティング側(413)で弾かれることがある。
+  if (bytes.length > 4 * 1024 * 1024) {
+    return NextResponse.json(
+      { ok: false, error: "画像が大きすぎます（4MB以下にしてください）。画面からのアップロードは自動で縮小されます。" },
+      { status: 413 }
+    );
+  }
 
   // Storage へ保存（service role）。日付フォルダ＋ランダムで衝突回避。
   const admin = createAdminClient();

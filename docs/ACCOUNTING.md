@@ -58,6 +58,9 @@
 - **月次P&L** `/admin/accounting`：`v_pl_monthly` を service role で参照（RLS回避ビューのため一般ロールからは revoke 済み）。
 - **領収書** `/admin/accounting/receipts`：画像アップロード→OCR→一覧で日付/金額/支払先/勘定科目を確認・修正→確定。
   - アップロードは `POST /api/accounting/receipt-upload`（Storage `receipts` バケットへ保存→Claude抽出→receipts登録）。
+  - **画像はブラウザ側で自動縮小**（長辺2200px・JPEG再圧縮・`downscaleImage`）してから送信。
+    スマホのフル解像度写真（4〜6MB）はホスティングのリクエスト上限(4.5MB)やClaudeの画像上限を
+    超えるため。サーバ側でも4MB超は413で明確にエラーを返す。
   - 画像は署名付きURLで表示（Storageは非公開）。カード明細との照合状況も表示。
 - **売上入力** `/admin/accounting/sales`：月次売上を手入力（同月は上書き）。P&Lの売上に反映。
   - **Squareから取得**ボタン：選択月の**税抜・純売上（返金控除後）**をSquare Orders APIで集計し monthly_sales に上書き。
