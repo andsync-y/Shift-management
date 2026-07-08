@@ -4,7 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import type { CardTransaction, Receipt } from "@/lib/types";
 import { deleteReceipt, setReceiptStatus, updateReceipt } from "../actions";
-import { ACCOUNTS } from "@/lib/accounting/accounts";
+import AccountSelect from "../AccountSelect";
 
 const yen = (n: number | null) => (n == null ? "—" : `¥${Math.round(n).toLocaleString()}`);
 
@@ -209,12 +209,9 @@ export default function ReceiptManager({
                         />
                       </td>
                       <td>
-                        <input
-                          className="input"
-                          list="acct-list"
-                          style={{ width: 130 }}
+                        <AccountSelect
                           value={(field(r, "suggested_account") as string | null) ?? ""}
-                          onChange={(e) => setField(r.id, "suggested_account", e.target.value)}
+                          onChange={(v) => setField(r.id, "suggested_account", v || null)}
                           disabled={pending}
                         />
                       </td>
@@ -245,11 +242,6 @@ export default function ReceiptManager({
               </tbody>
             </table>
           )}
-          <datalist id="acct-list">
-            {ACCOUNTS.map((a) => (
-              <option key={a} value={a} />
-            ))}
-          </datalist>
         </div>
       </div>
     </>

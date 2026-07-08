@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { deleteCardTransaction, insertCardTransactions, updateCardAccount } from "../actions";
-import { ACCOUNTS } from "@/lib/accounting/accounts";
+import AccountSelect from "../AccountSelect";
 
 export interface CardRow {
   id: string;
@@ -320,14 +320,11 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
                     <td className="en" style={{ textAlign: "right" }}>{yen(r.amount)}</td>
                     <td>{r.merchant_name ?? ""}</td>
                     <td>
-                      <input
-                        className="input"
-                        list="acct-list-card"
-                        defaultValue={r.account ?? ""}
-                        style={{ width: 130 }}
+                      <AccountSelect
+                        value={r.account ?? ""}
                         disabled={pending}
-                        onBlur={(e) => {
-                          if ((e.target.value || "") !== (r.account ?? "")) saveAccount(r.id, e.target.value);
+                        onChange={(v) => {
+                          if (v !== (r.account ?? "")) saveAccount(r.id, v);
                         }}
                       />
                     </td>
@@ -346,11 +343,6 @@ export default function CardManager({ rows }: { rows: CardRow[] }) {
               </tbody>
             </table>
           )}
-          <datalist id="acct-list-card">
-            {ACCOUNTS.map((a) => (
-              <option key={a} value={a} />
-            ))}
-          </datalist>
         </div>
       </div>
     </>
