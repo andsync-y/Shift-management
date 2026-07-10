@@ -210,3 +210,30 @@ export async function deleteRequest(requestId: string) {
   revalidatePath("/admin/shifts", "layout");
   revalidatePath("/staff");
 }
+
+// 未対応（申請中）の休み希望をまとめて承認する（オーナー用）。
+// month="YYYY-MM" で対象月を絞り込み（空文字なら全期間）。
+// 1件ずつ reviewRequest を通すので、LINE通知・終日休みのシフト削除・
+// 欠員の出勤打診など単件承認と同じ処理がすべて実行される。
+export async function approveAllPending(
+  month: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  let q = supabase.from("time_off_requests").select("id").eq("status", "pending");
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    q = q.gte("off_date", `${month}-01`).lte("off_date", `${month}-31`);
+  }
+  const { data, error } = await q;
+  if (error) return { ok: false, message: error.message };
+  const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  if (ids.length === 0) return { ok: false, message: "未対応の申請はありません。" };
+
+  let done = 0;
+  for (const id of ids) {
+    await reviewRequest(id, "approved");
+    done++;
+  }
+  return { ok: true, message: `${done}件の休み希望を承認しました。` };
+}

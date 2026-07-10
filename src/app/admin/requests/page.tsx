@@ -11,6 +11,7 @@ import {
 } from "@/lib/types";
 import RequestActions from "./RequestActions";
 import CleanupShiftsButton from "./CleanupShiftsButton";
+import ApproveAllButton from "./ApproveAllButton";
 import LineTestButton from "./LineTestButton";
 import ShiftReminderButton from "./ShiftReminderButton";
 
@@ -244,7 +245,7 @@ export default async function AdminRequestsPage({
             </span>
             <span className="muted" style={{ fontWeight: 400 }}> 件</span>
           </h2>
-          <span style={{ display: "flex", alignItems: "center", gap: 14 }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
             <form method="get">
               <select
                 name="month"
@@ -264,6 +265,7 @@ export default async function AdminRequestsPage({
                 絞り込み
               </button>
             </form>
+            <ApproveAllButton month={month} count={shownPending} />
             <CleanupShiftsButton />
             <span className="eyebrow">Time-off</span>
           </span>
