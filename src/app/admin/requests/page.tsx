@@ -245,8 +245,9 @@ export default async function AdminRequestsPage({
             </span>
             <span className="muted" style={{ fontWeight: 400 }}> 件</span>
           </h2>
-          <span style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap" }}>
-            <form method="get">
+          <span style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {/* セレクトとボタンは1つの塊として折り返す（バラけると崩れて見える） */}
+            <form method="get" style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
               <select
                 name="month"
                 defaultValue={month}
@@ -261,7 +262,7 @@ export default async function AdminRequestsPage({
                   </option>
                 ))}
               </select>
-              <button type="submit" className="btn-outline" style={{ marginLeft: 6, fontSize: 12, padding: "6px 12px" }}>
+              <button type="submit" className="btn-outline" style={{ fontSize: 12, padding: "6px 12px" }}>
                 絞り込み
               </button>
             </form>
