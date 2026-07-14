@@ -82,17 +82,28 @@ export async function applyFcNominations(
   if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
   const supabase = await createClient();
 
+  // 対象月のKPIを持つ最新スナップショットを検索（過去月は月末頃のスナップショットが該当）。
+  type Snap = { data?: { month?: { month?: string; staffNominations?: { name: string; count: number }[] } } };
   const { data: snap } = await supabase
     .from("fc_kpi")
     .select("data")
+    .eq("data->month->>month", month)
     .order("as_of", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const m = (snap as { data?: { month?: { month?: string; staffNominations?: { name: string; count: number }[] } } } | null)?.data?.month;
-  if (!m || m.month !== month || !Array.isArray(m.staffNominations)) {
+  const m = (snap as Snap | null)?.data?.month;
+  if (!m || !Array.isArray(m.staffNominations)) {
+    // 当月なら「日次取得がまだ」、過去月なら「遡取得は不可＝手入力で十分」を正しく案内する。
+    const jstNow = new Date(Date.now() + 9 * 3600 * 1000);
+    const currentMonth = `${jstNow.getUTCFullYear()}-${String(jstNow.getUTCMonth() + 1).padStart(2, "0")}`;
+    const [y, mo] = month.split("-");
+    const label = `${y}年${Number(mo)}月`;
     return {
       ok: false,
-      message: `本部の${month}の指名数データがありません。先に「店舗KPI」の取得（日次ジョブ）を実行してください。`,
+      message:
+        month === currentMonth
+          ? `本部の${label}の指名数データがまだありません。「店舗KPI」の日次取得の実行後にもう一度お試しください。`
+          : `${label}のKPIスナップショットが見つかりませんでした。過去月のデータは本部から遡って取得できないため、指名本数は表に直接入力してください（すでに入力済みであればこの取込は不要です）。`,
     };
   }
 
