@@ -27,6 +27,9 @@ export async function GET(req: NextRequest) {
   const date = /^\d{4}-\d{2}-\d{2}$/.test(url.searchParams.get("date") ?? "")
     ? url.searchParams.get("date")!
     : end;
+  // kind=salary で給与振込形式（種別コード11・Web21の「給与／賞与振込」メニュー用）。
+  // 既定は総合振込（21）。給与振込は銀行側の締めが早い（通常3営業日前）ことに注意。
+  const typeCode = url.searchParams.get("kind") === "salary" ? ("11" as const) : ("21" as const);
 
   // 委託者情報（SMBCから付与される委託者コード等。環境変数で設定）
   const consignor = {
@@ -106,7 +109,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { bytes } = buildZenginData(consignor, transfers, date);
+  const { bytes } = buildZenginData(consignor, transfers, date, typeCode);
   return new Response(new Uint8Array(bytes), {
     headers: {
       "Content-Type": "application/octet-stream",

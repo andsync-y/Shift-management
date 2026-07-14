@@ -19,6 +19,7 @@ export default function TransferPanel({
   missing: string[];
 }) {
   const [date, setDate] = useState(defaultDate);
+  const [kind, setKind] = useState<"sogo" | "salary">("sogo");
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
@@ -26,7 +27,8 @@ export default function TransferPanel({
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch(`/api/payroll/transfer?month=${month}&date=${date}`, { cache: "no-store" });
+      const kindParam = kind === "salary" ? "&kind=salary" : "";
+      const res = await fetch(`/api/payroll/transfer?month=${month}&date=${date}${kindParam}`, { cache: "no-store" });
       if (!res.ok) {
         const j = await res.json().catch(() => null);
         setMsg(j?.error ?? "ファイル生成に失敗しました。");
@@ -48,11 +50,19 @@ export default function TransferPanel({
   return (
     <div className="section-body" style={{ paddingTop: 14 }}>
       <p className="help" style={{ marginTop: 0 }}>
-        当月の給与から<strong>総合振込データ（全銀フォーマット）</strong>を作成します。ダウンロードして
+        当月の給与から<strong>振込データ（全銀フォーマット）</strong>を作成します。ダウンロードして
         三井住友のビジネスバンキング（Web21／ValueDoor）にアップロード → 内容確認のうえ実行してください。
         金額は<strong>差引支給（手取り・控除後）</strong>です。
+        <strong>形式はWeb21のアップロード先メニューと一致させること</strong>（不一致だと「種別コードが不正」エラー）。
       </p>
       <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+        <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
+          形式
+          <select className="select" value={kind} onChange={(e) => setKind(e.target.value as "sogo" | "salary")} style={{ fontSize: 13, padding: "7px 28px 7px 10px" }}>
+            <option value="sogo">総合振込（種別21・前営業日締め）</option>
+            <option value="salary">給与振込（種別11・約3営業日前締め・手数料安）</option>
+          </select>
+        </label>
         <label style={{ display: "inline-flex", alignItems: "center", gap: 6, fontSize: 13 }}>
           振込指定日
           <input type="date" className="input en" value={date} onChange={(e) => setDate(e.target.value)} style={{ width: 160 }} />

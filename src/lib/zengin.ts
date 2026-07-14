@@ -54,11 +54,12 @@ function mmdd(date: string): string {
 export function buildZenginData(
   consignor: ZenginConsignor,
   transfers: ZenginTransfer[],
-  transferDate: string // "YYYY-MM-DD"
+  transferDate: string, // "YYYY-MM-DD"
+  typeCode: "21" | "11" = "21" // 種別コード: 21=総合振込 / 11=給与振込（銀行の対応メニューが異なる）
 ): { text: string; bytes: Buffer; count: number; total: number } {
   const header =
     "1" + // データ区分
-    "21" + // 種別コード（総合振込）
+    typeCode + // 種別コード
     "0" + // コード区分（0=JIS）
     digits(consignor.consignorCode, 10) +
     padLeft(toHankakuKana(consignor.consignorName), 40) +
