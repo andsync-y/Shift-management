@@ -400,13 +400,14 @@ export default async function PayrollPage({
             <span className="eyebrow">名前をタップで展開</span>
           </div>
           <div className="section-body">
-            {rows.map(({ staff: s, pay }) => (
+            {rows.map(({ staff: s, pay, grossTotal, ded }) => (
               <details key={s.id} className="pay-detail">
                 <summary>
                   <span className="dot" style={{ background: s.display_color, marginRight: 6 }} />
                   {displayName(s)}
+                  {/* 途中経過の金額を出すと振込額と誤認するため、総支給と振込額（差引支給）を明示する */}
                   <span className="soft" style={{ marginLeft: 8, fontSize: 12 }}>
-                    実働 {hhmm(pay.workedMin)} ・ {yen(pay.gross)}
+                    実働 {hhmm(pay.workedMin)} ・ 総支給 {yen(grossTotal)} ・ <strong>振込 {yen(ded.net)}</strong>
                   </span>
                 </summary>
                 <table className="staff-table" style={{ fontSize: 12.5, marginTop: 8 }}>
