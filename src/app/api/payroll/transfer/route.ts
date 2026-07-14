@@ -36,13 +36,15 @@ export async function GET(req: NextRequest) {
     bankName: process.env.ZENGIN_BANK_NAME ?? "ﾐﾂｲｽﾐﾄﾓｷﾞﾝｺｳ",
     branchCode: process.env.ZENGIN_BRANCH_CODE ?? "",
     branchName: process.env.ZENGIN_BRANCH_NAME ?? "",
+    accountType: process.env.ZENGIN_ACCOUNT_TYPE ?? "1", // 依頼人口座 預金種目（1=普通）
+    accountNumber: process.env.ZENGIN_ACCOUNT_NUMBER ?? "", // 依頼人口座番号(7桁)。Web21では必須
   };
-  if (!consignor.consignorCode || !consignor.consignorName || !consignor.branchCode) {
+  if (!consignor.consignorCode || !consignor.consignorName || !consignor.branchCode || !consignor.accountNumber) {
     return NextResponse.json(
       {
         ok: false,
         error:
-          "委託者情報が未設定です。環境変数 ZENGIN_CONSIGNOR_CODE / ZENGIN_CONSIGNOR_NAME / ZENGIN_BRANCH_CODE（必要なら ZENGIN_BANK_CODE / ZENGIN_BANK_NAME / ZENGIN_BRANCH_NAME）を設定してください。",
+          "委託者情報が未設定です。環境変数 ZENGIN_CONSIGNOR_CODE / ZENGIN_CONSIGNOR_NAME / ZENGIN_BRANCH_CODE / ZENGIN_ACCOUNT_NUMBER（引落口座番号7桁。必要なら ZENGIN_ACCOUNT_TYPE / ZENGIN_BANK_CODE / ZENGIN_BANK_NAME / ZENGIN_BRANCH_NAME）を設定してください。",
       },
       { status: 400 }
     );

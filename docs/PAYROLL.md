@@ -116,7 +116,10 @@
 - 振込金額＝**差引支給（手取り・控除後）**。口座情報が未登録のスタッフは対象外（画面に警告表示）。
 - 各スタッフの口座は「スタッフ管理」で登録（受取人カナは半角に自動変換）。
 - 委託者情報は環境変数：`ZENGIN_CONSIGNOR_CODE`（委託者コード）/ `ZENGIN_CONSIGNOR_NAME`（依頼人カナ）/
-  `ZENGIN_BRANCH_CODE`（自社支店）/ `ZENGIN_BANK_CODE`（既定0009）/ `ZENGIN_BANK_NAME` / `ZENGIN_BRANCH_NAME`。
+  `ZENGIN_BRANCH_CODE`（自社支店）/ **`ZENGIN_ACCOUNT_NUMBER`（引落口座番号7桁・Web21必須）** /
+  `ZENGIN_ACCOUNT_TYPE`（預金種目・既定1=普通）/ `ZENGIN_BANK_CODE`（既定0009）/ `ZENGIN_BANK_NAME` / `ZENGIN_BRANCH_NAME`。
+  - ヘッダーの96〜103桁目に依頼人口座（種目＋口座番号）が入る。未設定だと Web21 で
+    「フォーマットエラー（1行目、口座番号）」になる。
 - 拘束/実働：給与一覧に「拘束」（出勤〜退勤合計・勤怠管理と一致）と「実働」（休憩控除・15分丸め後）を併記。
 - ⚠️ 銀行が受け付けるか必ず**少人数で試験送金**して確認すること（フォーマット細部は銀行仕様に依存）。
 

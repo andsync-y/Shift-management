@@ -10,6 +10,8 @@ export interface ZenginConsignor {
   bankName: string; // 仕向銀行名（カナ・15）
   branchCode: string; // 仕向支店番号(3)
   branchName: string; // 仕向支店名（カナ・15）
+  accountType: string; // 依頼人（引落）口座 預金種目 1=普通 2=当座
+  accountNumber: string; // 依頼人（引落）口座番号(7)。Web21では必須
 }
 
 export interface ZenginTransfer {
@@ -65,7 +67,9 @@ export function buildZenginData(
     padLeft(toHankakuKana(consignor.bankName), 15) +
     digits(consignor.branchCode, 3) +
     padLeft(toHankakuKana(consignor.branchName), 15) +
-    " ".repeat(25); // ダミー
+    (consignor.accountType === "2" ? "2" : "1") + // 預金種目（依頼人＝引落口座）
+    digits(consignor.accountNumber, 7) + // 口座番号（依頼人＝引落口座）
+    " ".repeat(17); // ダミー
 
   const dataRecords = transfers.map(
     (t) =>
