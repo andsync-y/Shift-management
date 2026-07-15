@@ -84,7 +84,7 @@ export async function GET(req: NextRequest) {
     if (nowMin >= toMin(s.start_time) && !hasClockIn.has(s.staff_id) && !already.has(`${s.id}_in`)) {
       const ok = await pushLineMessage(
         lid,
-        `【打刻のお願い】本日 ${start}〜${end} のシフトです。\n出勤の打刻をお願いします🙏\n「おはようございます」と送ると出勤打刻になります。`
+        `【打刻のお願い】本日 ${start}〜${end} のシフトです。\n出勤の打刻をお願いします🙏\nメニューの「出勤」ボタンから打刻できます。`
       );
       if (ok) {
         await admin.from("clock_reminders").upsert(
@@ -100,7 +100,7 @@ export async function GET(req: NextRequest) {
     if (nowMin >= toMin(s.end_time) && hasOpen.has(s.staff_id) && !already.has(`${s.id}_out`)) {
       const ok = await pushLineMessage(
         lid,
-        `【打刻のお願い】${end} でシフト終了です。\n退勤の打刻をお願いします🙏\n「お疲れ様です」と送ると退勤打刻になります。`
+        `【打刻のお願い】${end} でシフト終了です。\n退勤の打刻をお願いします🙏\nメニューの「退勤」ボタンから打刻できます。`
       );
       if (ok) {
         await admin.from("clock_reminders").upsert(
