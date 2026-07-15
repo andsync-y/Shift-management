@@ -19,13 +19,14 @@ const STORE = process.env.STORE_NAME || "全力ストレッチ岐阜長良店";
 
 const PRINT_CSS = `
 @media print {
-  @page { size: A4 portrait; margin: 12mm; }
+  @page { size: A4 landscape; margin: 16mm 20mm; }
   body { background: #fff; }
   .no-print { display: none !important; }
-  .payslip { box-shadow: none !important; page-break-after: always; }
+  .payslip { box-shadow: none !important; max-width: none; margin: 0; page-break-after: always; }
   .payslip:last-child { page-break-after: auto; }
+  .ps-grid th, .ps-grid td { padding: 9px 12px; }
 }
-.payslip { max-width: 760px; margin: 0 auto 22px; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.08); font-size: 13px; }
+.payslip { max-width: 940px; margin: 0 auto 22px; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.08); font-size: 13px; }
 .ps-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
 .ps-grid th, .ps-grid td { border: 1.5px solid #1a2b4a; padding: 6px 9px; font-size: 12.5px; }
 .ps-grid th { background: #dbe5f1; font-weight: 600; text-align: left; }
