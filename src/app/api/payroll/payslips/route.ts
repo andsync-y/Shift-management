@@ -98,7 +98,7 @@ export async function POST(req: NextRequest) {
     }
     const ok = await pushLineMessage(
       e.lineUserId,
-      `${y}年${m}月分の給与明細です（${e.data.payDateLabel}支給）。\nこちらから確認できます（60日間有効）:\n${signed.signedUrl}`
+      `${e.name}さん\n${m}月もお疲れさまでした！✨\n\n${y}年${m}月分の給与明細をお送りします（${e.data.payDateLabel}支給）。\nこちらから確認できます（60日間有効）:\n${signed.signedUrl}\n\n内容に質問があればいつでも声をかけてください。`
     );
     if (ok) sent++;
     else failed.push(`${e.name}(LINE送信失敗)`);
