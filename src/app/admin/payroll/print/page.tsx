@@ -22,19 +22,19 @@ const PRINT_CSS = `
   @page { size: A4 portrait; margin: 12mm; }
   body { background: #fff; }
   .no-print { display: none !important; }
-  .payslip { box-shadow: none !important; border: 1px solid #ccc !important; page-break-after: always; }
+  .payslip { box-shadow: none !important; page-break-after: always; }
   .payslip:last-child { page-break-after: auto; }
 }
-.payslip { max-width: 720px; margin: 0 auto 18px; border: 1px solid var(--line); border-radius: 10px; padding: 22px 26px; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.08); }
-.ps-head { display: flex; justify-content: space-between; align-items: baseline; border-bottom: 2px solid var(--ink); padding-bottom: 10px; margin-bottom: 14px; }
-.ps-title { font-size: 18px; font-weight: 700; }
-.ps-store { font-size: 12px; color: var(--ink-2); }
-.ps-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
-.ps-table td { padding: 7px 4px; border-bottom: 1px solid var(--line); }
-.ps-table td.k { color: var(--ink-2); }
-.ps-table td.v { text-align: right; font-variant-numeric: tabular-nums; }
-.ps-total td { border-top: 2px solid var(--ink); border-bottom: 0; font-weight: 700; font-size: 16px; padding-top: 12px; }
-.ps-note { font-size: 11px; color: var(--ink-3); margin-top: 12px; }
+.payslip { max-width: 760px; margin: 0 auto 22px; background: #fff; box-shadow: 0 1px 8px rgba(0,0,0,.08); font-size: 13px; }
+.ps-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+.ps-grid th, .ps-grid td { border: 1.5px solid #1a2b4a; padding: 6px 9px; font-size: 12.5px; }
+.ps-grid th { background: #dbe5f1; font-weight: 600; text-align: left; }
+.ps-grid td.v { text-align: right; font-variant-numeric: tabular-nums; font-size: 14px; }
+.ps-grid td.sec { background: #dbe5f1; font-weight: 700; text-align: center; width: 34px; vertical-align: middle; letter-spacing: 2px; }
+.ps-grid .ttl { font-size: 15px; font-weight: 700; background: #fff; }
+.ps-grid .meta { text-align: right; background: #fff; }
+.ps-grid td.total { font-weight: 700; font-size: 16px; text-align: right; }
+.ps-note { font-size: 10.5px; color: #667; margin: 8px 2px 0; }
 `;
 
 export default async function PayslipPrintPage({
@@ -89,43 +89,95 @@ export default async function PayslipPrintPage({
     })
     .filter((r) => r.pay.workedMin > 0 || r.count > 0 || r.kaisCount > 0);
 
+  // 支給日＝翌月15日（当店の給与支払日）
+  const payDate = m === 12 ? `${y + 1}年1月15日` : `${y}年${m + 1}月15日`;
+
   return (
     <div className="print-root" style={{ padding: "14px 18px 28px" }}>
       <style>{PRINT_CSS}</style>
       <PrintBar label={`${y}年${m}月 給与明細`} />
 
-      {rows.map(({ s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross, ded }) => (
+      {rows.map(({ s, pay, count, back, kaisCount, kaisBack, gross, ded }) => (
         <div className="payslip" key={s.id}>
-          <div className="ps-head">
-            <div>
-              <div className="ps-title">{displayName(s)} 様</div>
-              <div className="ps-store">{y}年{m}月 給与明細</div>
-            </div>
-            <div className="ps-store">{STORE}</div>
-          </div>
-          <table className="ps-table">
+          <table className="ps-grid">
+            <colgroup>
+              <col style={{ width: 34 }} />
+              <col /><col /><col /><col />
+            </colgroup>
             <tbody>
-              <tr><td className="k">拘束時間</td><td className="v">{hhmm(pay.clockedMin)}</td></tr>
-              <tr><td className="k">実働時間（休憩控除後・1分単位）</td><td className="v">{hhmm(pay.workedMin)}</td></tr>
-              <tr><td className="k">うち残業</td><td className="v">{hhmm(pay.overtimeMin)}</td></tr>
-              <tr><td className="k">うち深夜</td><td className="v">{hhmm(pay.nightMin)}</td></tr>
-              <tr><td className="k">基本給</td><td className="v">{yen(pay.basePay)}</td></tr>
-              <tr><td className="k">残業割増</td><td className="v">{yen(pay.overtimePay)}</td></tr>
-              <tr><td className="k">深夜割増</td><td className="v">{yen(pay.nightPay)}</td></tr>
-              <tr><td className="k">交通費{s.commute_distance_km ? `（${s.commute_distance_km}km×2×15円×${pay.workedDays}日）` : ""}</td><td className="v">{yen(pay.commute)}</td></tr>
-              <tr><td className="k">指名バック（{count}本 × {yen(rate)}）</td><td className="v">{yen(back)}</td></tr>
-              <tr><td className="k">回数券バック（{kaisCount}本{kaisRate ? ` × ${yen(kaisRate)}` : ""}）</td><td className="v">{yen(kaisBack)}</td></tr>
-              <tr><td className="k" style={{ fontWeight: 700 }}>総支給（額面）</td><td className="v" style={{ fontWeight: 700 }}>{yen(gross)}</td></tr>
-              {ded.empInsurance > 0 && <tr><td className="k">雇用保険料</td><td className="v">−{yen(ded.empInsurance)}</td></tr>}
-              {ded.healthInsurance > 0 && <tr><td className="k">健康保険料{s.kaigo_applicable ? "（介護保険含む）" : ""}</td><td className="v">−{yen(ded.healthInsurance)}</td></tr>}
-              {ded.pension > 0 && <tr><td className="k">厚生年金保険料</td><td className="v">−{yen(ded.pension)}</td></tr>}
-              <tr><td className="k">源泉所得税（{(s.tax_column ?? "otsu") === "kou" ? "甲欄" : "乙欄"}）</td><td className="v">−{yen(ded.incomeTax)}</td></tr>
-              <tr className="ps-total"><td>差引支給額（手取り）</td><td className="v">{yen(ded.net)}</td></tr>
+              {/* 見出し */}
+              <tr>
+                <td className="ttl" colSpan={3}>{y}年{m}月 給与明細書</td>
+                <td className="meta" colSpan={2} style={{ fontWeight: 700, fontSize: 14 }}>{displayName(s)} 様</td>
+              </tr>
+              <tr>
+                <td className="meta" colSpan={5}>{payDate}支給　{STORE}</td>
+              </tr>
+
+              {/* 勤務 */}
+              <tr>
+                <td className="sec" rowSpan={2}>勤務</td>
+                <th>勤務日数</th><th>実働時間</th><th>うち残業</th><th>うち深夜</th>
+              </tr>
+              <tr>
+                <td className="v">{pay.workedDays}日</td>
+                <td className="v">{hhmm(pay.workedMin)}</td>
+                <td className="v">{hhmm(pay.overtimeMin)}</td>
+                <td className="v">{hhmm(pay.nightMin)}</td>
+              </tr>
+
+              {/* 支給 */}
+              <tr>
+                <td className="sec" rowSpan={4}>支給</td>
+                <th>基本給</th><th>残業手当</th><th>深夜手当</th><th>通勤費（非課税）</th>
+              </tr>
+              <tr>
+                <td className="v">{yen(pay.basePay)}</td>
+                <td className="v">{yen(pay.overtimePay)}</td>
+                <td className="v">{yen(pay.nightPay)}</td>
+                <td className="v">{yen(pay.commute)}</td>
+              </tr>
+              <tr>
+                <th>指名バック（{count}本）</th><th>回数券バック（{kaisCount}本）</th><th></th><th>支給額合計</th>
+              </tr>
+              <tr>
+                <td className="v">{yen(back)}</td>
+                <td className="v">{yen(kaisBack)}</td>
+                <td className="v"></td>
+                <td className="v" style={{ fontWeight: 700 }}>{yen(gross)}</td>
+              </tr>
+
+              {/* 控除 */}
+              <tr>
+                <td className="sec" rowSpan={4}>控除</td>
+                <th>健康保険{s.kaigo_applicable ? "（介護含む）" : ""}</th><th>厚生年金</th><th>雇用保険</th><th>社会保険計</th>
+              </tr>
+              <tr>
+                <td className="v">{yen(ded.healthInsurance)}</td>
+                <td className="v">{yen(ded.pension)}</td>
+                <td className="v">{yen(ded.empInsurance)}</td>
+                <td className="v">({yen(ded.socialTotal)})</td>
+              </tr>
+              <tr>
+                <th>課税対象額</th><th>所得税（{(s.tax_column ?? "otsu") === "kou" ? "甲欄" : "乙欄"}）</th><th>住民税</th><th>控除計</th>
+              </tr>
+              <tr>
+                <td className="v">({yen(ded.taxableBase)})</td>
+                <td className="v">{yen(ded.incomeTax)}</td>
+                <td className="v">{yen(0)}</td>
+                <td className="v" style={{ fontWeight: 700 }}>{yen(ded.socialTotal + ded.incomeTax)}</td>
+              </tr>
+
+              {/* 差引支給額 */}
+              <tr>
+                <th colSpan={3} style={{ textAlign: "right", fontSize: 14 }}>差引支給額</th>
+                <td className="total" colSpan={2}>{yen(ded.net)}</td>
+              </tr>
             </tbody>
           </table>
           <p className="ps-note">
-            ※ 時給は期間別（6/8〜6/19 ¥1,060／6/20〜 ¥1,600フロア）。回数券バックは本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）。
-            交通費は非課税として課税対象から除外。源泉所得税は令和8年分 税額表（月額表）による。
+            ※ 賃金は1分単位で計算。時給は期間別（6/8〜6/19 ¥1,060／6/20〜 ¥1,600）。回数券バックは本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）。
+            通勤費は非課税として課税対象から除外。所得税は源泉徴収税額表（令和8年分）月額表による。
           </p>
         </div>
       ))}
