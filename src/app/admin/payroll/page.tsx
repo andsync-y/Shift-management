@@ -9,6 +9,7 @@ import KaisukenInput from "./KaisukenInput";
 import TaxInput from "./TaxInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
+import SendPayslipsButton from "./SendPayslipsButton";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -268,7 +269,13 @@ export default async function PayrollPage({
         <div className="section">
           <div className="section-head">
             <h2>控除・差引支給（手取り）</h2>
-            <span className="eyebrow">手取り合計 {yen(totalNet)}</span>
+            <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <SendPayslipsButton month={month} count={rows.length} />
+              <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px" }} href={`/api/payroll/payslips?month=${month}`}>
+                📄 全員分PDF
+              </a>
+              <span className="eyebrow">手取り合計 {yen(totalNet)}</span>
+            </span>
           </div>
           <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
             <table className="staff-table" style={{ fontSize: 13 }}>
@@ -283,6 +290,7 @@ export default async function PayrollPage({
                   <th style={{ textAlign: "right" }}>厚生年金</th>
                   <th style={{ textAlign: "right" }}>源泉所得税</th>
                   <th style={{ textAlign: "right" }}>差引支給</th>
+                  <th>明細</th>
                 </tr>
               </thead>
               <tbody>
@@ -309,6 +317,11 @@ export default async function PayrollPage({
                       )}
                     </td>
                     <td className="en" style={{ textAlign: "right", fontWeight: 700 }}>{yen(ded.net)}</td>
+                    <td>
+                      <a className="btn-mini" href={`/api/payroll/payslips?month=${month}&staff=${s.id}`} title="この人の給与明細PDFをダウンロード">
+                        PDF
+                      </a>
+                    </td>
                   </tr>
                 ))}
               </tbody>

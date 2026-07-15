@@ -37,6 +37,16 @@
   - 形式は一般的な**給与明細書グリッド**（勤務＝日数/実働/残業/深夜 → 支給＝基本給/残業・深夜手当/
     通勤費/バック/支給額合計 → 控除＝健保/厚年/雇用保険/社会保険計/課税対象額/所得税/住民税/控除計 →
     **差引支給額**）。見出しに氏名・支給日（翌月15日）・店舗名を表示。
+- **給与明細のPDF・LINE送信**（`src/lib/payslip/`・`/api/payroll/payslips`）：
+  - 「控除・差引支給」表の各行の**「PDF」リンク**で1人分をダウンロード、見出しの
+    **「全員分PDF」**で全員を1ファイル（1人1ページ）でダウンロード（GET・オーナーのみ）。
+  - **「📨 明細PDFをLINE送信」ボタン**で、全員分のPDFを生成→非公開バケット `payslips` に保存
+    （`payslips/YYYY-MM/<staffId>.pdf`・上書き）→**署名付きURL（60日有効）を各自のLINEへ送信**（POST）。
+    LINE未連携のスタッフは結果メッセージに表示される。
+  - 様式は印刷ページと同じ給与明細書グリッド（A4横・pdf-lib）。日本語フォントは
+    `public/fonts/NotoSansJP-Medium-sub.ttf`（Noto Sans JP のサブセット・SIL OFL）を丸ごと埋め込む
+    （pdf-lib のサブセット機能はこのフォントでグリフ欠落を起こすため使用しない）。
+  - 要マイグレーション：`0039_payslips_bucket.sql`（payslips バケット作成）。
 - **総支給** = 基本(全労働×時給) + 残業割増 + 深夜割増 + **交通費** + **指名バック** + **回数券バック**。
   - 控除（源泉・雇用保険・社保）→ 手取りは下記「控除・差引支給」を参照。
 - **交通費（距離ベース・推奨）**：スタッフに **片道距離(km)** を設定すると、
@@ -110,6 +120,7 @@
 - `supabase/migrations/0037_kaisuken_back.sql`：`kaisuken_counts`（月別 回数券販売本数）。回数券バック（本数連動）の元データ。
 - `supabase/migrations/0038_payroll_deductions.sql`：`profiles` に税・保険設定（`tax_column` / `dependents_count` / `emp_insurance_enrolled` / `shaho_enrolled` / `kaigo_applicable`）＋ `income_tax_overrides`（月別 源泉の手入力）。
 - `supabase/migrations/0031_bank_account.sql`：`profiles` に振込先口座（銀行/支店コード・預金種目・口座番号・受取人カナ）。
+- `supabase/migrations/0039_payslips_bucket.sql`：給与明細PDFの非公開バケット `payslips`。
 
 ## 給与振込データ（全銀フォーマット・SMBC総合振込）
 
