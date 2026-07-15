@@ -119,6 +119,8 @@
   一方、データの締めが早い（通常3営業日前）。
 - 振込金額＝**差引支給（手取り・控除後）**。口座情報が未登録のスタッフは対象外（画面に警告表示）。
 - 各スタッフの口座は「スタッフ管理」で登録（受取人カナは半角に自動変換）。
+- **依頼人名（`ZENGIN_CONSIGNOR_NAME`）は出金口座の名義と完全一致させる**（スペースの有無も
+  一致判定される。例: `ｶ) ｱﾝﾄﾞｼﾝｸ`＝「ｶ)」の後に半角スペース）。不一致だと銀行画面で警告が出る。
 - 委託者情報は環境変数：`ZENGIN_CONSIGNOR_CODE`（委託者コード）/ `ZENGIN_CONSIGNOR_NAME`（依頼人カナ）/
   `ZENGIN_BRANCH_CODE`（自社支店）/ **`ZENGIN_ACCOUNT_NUMBER`（引落口座番号7桁・Web21必須）** /
   `ZENGIN_ACCOUNT_TYPE`（預金種目・既定1=普通）/ `ZENGIN_BANK_CODE`（既定0009）/ `ZENGIN_BANK_NAME` / `ZENGIN_BRANCH_NAME`。
