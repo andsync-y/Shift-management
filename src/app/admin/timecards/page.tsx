@@ -61,15 +61,17 @@ export default async function TimeCardsPage({
   }));
 
   // スタッフ別 集計
-  type Agg = { name: string; color: string; minutes: number; wage: number | null; open: number };
+  type Agg = { name: string; color: string; minutes: number; wage: number | null; open: number; days: Set<string> };
   const agg = new Map<string, Agg>();
   for (const r of records) {
     const p = staffMap.get(r.staff_id);
     const a =
       agg.get(r.staff_id) ??
-      { name: p?.full_name ?? "?", color: p?.display_color ?? "var(--ink-3)", minutes: 0, wage: p?.hourly_wage ?? null, open: 0 };
-    if (r.clock_in && r.clock_out) a.minutes += minutesBetween(r.clock_in, r.clock_out);
-    else if (r.clock_in && !r.clock_out) a.open += 1;
+      { name: p?.full_name ?? "?", color: p?.display_color ?? "var(--ink-3)", minutes: 0, wage: p?.hourly_wage ?? null, open: 0, days: new Set<string>() };
+    if (r.clock_in && r.clock_out) {
+      a.minutes += minutesBetween(r.clock_in, r.clock_out);
+      a.days.add(r.work_date); // 出勤日数＝出退勤が揃った日（給与計算の勤務日数と同じ定義）
+    } else if (r.clock_in && !r.clock_out) a.open += 1;
     agg.set(r.staff_id, a);
   }
   const rows = [...agg.values()].sort((a, b) => b.minutes - a.minutes);
@@ -117,6 +119,7 @@ export default async function TimeCardsPage({
                 <thead>
                   <tr>
                     <th>スタッフ</th>
+                    <th style={{ textAlign: "right" }}>出勤</th>
                     <th style={{ textAlign: "right" }}>勤務時間</th>
                     <th style={{ textAlign: "right" }}>時給</th>
                     <th style={{ textAlign: "right" }}>概算給与</th>
@@ -132,6 +135,7 @@ export default async function TimeCardsPage({
                           {r.open > 0 && <span className="live-dot" title={`打刻中 ${r.open}件`} />}
                         </span>
                       </td>
+                      <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>{r.days.size}日</td>
                       <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                         {Math.floor(r.minutes / 60)}時間{r.minutes % 60}分
                       </td>
