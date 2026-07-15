@@ -119,6 +119,10 @@ export default async function PayrollPage({
   const transferTotal = transferRows.reduce((s, r) => s + r.ded.net, 0);
   const missingBank = rows.filter((r) => r.ded.net > 0 && !bankReady(r.staff)).map((r) => displayName(r.staff));
   const monthEndDate = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
+  // 振込指定日の初期値: 対象月の月末。ただし過去日は銀行が受け付けないため、
+  // 月末が過ぎている（過去月の給与を翌月に払う）場合は今日(JST)にする。
+  const todayJst = new Date(Date.now() + 9 * 3600 * 1000).toISOString().slice(0, 10);
+  const defaultTransferDate = monthEndDate < todayJst ? todayJst : monthEndDate;
 
   return (
     <div className="page page-wide">
@@ -330,7 +334,7 @@ export default async function PayrollPage({
           </div>
           <TransferPanel
             month={month}
-            defaultDate={monthEndDate}
+            defaultDate={defaultTransferDate}
             count={transferRows.length}
             total={transferTotal}
             missing={missingBank}
