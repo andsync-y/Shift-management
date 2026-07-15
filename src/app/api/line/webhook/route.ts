@@ -250,11 +250,16 @@ export async function POST(req: NextRequest) {
       const isIn = IN_WORDS.some((w) => t.includes(w));
       const isOut = OUT_WORDS.some((w) => t.includes(w));
 
+      // キーワードに該当しない雑談・返信（明細への「ありがとうございます」等）には
+      // 何も返さない。以前は使い方の案内を自動返信していたが、会話のたびに
+      // 説明文が返ってくるのは不自然なため廃止。使い方は「ヘルプ」でのみ案内する。
       if (!isIn && !isOut) {
-        await replyLineMessage(
-          ev.replyToken,
-          "「おはようございます」で出勤、「お疲れ様です」で退勤を記録します。ログイン情報は「ID」または「パスワード」と送ってください。"
-        );
+        if (t.includes("ヘルプ") || lc.includes("help") || t.includes("使い方")) {
+          await replyLineMessage(
+            ev.replyToken,
+            "「おはようございます」で出勤、「お疲れ様です」で退勤を記録します。ログイン情報は「ID」または「パスワード」と送ってください。"
+          );
+        }
         continue;
       }
 
