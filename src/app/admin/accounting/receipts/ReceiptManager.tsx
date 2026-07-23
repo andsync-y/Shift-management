@@ -11,6 +11,40 @@ const yen = (n: number | null) => (n == null ? "—" : `¥${Math.round(n).toLoca
 type PayMethod = "" | "card" | "cash" | "personal";
 const PAY_LABELS: Record<Exclude<PayMethod, "">, string> = { card: "カード", cash: "現金", personal: "立替" };
 
+// 既存領収書の支払手段（カード/現金）を一括判定するボタン。
+// カード明細照合済み→カード、それ以外は保存済み画像を再OCRして判定（未判定は手修正）。
+function BackfillPaymentButton() {
+  const router = useRouter();
+  const [pending, start] = useTransition();
+  const [msg, setMsg] = useState<string | null>(null);
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <button
+        className="btn-outline"
+        style={{ fontSize: 12.5, padding: "7px 12px", whiteSpace: "nowrap" }}
+        disabled={pending}
+        title="支払手段が未設定の領収書を一括判定します（カード明細照合済み→カード／残りは画像を再解析）"
+        onClick={() => {
+          if (!confirm("支払手段が未設定の領収書を一括判定します（保存済み画像をAIで再解析）。よろしいですか？")) return;
+          start(async () => {
+            try {
+              const res = await fetch("/api/accounting/receipts-backfill-payment", { method: "POST" });
+              const j = await res.json().catch(() => null);
+              setMsg(j?.message ?? j?.error ?? "失敗しました。");
+              if (j?.ok) router.refresh();
+            } catch {
+              setMsg("通信に失敗しました。");
+            }
+          });
+        }}
+      >
+        {pending ? "判定中…" : "支払手段を一括判定"}
+      </button>
+      {msg && <span className="help" style={{ margin: 0 }}>{msg}</span>}
+    </span>
+  );
+}
+
 // freee会計「取引の一括登録」向けの明細CSVエクスポート（対象年・確定のみの絞り込み付き）。
 function ExportControls() {
   const thisYear = new Date().getFullYear();
@@ -177,7 +211,8 @@ export default function ReceiptManager({
       <div className="section">
         <div className="section-head">
           <h2>領収書一覧</h2>
-          <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            <BackfillPaymentButton />
             <ExportControls />
             <span className="eyebrow">{receipts.length}件</span>
           </span>
