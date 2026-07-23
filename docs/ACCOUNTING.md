@@ -31,10 +31,11 @@
   `card`/`cash` を判定して `receipts.payment_method` に保存（不明はnull・電子マネー/QRはcard扱い）。
   一覧の「支払」列で手修正できる（カード/現金/立替）。migration **0040**。
   - **既存分の一括判定**：一覧の「支払手段を一括判定」ボタン
-    （`POST /api/accounting/receipts-backfill-payment`）。未設定の行を
-    ①カード明細照合済み→カード ②残りは保存済み画像を再OCRして card/cash 判定
-    （日付＋金額で既存行と突合・曖昧ならスキップ）。1回で最大25画像、残りは再実行で続き。
-    判別できなかった行は null のまま＝一覧で手修正。
+    （`/api/accounting/receipts-backfill-payment`・GET=残数、POST=数枚ずつ処理）。
+    未設定の行を ①カード明細照合済み→カード ②残りは保存済み画像を再OCRして
+    card/cash 判定（日付＋金額で既存行と突合・曖昧ならスキップ）。
+    **画面側が1リクエスト2画像のループで呼び、進捗%を表示**（サーバータイムアウト回避）。
+    処理済み画像は `skip` で渡して再選択を防ぐ。判別できなかった行は null のまま＝一覧で手修正。
 - **勘定科目のAI提案**：OCR時に店名・品目から勘定科目を推定し（候補は `src/lib/accounting/accounts.ts` の
   `ACCOUNTS` のみ・候補外の文字列は破棄）、`receipts.suggested_account` に保存。領収書一覧の勘定科目欄に
   最初から入った状態になる（人が確認・修正して確定する運用は従来どおり）。

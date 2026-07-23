@@ -1,12 +1,13 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
 import { extractReceipts } from "@/lib/accounting/receipt-ocr";
 
 export const dynamic = "force-dynamic";
 
-// 1回の実行で再OCRする画像数の上限（タイムアウト対策。残りは再実行で続きから）
-const MAX_IMAGES_PER_RUN = 25;
+// 1回のPOSTで再OCRする画像数。画面側がループで呼び、進捗%を表示する
+// （1リクエストを短く保ちサーバーのタイムアウトを避ける）。
+const IMAGES_PER_CALL = 2;
 
 type Media = "image/png" | "image/jpeg" | "image/gif" | "image/webp";
 const EXT_TO_MEDIA: Record<string, Media> = {
@@ -17,65 +18,79 @@ const EXT_TO_MEDIA: Record<string, Media> = {
   webp: "image/webp",
 };
 
-// 支払手段が未設定の既存領収書に payment_method を一括で埋める（オーナーのみ）。
-//   POST /api/accounting/receipts-backfill-payment
-// 1) カード明細と照合済みの行 → OCRせず 'card' に更新
-// 2) 残りは画像ごとに再OCRし、日付＋金額で既存行と突合して card/cash を更新
-//    （新規行は作らない・判定できなかった行は null のまま＝画面で手修正）
-export async function POST() {
+type Row = { id: string; image_url: string; detected_date: string | null; detected_amount: number | null };
+
+async function pendingRows(supabase: Awaited<ReturnType<typeof createClient>>): Promise<Row[]> {
+  const { data } = await supabase
+    .from("receipts")
+    .select("id, image_url, detected_date, detected_amount")
+    .is("payment_method", null);
+  return (data ?? []) as Row[];
+}
+
+// 進捗の現在地（残り画像数・行数）。画面側が%計算の分母を取るのに使う。
+export async function GET() {
   await requireAdmin();
+  const supabase = await createClient();
+  const rows = await pendingRows(supabase);
+  return NextResponse.json({
+    ok: true,
+    remainingImages: new Set(rows.map((r) => r.image_url)).size,
+    remainingRows: rows.length,
+  });
+}
+
+// 支払手段が未設定の既存領収書を少しずつ埋める（オーナーのみ・画面からループ実行）。
+//   POST body: { skip?: string[] } … 既に処理した画像パス（判定不能の行が残る画像を
+//   再選択して無限ループしないよう、画面側が累積して渡す）
+// 毎回: 1) カード明細照合済み→'card'（冪等・軽量） 2) skip以外の画像を IMAGES_PER_CALL 枚だけ再OCR。
+export async function POST(req: NextRequest) {
+  await requireAdmin();
+  const body = (await req.json().catch(() => null)) as { skip?: string[] } | null;
+  const skip = new Set(Array.isArray(body?.skip) ? body!.skip!.filter((s) => typeof s === "string") : []);
+
   const supabase = await createClient();
   const admin = createAdminClient();
 
-  const { data: targetsRaw, error } = await supabase
-    .from("receipts")
-    .select("id, image_url, detected_date, detected_amount")
-    .is("payment_method", null);
-  if (error) return NextResponse.json({ ok: false, error: error.message }, { status: 500 });
-
-  type Row = { id: string; image_url: string; detected_date: string | null; detected_amount: number | null };
-  const targets = (targetsRaw ?? []) as Row[];
-  if (targets.length === 0) {
-    return NextResponse.json({ ok: true, message: "支払手段が未設定の領収書はありません。" });
-  }
-
-  // 1) カード明細と照合済み → 'card'
+  // 1) カード明細と照合済み → 'card'（毎回実行しても冪等）
   let byMatch = 0;
   {
-    const { data: cards } = await supabase
-      .from("card_transactions")
-      .select("receipt_id")
-      .in("receipt_id", targets.map((t) => t.id));
-    const matchedIds = [...new Set(((cards ?? []) as { receipt_id: string | null }[]).map((c) => c.receipt_id).filter(Boolean))] as string[];
-    if (matchedIds.length > 0) {
-      const { error: upErr } = await supabase.from("receipts").update({ payment_method: "card" }).in("id", matchedIds);
-      if (!upErr) byMatch = matchedIds.length;
+    const rows = await pendingRows(supabase);
+    if (rows.length > 0) {
+      const { data: cards } = await supabase
+        .from("card_transactions")
+        .select("receipt_id")
+        .in("receipt_id", rows.map((t) => t.id));
+      const matchedIds = [
+        ...new Set(((cards ?? []) as { receipt_id: string | null }[]).map((c) => c.receipt_id).filter(Boolean)),
+      ] as string[];
+      if (matchedIds.length > 0) {
+        const { error: upErr } = await supabase.from("receipts").update({ payment_method: "card" }).in("id", matchedIds);
+        if (!upErr) byMatch = matchedIds.length;
+      }
     }
   }
 
-  // 2) 残り（照合で埋まらなかった未設定分）を画像ごとに再OCR
-  const { data: stillRaw } = await supabase
-    .from("receipts")
-    .select("id, image_url, detected_date, detected_amount")
-    .is("payment_method", null);
-  const still = ((stillRaw ?? []) as Row[]);
-
+  // 2) skip以外の画像から数枚だけ再OCR
+  const still = await pendingRows(supabase);
   const byImage = new Map<string, Row[]>();
   for (const r of still) {
     if (!byImage.has(r.image_url)) byImage.set(r.image_url, []);
     byImage.get(r.image_url)!.push(r);
   }
-  const images = [...byImage.keys()];
-  const processImages = images.slice(0, MAX_IMAGES_PER_RUN);
+  const candidates = [...byImage.keys()].filter((p) => !skip.has(p));
+  const targets = candidates.slice(0, IMAGES_PER_CALL);
 
-  let byOcrCard = 0;
-  let byOcrCash = 0;
-  let ocrFailed = 0;
-  for (const path of processImages) {
+  let ocrCard = 0;
+  let ocrCash = 0;
+  let failed = 0;
+  let undecided = 0;
+  for (const path of targets) {
     const rows = byImage.get(path)!;
     const { data: file, error: dlErr } = await admin.storage.from("receipts").download(path);
     if (dlErr || !file) {
-      ocrFailed++;
+      failed++;
+      undecided += rows.length;
       continue;
     }
     const ext = path.split(".").pop()?.toLowerCase() ?? "jpg";
@@ -83,38 +98,49 @@ export async function POST() {
     const base64 = Buffer.from(await file.arrayBuffer()).toString("base64");
     const res = await extractReceipts(base64, media);
     if (!res.ok) {
-      ocrFailed++;
+      failed++;
+      undecided += rows.length;
       continue;
     }
-    // 日付＋金額で既存行と突合（同一キーが複数ある場合は曖昧なのでスキップ）
     for (const row of rows) {
-      const candidates = res.receipts.filter(
-        (d) => d.payment && d.date === row.detected_date && d.amount != null && Math.round(d.amount) === Math.round(Number(row.detected_amount ?? NaN))
+      const hits = res.receipts.filter(
+        (d) =>
+          d.payment &&
+          d.date === row.detected_date &&
+          d.amount != null &&
+          Math.round(d.amount) === Math.round(Number(row.detected_amount ?? NaN))
       );
-      if (candidates.length !== 1) continue;
-      const pm = candidates[0].payment!;
+      if (hits.length !== 1) {
+        undecided++;
+        continue;
+      }
+      const pm = hits[0].payment!;
       const { error: upErr } = await supabase.from("receipts").update({ payment_method: pm }).eq("id", row.id);
       if (!upErr) {
-        if (pm === "card") byOcrCard++;
-        else byOcrCash++;
+        if (pm === "card") ocrCard++;
+        else ocrCash++;
+      } else {
+        undecided++;
       }
     }
   }
 
-  const leftImages = images.length - processImages.length;
-  const { count: leftCount } = await supabase
+  const remainingImages = candidates.length - targets.length; // 未処理（skip・今回分を除く）
+  const { count: remainingRows } = await supabase
     .from("receipts")
     .select("id", { count: "exact", head: true })
     .is("payment_method", null);
 
-  const parts: string[] = [];
-  if (byMatch) parts.push(`カード明細照合済み→カード: ${byMatch}件`);
-  if (byOcrCard) parts.push(`再OCR判定→カード: ${byOcrCard}件`);
-  if (byOcrCash) parts.push(`再OCR判定→現金: ${byOcrCash}件`);
-  if (ocrFailed) parts.push(`画像取得/OCR失敗: ${ocrFailed}枚`);
-  if (leftImages > 0) parts.push(`未処理画像あと${leftImages}枚（もう一度実行で続き）`);
-  const undetermined = leftCount ?? 0;
-  parts.push(`残り未設定: ${undetermined}件${undetermined > 0 && leftImages === 0 ? "（印字から判別不能＝一覧で手修正）" : ""}`);
-
-  return NextResponse.json({ ok: true, message: parts.join("／") });
+  return NextResponse.json({
+    ok: true,
+    done: remainingImages === 0,
+    processedImages: targets, // 画面側が skip に積む
+    byMatch,
+    ocrCard,
+    ocrCash,
+    failed,
+    undecided,
+    remainingImages,
+    remainingRows: remainingRows ?? 0,
+  });
 }

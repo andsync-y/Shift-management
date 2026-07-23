@@ -12,33 +12,81 @@ type PayMethod = "" | "card" | "cash" | "personal";
 const PAY_LABELS: Record<Exclude<PayMethod, "">, string> = { card: "カード", cash: "現金", personal: "立替" };
 
 // 既存領収書の支払手段（カード/現金）を一括判定するボタン。
-// カード明細照合済み→カード、それ以外は保存済み画像を再OCRして判定（未判定は手修正）。
+// カード明細照合済み→カード、それ以外は保存済み画像を少しずつ再OCR（1リクエスト数枚を
+// ループで呼ぶ＝進捗%を表示しつつサーバーのタイムアウトも回避）。未判定は手修正。
 function BackfillPaymentButton() {
   const router = useRouter();
-  const [pending, start] = useTransition();
+  const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<{ done: number; total: number } | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+
+  const run = async () => {
+    setRunning(true);
+    setMsg(null);
+    try {
+      // 分母（未処理の画像数）を取得
+      const st = await fetch("/api/accounting/receipts-backfill-payment").then((r) => r.json());
+      const total: number = st?.remainingImages ?? 0;
+      if (!st?.ok || total === 0) {
+        setMsg(st?.ok ? "支払手段が未設定の領収書はありません。" : (st?.error ?? "状態の取得に失敗しました。"));
+        return;
+      }
+      setProgress({ done: 0, total });
+
+      const sums = { byMatch: 0, ocrCard: 0, ocrCash: 0, failed: 0, undecided: 0 };
+      const skip: string[] = [];
+      // 1回=数枚を完了まで繰り返す（安全弁として最大200回）
+      for (let i = 0; i < 200; i++) {
+        const res = await fetch("/api/accounting/receipts-backfill-payment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ skip }),
+        });
+        const j = await res.json().catch(() => null);
+        if (!j?.ok) {
+          setMsg(j?.error ?? "判定に失敗しました。途中までの結果は保存されています。");
+          return;
+        }
+        sums.byMatch += j.byMatch ?? 0;
+        sums.ocrCard += j.ocrCard ?? 0;
+        sums.ocrCash += j.ocrCash ?? 0;
+        sums.failed += j.failed ?? 0;
+        sums.undecided += j.undecided ?? 0;
+        skip.push(...(j.processedImages ?? []));
+        setProgress({ done: Math.min(total, skip.length), total });
+        if (j.done) break;
+      }
+
+      const parts: string[] = [];
+      if (sums.byMatch) parts.push(`照合済み→カード${sums.byMatch}件`);
+      if (sums.ocrCard) parts.push(`カード${sums.ocrCard}件`);
+      if (sums.ocrCash) parts.push(`現金${sums.ocrCash}件`);
+      if (sums.undecided) parts.push(`判別不能${sums.undecided}件（一覧で手修正）`);
+      if (sums.failed) parts.push(`解析失敗${sums.failed}枚`);
+      setMsg(`完了：${parts.join("・") || "更新なし"}`);
+      router.refresh();
+    } catch {
+      setMsg("通信に失敗しました。途中までの結果は保存されています。");
+    } finally {
+      setRunning(false);
+      setProgress(null);
+    }
+  };
+
+  const pct = progress ? Math.round((progress.done / progress.total) * 100) : 0;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <button
         className="btn-outline"
         style={{ fontSize: 12.5, padding: "7px 12px", whiteSpace: "nowrap" }}
-        disabled={pending}
+        disabled={running}
         title="支払手段が未設定の領収書を一括判定します（カード明細照合済み→カード／残りは画像を再解析）"
         onClick={() => {
           if (!confirm("支払手段が未設定の領収書を一括判定します（保存済み画像をAIで再解析）。よろしいですか？")) return;
-          start(async () => {
-            try {
-              const res = await fetch("/api/accounting/receipts-backfill-payment", { method: "POST" });
-              const j = await res.json().catch(() => null);
-              setMsg(j?.message ?? j?.error ?? "失敗しました。");
-              if (j?.ok) router.refresh();
-            } catch {
-              setMsg("通信に失敗しました。");
-            }
-          });
+          void run();
         }}
       >
-        {pending ? "判定中…" : "支払手段を一括判定"}
+        {running ? (progress ? `判定中… ${pct}%（${progress.done}/${progress.total}枚）` : "判定中…") : "支払手段を一括判定"}
       </button>
       {msg && <span className="help" style={{ margin: 0 }}>{msg}</span>}
     </span>
