@@ -15,6 +15,7 @@ export async function updateReceipt(
     detected_amount: number | null;
     detected_merchant: string | null;
     suggested_account: string | null;
+    payment_method: "card" | "cash" | "personal" | null;
   }
 ): Promise<AcctResult> {
   await requireAdmin();
@@ -26,6 +27,7 @@ export async function updateReceipt(
       detected_amount: patch.detected_amount,
       detected_merchant: patch.detected_merchant || null,
       suggested_account: patch.suggested_account || null,
+      payment_method: patch.payment_method || null,
     })
     .eq("id", id);
   if (error) return { ok: false, message: error.message };

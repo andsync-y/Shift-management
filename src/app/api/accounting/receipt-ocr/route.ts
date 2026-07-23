@@ -54,6 +54,7 @@ export async function POST(req: NextRequest) {
         detected_amount: r.amount,
         detected_merchant: r.merchant,
         suggested_account: r.account,
+        payment_method: r.payment,
         status: "pending",
       }));
       const { error, count } = await supabase.from("receipts").insert(rows, { count: "exact" });

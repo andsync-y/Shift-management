@@ -201,6 +201,7 @@ export interface Receipt {
   detected_amount: number | null;
   detected_merchant: string | null;
   suggested_account: string | null;
+  payment_method?: "card" | "cash" | "personal" | null; // 支払手段（OCR判定＋手修正・null=不明）
   status: "pending" | "confirmed";
   created_at: string;
   updated_at: string;

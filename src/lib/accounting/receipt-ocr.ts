@@ -15,6 +15,7 @@ export interface DetectedReceipt {
   amount: number | null; // 税込合計
   merchant: string | null;
   account: string | null; // AI提案の勘定科目（ACCOUNTS のいずれか）
+  payment: "card" | "cash" | null; // 支払手段（レシートの印字から判定・不明はnull）
 }
 
 export interface ReceiptOcrResult {
@@ -33,6 +34,10 @@ const PROMPT = `あなたは日本の経理担当者です。これは「複数�
 - date: 日付。"YYYY-MM-DD"。和暦・スラッシュ等は西暦ハイフンに正規化。年が無ければ当年。読めなければ null。
 - amount: 支払合計金額（税込）。数値のみ（円記号・カンマ・「円」を除く）。小計や預り金ではなく「合計」。読めなければ null。
 - merchant: 支払先（店名・会社名）。読めなければ null。
+- payment: 支払手段。レシートの印字から判定する。
+  クレジット・カード・VISA・Mastercard・AMEX・JCB・IC・タッチ決済 等の記載 → "card"
+  現金・お預り・お釣り・釣銭 等の記載 → "cash"
+  判別できなければ null。電子マネー・QR決済（PayPay等）は "card" とする。
 - account: 勘定科目。店名と購入品目から最も適切なものを次の候補から1つだけ選ぶ:
   ${ACCOUNTS.join(" / ")}
   分類の目安: 施術用オイル・タオル・備品・日用品→消耗品費 / 取引先との飲食→接待交際費 /
@@ -45,7 +50,7 @@ const PROMPT = `あなたは日本の経理担当者です。これは「複数�
 - レシート/領収書でないもの（メモ・商品・背景）は出力に含めない。
 - 推測で値を捏造しない。読めない項目は必ず null（account は候補外の文字列を出さない）。
 - 出力はJSONのみ（前後に説明文・コードフェンス・余計なキーを付けない）。
-- 形式: {"receipts":[{"date":"YYYY-MM-DD","amount":1234,"merchant":"...","account":"消耗品費"}]}
+- 形式: {"receipts":[{"date":"YYYY-MM-DD","amount":1234,"merchant":"...","account":"消耗品費","payment":"card"}]}
 - 1枚も検出できなければ {"receipts":[]}。`;
 
 export async function extractReceipts(
@@ -91,6 +96,7 @@ export async function extractReceipts(
         merchant: typeof r.merchant === "string" && r.merchant.trim() ? r.merchant.trim() : null,
         // 候補リスト外の科目は捨てる（datalist・集計の並びと揃える）
         account: typeof r.account === "string" && accountSet.has(r.account.trim()) ? r.account.trim() : null,
+        payment: r.payment === "card" || r.payment === "cash" ? r.payment : null,
       };
     });
     return { ok: true, receipts };

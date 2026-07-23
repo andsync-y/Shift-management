@@ -12,6 +12,7 @@
 | `0022_accounting_views.sql` | 人件費ビュー・経費ビュー・月次P&Lビュー |
 | `0023_monthly_sales.sql` | 月次売上(手入力) `monthly_sales` ＋ P&Lに売上反映 |
 | `0024_expense_account.sql` | カード明細に勘定科目 `account`＋科目別月次ビュー `v_expense_by_account_monthly` |
+| `0040_receipt_payment_method.sql` | 領収書に支払手段 `payment_method`（card/cash/personal・OCR判定＋手修正） |
 | `src/app/api/accounting/receipt-ocr/route.ts` | 領収書まとめ撮り画像→Claudeで複数領収書を一括抽出（オーナーのみ） |
 
 ## 1. テーブルと監査ログ
@@ -26,6 +27,9 @@
 - 入力: `{ path, bucket="receipts", insert? }`（Storageの画像パス）。`requireAdmin` でオーナー限定。
 - 処理: Storageから画像取得（service role）→ **Claude ビジョン**（既存 `ANTHROPIC_API_KEY`・`src/lib/accounting/receipt-ocr.ts`）→
   各領収書を `{date, amount, merchant, account}` で配列返却。`insert:true` で `receipts` に `status='pending'` 登録（オーナーセッションでinsert＝監査ログに記録）。
+- **支払手段のAI判定**：レシートの印字（クレジット/VISA/現金/お預り等）から
+  `card`/`cash` を判定して `receipts.payment_method` に保存（不明はnull・電子マネー/QRはcard扱い）。
+  一覧の「支払」列で手修正できる（カード/現金/立替）。migration **0040**。
 - **勘定科目のAI提案**：OCR時に店名・品目から勘定科目を推定し（候補は `src/lib/accounting/accounts.ts` の
   `ACCOUNTS` のみ・候補外の文字列は破棄）、`receipts.suggested_account` に保存。領収書一覧の勘定科目欄に
   最初から入った状態になる（人が確認・修正して確定する運用は従来どおり）。
@@ -51,6 +55,10 @@
   （freee側で必須のため。読み取れていない行は先に領収書画面で入力してから出力）。
 - **税区分**：システムに項目が無いため一律「課対仕入10%」で出力。
   軽減税率(8%)・対象外の行は **freee取込後に修正**する運用。
+- **支払手段**：`payment_method`（OCR判定＋手修正）から出力（カード/現金/個人立替）。
+  **カード明細と照合済みの行は「カード」扱い**。「カード払いを除外」チェック
+  （`&exclude=card`）でカード払い＋照合済みの行を除いて出力できる
+  （freeeにカード連携がある場合の二重計上防止はこれを使う）。
 - **freee側の取込手順**：［取引］→［取引の一括登録］→CSVアップロード→列マッピング
   （発生日/金額/取引先/勘定科目/税区分）。決済口座は取込後に設定
   （現金→現金、個人立替→役員借入金）。

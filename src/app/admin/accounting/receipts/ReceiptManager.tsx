@@ -8,13 +8,17 @@ import AccountSelect from "../AccountSelect";
 
 const yen = (n: number | null) => (n == null ? "—" : `¥${Math.round(n).toLocaleString()}`);
 
+type PayMethod = "" | "card" | "cash" | "personal";
+const PAY_LABELS: Record<Exclude<PayMethod, "">, string> = { card: "カード", cash: "現金", personal: "立替" };
+
 // freee会計「取引の一括登録」向けの明細CSVエクスポート（対象年・確定のみの絞り込み付き）。
 function ExportControls() {
   const thisYear = new Date().getFullYear();
   const [year, setYear] = useState(thisYear);
   const [confirmedOnly, setConfirmedOnly] = useState(false);
+  const [excludeCard, setExcludeCard] = useState(false);
   const years = Array.from({ length: thisYear - 2026 + 1 }, (_, i) => 2026 + i).reverse();
-  const href = `/api/accounting/receipts-export?year=${year}${confirmedOnly ? "&status=confirmed" : ""}`;
+  const href = `/api/accounting/receipts-export?year=${year}${confirmedOnly ? "&status=confirmed" : ""}${excludeCard ? "&exclude=card" : ""}`;
   return (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
       <select className="select" value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ fontSize: 12.5, padding: "6px 26px 6px 8px" }}>
@@ -25,6 +29,10 @@ function ExportControls() {
       <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, whiteSpace: "nowrap" }}>
         <input type="checkbox" checked={confirmedOnly} onChange={(e) => setConfirmedOnly(e.target.checked)} />
         確定のみ
+      </label>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, whiteSpace: "nowrap" }} title="freeeにカード連携がある場合の二重計上防止（カード払い＋カード明細照合済みの行を除外）">
+        <input type="checkbox" checked={excludeCard} onChange={(e) => setExcludeCard(e.target.checked)} />
+        カード払いを除外
       </label>
       <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px", whiteSpace: "nowrap" }} href={href} title="freeeの「取引の一括登録」に取り込める1件1行のCSV（UTF-8 BOM）">
         freee用CSV
@@ -117,6 +125,7 @@ export default function ReceiptManager({
         detected_amount: field(r, "detected_amount") as number | null,
         detected_merchant: (field(r, "detected_merchant") as string | null) || null,
         suggested_account: (field(r, "suggested_account") as string | null) || null,
+        payment_method: ((field(r, "payment_method") as Receipt["payment_method"]) || null) as "card" | "cash" | "personal" | null,
       });
       setMsg({ ok: res.ok, text: res.message });
       if (res.ok) {
@@ -185,6 +194,7 @@ export default function ReceiptManager({
                   <th style={{ textAlign: "right" }}>金額</th>
                   <th>支払先</th>
                   <th>勘定科目</th>
+                  <th>支払</th>
                   <th>カード明細</th>
                   <th>状態</th>
                   <th style={{ textAlign: "right" }}>操作</th>
@@ -242,6 +252,21 @@ export default function ReceiptManager({
                           onChange={(v) => setField(r.id, "suggested_account", v || null)}
                           disabled={pending}
                         />
+                      </td>
+                      <td>
+                        <select
+                          className="select"
+                          style={{ width: 84, padding: "6px 8px", fontSize: 13 }}
+                          value={((field(r, "payment_method") as Receipt["payment_method"]) ?? "") as string}
+                          onChange={(e) => setField(r.id, "payment_method", (e.target.value || null) as Receipt["payment_method"])}
+                          disabled={pending}
+                          title="支払手段（OCRの自動判定を手修正できる）"
+                        >
+                          <option value="">—</option>
+                          <option value="card">{PAY_LABELS.card}</option>
+                          <option value="cash">{PAY_LABELS.cash}</option>
+                          <option value="personal">{PAY_LABELS.personal}</option>
+                        </select>
                       </td>
                       <td className="soft" style={{ whiteSpace: "nowrap", fontSize: 12 }}>
                         {card ? `${card.transaction_date.slice(5)} ${yen(card.amount)}` : "未照合"}

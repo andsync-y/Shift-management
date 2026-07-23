@@ -13,7 +13,7 @@ function esc(v: string): string {
 }
 
 // freee会計「取引の一括登録」向けの明細CSV（1件=1行）。
-//   GET /api/accounting/receipts-export?year=2026&status=all|confirmed
+//   GET /api/accounting/receipts-export?year=2026&status=all|confirmed&exclude=card
 // - 発生日（領収日）が対象年の領収書を出力。日付・金額が読み取れていない行は対象外
 //   （freee側で発生日・金額が必須のため。先に領収書画面で入力してから出力する）。
 // - 文字コードは UTF-8 with BOM・改行CRLF（Excel/freeeの文字化け対策）。
@@ -27,11 +27,14 @@ export async function GET(req: NextRequest) {
   const yearParam = url.searchParams.get("year") ?? "";
   const year = /^\d{4}$/.test(yearParam) ? Number(yearParam) : jstNow.getUTCFullYear();
   const confirmedOnly = url.searchParams.get("status") === "confirmed";
+  // カード払いを除外（freeeにカード連携がある場合の二重計上防止）。
+  // 「支払手段=カード」または「カード明細と照合済み」の行を除く。
+  const excludeCard = url.searchParams.get("exclude") === "card";
 
   const supabase = await createClient();
   let q = supabase
     .from("receipts")
-    .select("id, image_url, detected_date, detected_amount, detected_merchant, suggested_account, status")
+    .select("id, image_url, detected_date, detected_amount, detected_merchant, suggested_account, payment_method, status")
     .gte("detected_date", `${year}-01-01`)
     .lte("detected_date", `${year}-12-31`)
     .order("detected_date", { ascending: true });
@@ -46,9 +49,24 @@ export async function GET(req: NextRequest) {
     detected_amount: number | null;
     detected_merchant: string | null;
     suggested_account: string | null;
+    payment_method: "card" | "cash" | "personal" | null;
     status: string;
   };
-  const rows = ((data ?? []) as Row[]).filter((r) => r.detected_date && r.detected_amount != null);
+  let rows = ((data ?? []) as Row[]).filter((r) => r.detected_date && r.detected_amount != null);
+
+  // カード明細と照合済みの領収書ID（照合済み＝カード払いとみなす）
+  const matched = new Set<string>();
+  if (rows.length > 0) {
+    const { data: cards } = await supabase
+      .from("card_transactions")
+      .select("receipt_id")
+      .in("receipt_id", rows.map((r) => r.id));
+    for (const c of (cards ?? []) as { receipt_id: string | null }[]) {
+      if (c.receipt_id) matched.add(c.receipt_id);
+    }
+  }
+  const isCard = (r: Row) => r.payment_method === "card" || matched.has(r.id);
+  if (excludeCard) rows = rows.filter((r) => !isCard(r));
   if (rows.length === 0) {
     return NextResponse.json(
       { ok: false, error: `${year}年の出力対象（日付・金額あり）の領収書がありません。` },
@@ -88,7 +106,7 @@ export async function GET(req: NextRequest) {
         esc(r.detected_merchant?.trim() || "不明"),
         esc(r.suggested_account?.trim() || "未分類"),
         "課対仕入10%",
-        "", // 支払手段（システムに項目なし）
+        isCard(r) ? "カード" : r.payment_method === "cash" ? "現金" : r.payment_method === "personal" ? "個人立替" : "",
         "", // 支払者（システムに項目なし）
         "", // 備考（システムに項目なし）
         r.id,
