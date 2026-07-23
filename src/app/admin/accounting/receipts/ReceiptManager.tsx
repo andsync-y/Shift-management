@@ -8,6 +8,31 @@ import AccountSelect from "../AccountSelect";
 
 const yen = (n: number | null) => (n == null ? "—" : `¥${Math.round(n).toLocaleString()}`);
 
+// freee会計「取引の一括登録」向けの明細CSVエクスポート（対象年・確定のみの絞り込み付き）。
+function ExportControls() {
+  const thisYear = new Date().getFullYear();
+  const [year, setYear] = useState(thisYear);
+  const [confirmedOnly, setConfirmedOnly] = useState(false);
+  const years = Array.from({ length: thisYear - 2026 + 1 }, (_, i) => 2026 + i).reverse();
+  const href = `/api/accounting/receipts-export?year=${year}${confirmedOnly ? "&status=confirmed" : ""}`;
+  return (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 8 }}>
+      <select className="select" value={year} onChange={(e) => setYear(Number(e.target.value))} style={{ fontSize: 12.5, padding: "6px 26px 6px 8px" }}>
+        {years.map((yy) => (
+          <option key={yy} value={yy}>{yy}年</option>
+        ))}
+      </select>
+      <label style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 12.5, whiteSpace: "nowrap" }}>
+        <input type="checkbox" checked={confirmedOnly} onChange={(e) => setConfirmedOnly(e.target.checked)} />
+        確定のみ
+      </label>
+      <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px", whiteSpace: "nowrap" }} href={href} title="freeeの「取引の一括登録」に取り込める1件1行のCSV（UTF-8 BOM）">
+        freee用CSV
+      </a>
+    </span>
+  );
+}
+
 // アップロード前にブラウザで縮小・再圧縮する。
 // スマホのフル解像度写真（4〜6MB）は Vercel のリクエスト上限(4.5MB)と
 // Claude の画像サイズ上限を超えるため。長辺2200px・JPEG品質0.85はレシートOCRに十分。
@@ -143,7 +168,10 @@ export default function ReceiptManager({
       <div className="section">
         <div className="section-head">
           <h2>領収書一覧</h2>
-          <span className="eyebrow">{receipts.length}件</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <ExportControls />
+            <span className="eyebrow">{receipts.length}件</span>
+          </span>
         </div>
         <div className="section-body" style={{ overflowX: "auto", paddingTop: 10 }}>
           {receipts.length === 0 ? (
