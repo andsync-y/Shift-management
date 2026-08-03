@@ -27,6 +27,7 @@
 | ドキュメント | 範囲 |
 |---|---|
 | `docs/LINE_INTEGRATION.md` | LINEログイン / 通知（Messaging API）の設計 |
+| `docs/SHIFT_GENERATION.md` | シフト自動生成（ソルバー/Claude・固定シフト・社保加入を加味） |
 | `docs/SHIFT_OFFER.md` | 出勤打診エンジン（休み承認→早番/遅番の欠員を自動打診） |
 | `docs/STORE_EVENTS.md` | 店休・店舗お知らせ（日単位イベントをカレンダーにバナー表示） |
 | `docs/PERSONAL_BLACKOUTS.md` | 個別予定の不可時間（タイムツリー画像取り込み→生成で回避） |

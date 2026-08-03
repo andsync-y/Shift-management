@@ -13,6 +13,7 @@ import { getStoreRules } from "@/lib/store-rules";
 import { blackoutsToTimeOff, monthRange } from "@/lib/blackouts";
 import type {
   AvailabilityPreference,
+  FixedShift,
   Profile,
   ShiftRequirement,
   TimeOffRequest,
@@ -163,7 +164,7 @@ export async function generatePeriodShifts(
     .single();
   if (!period) return { ok: false, message: "期間が見つかりません。" };
 
-  const [{ data: staff }, { data: availability }, { data: requirements }, { data: timeOff }] =
+  const [{ data: staff }, { data: availability }, { data: requirements }, { data: timeOff }, { data: fixed }] =
     await Promise.all([
       supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true),
       supabase.from("availability_preferences").select("*"),
@@ -173,6 +174,7 @@ export async function generatePeriodShifts(
         .select("*")
         .eq("status", "approved")
         .eq("period_id", periodId),
+      supabase.from("fixed_shifts").select("*"),
     ]);
 
   // 個別予定（不可時間）も取り込み、その時間は割り当て対象から外す
@@ -193,6 +195,7 @@ export async function generatePeriodShifts(
       ...((timeOff ?? []) as TimeOffRequest[]),
       ...blackoutsToTimeOff(blackouts ?? []),
     ],
+    fixedShifts: (fixed ?? []) as FixedShift[],
   });
 
   // 既存のドラフトシフトを削除して入れ替え
@@ -249,7 +252,7 @@ export async function generatePeriodShiftsWithClaude(
     .single();
   if (!period) return { ok: false, message: "期間が見つかりません。" };
 
-  const [{ data: staff }, { data: availability }, { data: timeOff }] = await Promise.all([
+  const [{ data: staff }, { data: availability }, { data: timeOff }, { data: cFixed }] = await Promise.all([
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true),
     supabase.from("availability_preferences").select("*"),
     supabase
@@ -257,6 +260,7 @@ export async function generatePeriodShiftsWithClaude(
       .select("*")
       .eq("status", "approved")
       .eq("period_id", periodId),
+    supabase.from("fixed_shifts").select("*"),
   ]);
 
   const cRange = monthRange(period.year, period.month);
@@ -275,6 +279,7 @@ export async function generatePeriodShiftsWithClaude(
       ...((timeOff ?? []) as TimeOffRequest[]),
       ...blackoutsToTimeOff(cBlackouts ?? []),
     ],
+    fixedShifts: (cFixed ?? []) as FixedShift[],
   });
 
   if (!result.ok) {

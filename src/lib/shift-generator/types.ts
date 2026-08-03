@@ -2,6 +2,7 @@
 
 import type {
   AvailabilityPreference,
+  FixedShift,
   Profile,
   ShiftRequirement,
   TimeOffRequest,
@@ -15,6 +16,8 @@ export interface GenerateInput {
   requirements: ShiftRequirement[];
   // 承認済みのお休み希望のみを渡す想定
   timeOff: TimeOffRequest[];
+  // 固定シフト（毎週決まった曜日・時間）。生成前に最優先で配置する。
+  fixedShifts?: FixedShift[];
 }
 
 export interface GeneratedAssignment {

@@ -2,12 +2,19 @@
 // 制約ベースのシフト自動生成ソルバー（ヒューリスティック貪欲法）
 // =====================================================================
 // 設計方針:
+//  - 固定シフト(fixed_shifts)を最優先で先に配置してから、残りの必要人数を埋める。
 //  - 月内の各日付について、その曜日に紐づく「必要人数(shift_requirements)」を満たすよう
 //    スタッフを割り当てる。
 //  - ハード制約: 希望シフトで unavailable / 承認済みお休み希望 / 週上限時間超過 は割り当てない。
+//  - 社保制約:
+//    * 社保加入者(shaho_enrolled)は週30時間以上になるよう強く優先（未達なら最優先で埋める）。
+//    * 非加入者は週30時間未満に抑える（意図せず社保加入義務が発生しないようハード上限）。
 //  - ソフト制約(スコア): preferred を優先、最低希望時間に満たないスタッフを優先、
 //    全体の労働時間が偏らないよう既割当時間が少ない人を優先。
 // =====================================================================
+
+// 社会保険の加入ライン（週30時間）。非加入者はこの手前で頭打ちにする。
+const SHAHO_WEEKLY_HOURS = 30;
 
 import type {
   GenerateInput,
@@ -53,12 +60,14 @@ function datesInMonth(year: number, month: number): { date: string; dow: number 
 }
 
 export function generateShifts(input: GenerateInput): GenerateResult {
-  const { year, month, staff, availability, requirements, timeOff } = input;
+  const { year, month, staff, availability, requirements, timeOff, fixedShifts } = input;
 
   const activeStaff = staff.filter((s) => s.is_active);
   const warnings: string[] = [];
   const assignments: GeneratedAssignment[] = [];
   const shortages: GeneratedSlotReport[] = [];
+
+  const isEnrolled = (id: string) => activeStaff.find((s) => s.id === id)?.shaho_enrolled === true;
 
   // スタッフごとの累計労働時間（週単位の上限判定にも使う）
   const totalHours: Record<string, number> = {};
@@ -83,15 +92,49 @@ export function generateShifts(input: GenerateInput): GenerateResult {
 
   const days = datesInMonth(year, month);
 
+  // 割当を1件確定させる共通処理（時間の累積・重複記録も更新）
+  const commit = (staffId: string, date: string, start: string, end: string, note: string | null) => {
+    const weekIndex = Math.floor((Number(date.slice(-2)) - 1) / 7);
+    const h = durationHours(start, end);
+    assignments.push({ staff_id: staffId, work_date: date, start_time: start, end_time: end, note });
+    totalHours[staffId] += h;
+    weeklyHours[staffId][weekIndex] = (weeklyHours[staffId][weekIndex] ?? 0) + h;
+    if (!dayAssignments[staffId][date]) dayAssignments[staffId][date] = [];
+    dayAssignments[staffId][date].push({ start, end });
+  };
+
+  // --- ① 固定シフトを最優先で先に配置する ---
+  // 承認済みお休みと重なる固定シフトはスキップ（休み優先）。
+  const activeIds = new Set(activeStaff.map((s) => s.id));
+  for (const { date, dow } of days) {
+    for (const f of fixedShifts ?? []) {
+      if (f.day_of_week !== dow || !activeIds.has(f.staff_id)) continue;
+      const offs = offIndex.get(`${f.staff_id}|${date}`);
+      const onLeave = offs?.some(
+        (o) => o.start === null || o.end === null || overlaps(o.start, o.end, f.start_time, f.end_time)
+      );
+      if (onLeave) continue;
+      const existing = dayAssignments[f.staff_id][date] ?? [];
+      if (existing.some((e) => overlaps(e.start, e.end, f.start_time, f.end_time))) continue;
+      commit(f.staff_id, date, f.start_time.slice(0, 5), f.end_time.slice(0, 5), f.shift_type ?? "固定");
+    }
+  }
+
+  // --- ② 必要人数を埋める（固定シフトで既に埋まった分は差し引く）---
   for (const { date, dow } of days) {
     const weekIndex = Math.floor((Number(date.slice(-2)) - 1) / 7);
     const dayReqs = requirements.filter((r) => r.day_of_week === dow);
 
     for (const req of dayReqs) {
-      const assignedIds: string[] = [];
+      // 固定シフトで既にこの枠を（時間帯を包含する形で）カバーしている人を数える
+      const preFilled = activeStaff.filter((s) =>
+        (dayAssignments[s.id][date] ?? []).some((e) => covers(e.start, e.end, req.start_time, req.end_time))
+      );
+      const assignedIds: string[] = preFilled.map((s) => s.id);
 
       // 候補抽出
       const candidates = activeStaff.filter((s) => {
+        if (assignedIds.includes(s.id)) return false; // 固定シフトで既に充当済み
         // お休み希望チェック
         const offs = offIndex.get(`${s.id}|${date}`);
         if (offs) {
@@ -132,6 +175,10 @@ export function generateShifts(input: GenerateInput): GenerateResult {
         const wk = weeklyHours[s.id][weekIndex] ?? 0;
         if (wk + slotHours > s.max_hours_per_week) return false;
 
+        // 社保・非加入者は週30時間未満に抑える（意図しない社保加入義務を防ぐ）。
+        // 固定シフトで既に30h以上ある場合はそれを尊重して新規追加のみ止める。
+        if (!isEnrolled(s.id) && wk + slotHours > SHAHO_WEEKLY_HOURS) return false;
+
         return true;
       });
 
@@ -150,27 +197,20 @@ export function generateShifts(input: GenerateInput): GenerateResult {
           const wk = weeklyHours[s.id][weekIndex] ?? 0;
           // 最低希望時間に未達なら強く優先
           const belowMin = wk < s.min_hours_per_week / 4; // 月内の週按分
+          // 社保加入者がまだ週30時間に未達なら最優先で埋める（加入要件の確保）
+          const enrolledBelow30 = isEnrolled(s.id) && wk + slotHours <= s.max_hours_per_week && wk < SHAHO_WEEKLY_HOURS;
           let score = totalHours[s.id]; // 公平性: 既割当が少ない人を優先
           if (isPreferred) score -= 1000;
           if (belowMin) score -= 500;
+          if (enrolledBelow30) score -= 2000; // 社保確保を最優先
           return { staff: s, score };
         })
         .sort((a, b) => a.score - b.score);
 
       for (const { staff: s } of scored) {
         if (assignedIds.length >= req.required_staff) break;
-        assignments.push({
-          staff_id: s.id,
-          work_date: date,
-          start_time: req.start_time,
-          end_time: req.end_time,
-          note: null,
-        });
+        commit(s.id, date, req.start_time, req.end_time, null);
         assignedIds.push(s.id);
-        totalHours[s.id] += slotHours;
-        weeklyHours[s.id][weekIndex] = (weeklyHours[s.id][weekIndex] ?? 0) + slotHours;
-        if (!dayAssignments[s.id][date]) dayAssignments[s.id][date] = [];
-        dayAssignments[s.id][date].push({ start: req.start_time, end: req.end_time });
       }
 
       if (assignedIds.length < req.required_staff) {
@@ -195,6 +235,18 @@ export function generateShifts(input: GenerateInput): GenerateResult {
     warnings.push(
       "必要人数(shift_requirements)が未設定です。曜日ごとの必要人数を登録してください。"
     );
+  }
+
+  // 社保加入者が週30時間に届かなかった場合の警告（月平均の週時間で判定）
+  const weeksInMonth = new Set(days.map((d) => Math.floor((Number(d.date.slice(-2)) - 1) / 7))).size || 1;
+  for (const s of activeStaff) {
+    if (!s.shaho_enrolled) continue;
+    const avgWeekly = totalHours[s.id] / weeksInMonth;
+    if (avgWeekly < SHAHO_WEEKLY_HOURS) {
+      warnings.push(
+        `社保加入の ${s.full_name} が週平均${avgWeekly.toFixed(1)}hで30hに未達です。希望シフト・必要人数を増やして労働時間を確保してください。`
+      );
+    }
   }
 
   return { assignments, shortages, staffHours: totalHours, warnings };
