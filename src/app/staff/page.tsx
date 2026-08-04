@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { requireUser } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -5,16 +6,22 @@ import {
   type Profile,
   type Shift,
   type ShiftPeriod,
+  type StoreEvent,
   type TimeOffRequest,
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import CalendarSubscribe from "@/components/CalendarSubscribe";
 
-export default async function StaffShiftsPage() {
+export default async function StaffShiftsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ period?: string }>;
+}) {
+  const sp = await searchParams;
   const me = await requireUser();
   const supabase = await createClient();
 
-  // 公開 or 確定済みの最新期間を表示
+  // 公開 or 確定済みの期間（新しい順）。?period=<id> でその月を表示できる。
   const { data: periods } = await supabase
     .from("shift_periods")
     .select("*")
@@ -22,7 +29,9 @@ export default async function StaffShiftsPage() {
     .order("year", { ascending: false })
     .order("month", { ascending: false });
 
-  const latest = (periods as ShiftPeriod[] | null)?.[0];
+  const periodList = (periods as ShiftPeriod[] | null) ?? [];
+  const latest =
+    (sp.period ? periodList.find((p) => p.id === sp.period) : undefined) ?? periodList[0];
 
   if (!latest) {
     return (
@@ -45,20 +54,32 @@ export default async function StaffShiftsPage() {
     );
   }
 
+  // 前月（より古い）/ 次月（より新しい）の公開済み期間。periodList は新しい順。
+  const curIdx = periodList.findIndex((p) => p.id === latest.id);
+  const newerPeriod = curIdx > 0 ? periodList[curIdx - 1] : null;
+  const olderPeriod =
+    curIdx >= 0 && curIdx < periodList.length - 1 ? periodList[curIdx + 1] : null;
+
   const monthStart = `${latest.year}-${String(latest.month).padStart(2, "0")}-01`;
   const monthEnd = `${latest.year}-${String(latest.month).padStart(2, "0")}-${String(
     new Date(latest.year, latest.month, 0).getDate()
   ).padStart(2, "0")}`;
-  const [{ data: shifts }, { data: staff }, { data: timeOff }] = await Promise.all([
-    supabase.from("shifts").select("*").eq("period_id", latest.id),
-    supabase.from("profiles").select("*"),
-    supabase
-      .from("time_off_requests")
-      .select("*")
-      .eq("status", "approved")
-      .gte("off_date", monthStart)
-      .lte("off_date", monthEnd),
-  ]);
+  const [{ data: shifts }, { data: staff }, { data: timeOff }, { data: storeEvents }] =
+    await Promise.all([
+      supabase.from("shifts").select("*").eq("period_id", latest.id),
+      supabase.from("profiles").select("*"),
+      supabase
+        .from("time_off_requests")
+        .select("*")
+        .eq("status", "approved")
+        .gte("off_date", monthStart)
+        .lte("off_date", monthEnd),
+      supabase
+        .from("store_events")
+        .select("*")
+        .gte("event_date", monthStart)
+        .lte("event_date", monthEnd),
+    ]);
 
   const myShifts = (shifts as Shift[] | null)?.filter((s) => s.staff_id === me.id) ?? [];
   const myHours = myShifts.reduce((sum, s) => {
@@ -81,6 +102,9 @@ export default async function StaffShiftsPage() {
           </p>
           <CalendarSubscribe token={me.calendar_token} />
         </div>
+        <Link href="/staff/preopen" className="btn-outline">
+          プレオープン予約 <span className="arrow">→</span>
+        </Link>
       </div>
 
       <div className="summary-grid" style={{ gridTemplateColumns: "repeat(2,1fr)" }}>
@@ -103,7 +127,26 @@ export default async function StaffShiftsPage() {
       <div className="section">
         <div className="section-head">
           <h2>シフト表</h2>
-          <span className="eyebrow">あなたの勤務を強調</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            {olderPeriod ? (
+              <Link href={`/staff?period=${olderPeriod.id}`} className="btn-link">
+                <span className="arrow">←</span> 前月
+              </Link>
+            ) : (
+              <span className="btn-link" style={{ opacity: 0.35, pointerEvents: "none" }}>
+                <span className="arrow">←</span> 前月
+              </span>
+            )}
+            {newerPeriod ? (
+              <Link href={`/staff?period=${newerPeriod.id}`} className="btn-link">
+                次月 <span className="arrow">→</span>
+              </Link>
+            ) : (
+              <span className="btn-link" style={{ opacity: 0.35, pointerEvents: "none" }}>
+                次月 <span className="arrow">→</span>
+              </span>
+            )}
+          </div>
         </div>
         <div className="section-body">
           <ShiftCalendarView
@@ -112,6 +155,7 @@ export default async function StaffShiftsPage() {
             shifts={(shifts ?? []) as Shift[]}
             staff={(staff ?? []) as Profile[]}
             timeOff={(timeOff ?? []) as TimeOffRequest[]}
+            storeEvents={(storeEvents ?? []) as StoreEvent[]}
             highlightStaffId={me.id}
           />
         </div>

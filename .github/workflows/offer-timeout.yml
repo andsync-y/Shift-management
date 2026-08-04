@@ -1,0 +1,31 @@
+name: offer-timeout (hourly)
+
+# 出勤打診の無返答タイムアウトを毎時処理する。
+# Vercel Hobby プランは cron を 1 日 1 回までしか許可しないため、
+# 毎時の繰り上げ処理だけ GitHub Actions（無料）から実行する。
+#
+# 動かすには、リポジトリの Settings → Secrets and variables → Actions で
+# CRON_SECRET（Vercel の環境変数 CRON_SECRET と同じ値）を登録する。
+# 登録するまではスキップされる（エラーにはならない）。
+
+on:
+  schedule:
+    - cron: "0 * * * *" # 毎時0分（UTC）
+  workflow_dispatch: # 手動でも実行可能
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call offer-timeout endpoint
+        env:
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$CRON_SECRET" ]; then
+            echo "CRON_SECRET が未設定のためスキップします。"
+            echo "リポジトリの Settings → Secrets and variables → Actions に CRON_SECRET を登録してください。"
+            exit 0
+          fi
+          curl -fsS --retry 3 --max-time 60 \
+            "https://shift.andsync.jp/api/cron/offer-timeout" \
+            -H "Authorization: Bearer $CRON_SECRET"

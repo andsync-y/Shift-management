@@ -124,7 +124,7 @@ async function seedAvailability(staffId) {
     rows.push({
       staff_id: staffId,
       day_of_week: dow,
-      start_time: "10:00",
+      start_time: "09:30",
       end_time: "19:00",
       preference: dow === 1 || dow === 5 ? "preferred" : "available",
     });
@@ -156,7 +156,7 @@ async function seedPeriod() {
     if (dow === 2) continue; // 火曜定休
     // 午前と午後で必要人数を分ける
     reqs.push(
-      { period_id: period.id, day_of_week: dow, start_time: "10:00", end_time: "14:00", required_staff: 2 },
+      { period_id: period.id, day_of_week: dow, start_time: "09:30", end_time: "14:00", required_staff: 2 },
       { period_id: period.id, day_of_week: dow, start_time: "14:00", end_time: "19:00", required_staff: 2 }
     );
   }

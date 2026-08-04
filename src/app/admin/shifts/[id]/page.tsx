@@ -7,12 +7,14 @@ import {
   type Shift,
   type ShiftPeriod,
   type ShiftRequirement,
+  type StoreEvent,
   type TimeOffRequest,
 } from "@/lib/types";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import RequirementsEditor from "./RequirementsEditor";
 import GeneratePanel from "./GeneratePanel";
 import ShiftEditor from "./ShiftEditor";
+import StoreEventEditor from "./StoreEventEditor";
 import SalonBoardPanel from "./SalonBoardPanel";
 
 
@@ -36,22 +38,33 @@ export default async function PeriodDetailPage({
   const monthEnd = `${p.year}-${String(p.month).padStart(2, "0")}-${String(
     new Date(p.year, p.month, 0).getDate()
   ).padStart(2, "0")}`;
-  const [{ data: requirements }, { data: shifts }, { data: staff }, { data: timeOff }] =
-    await Promise.all([
-      supabase.from("shift_requirements").select("*").eq("period_id", id),
-      supabase.from("shifts").select("*").eq("period_id", id),
-      supabase.from("profiles").select("*"),
-      supabase
-        .from("time_off_requests")
-        .select("*")
-        .eq("status", "approved")
-        .gte("off_date", monthStart)
-        .lte("off_date", monthEnd),
-    ]);
+  const [
+    { data: requirements },
+    { data: shifts },
+    { data: staff },
+    { data: timeOff },
+    { data: storeEvents },
+  ] = await Promise.all([
+    supabase.from("shift_requirements").select("*").eq("period_id", id),
+    supabase.from("shifts").select("*").eq("period_id", id),
+    supabase.from("profiles").select("*"),
+    supabase
+      .from("time_off_requests")
+      .select("*")
+      .eq("status", "approved")
+      .gte("off_date", monthStart)
+      .lte("off_date", monthEnd),
+    supabase
+      .from("store_events")
+      .select("*")
+      .gte("event_date", monthStart)
+      .lte("event_date", monthEnd),
+  ]);
 
   const staffList = (staff ?? []) as Profile[];
   const shiftList = (shifts ?? []) as Shift[];
   const timeOffList = (timeOff ?? []) as TimeOffRequest[];
+  const storeEventList = (storeEvents ?? []) as StoreEvent[];
 
   // スタッフごとの合計時間
   const hours: Record<string, number> = {};
@@ -133,9 +146,14 @@ export default async function PeriodDetailPage({
             シフト作成 — {p.year}年{p.month}月
           </p>
         </div>
-        <Link href="/admin/shifts" className="btn-outline">
-          <span className="arrow">←</span> 一覧へ
-        </Link>
+        <span style={{ display: "flex", gap: 8 }}>
+          <Link href={`/admin/shifts/${id}/print`} className="btn-outline">
+            🖨 印刷
+          </Link>
+          <Link href="/admin/shifts" className="btn-outline">
+            <span className="arrow">←</span> 一覧へ
+          </Link>
+        </span>
       </div>
 
       {/* 承認済みお休みとシフトの矛盾 警告 */}
@@ -218,6 +236,8 @@ export default async function PeriodDetailPage({
                 shifts={shiftList}
                 staff={staffList}
                 timeOff={timeOffList}
+                storeEvents={storeEventList}
+                showHours
               />
             </>
           ) : (
@@ -225,6 +245,25 @@ export default async function PeriodDetailPage({
               まだシフトがありません。上の「AIでシフトを自動生成」を実行してください。
             </p>
           )}
+        </div>
+      </div>
+
+      {/* 店休・お知らせ */}
+      <div className="section">
+        <div className="section-head">
+          <h2>店休・お知らせ</h2>
+          <span className="eyebrow">Store Notices</span>
+        </div>
+        <div className="section-body">
+          <p className="help" style={{ marginTop: 0, marginBottom: 22 }}>
+            店休日や講習などのお知らせを登録すると、カレンダーの該当日にバナー表示されます（スタッフ画面・キオスクにも反映）。時間や「全員参加」も指定できます。
+          </p>
+          <StoreEventEditor
+            periodId={id}
+            year={p.year}
+            month={p.month}
+            events={storeEventList}
+          />
         </div>
       </div>
 

@@ -1,0 +1,14 @@
+{
+  "name": "fc-kpi-sync",
+  "private": true,
+  "type": "module",
+  "description": "本部システム(zn-stretch)からKPIを日次取得してアプリへ送る（Playwright・Vercel外で実行）",
+  "scripts": {
+    "sync": "node sync.mjs",
+    "dry": "DRY_RUN=1 node sync.mjs"
+  },
+  "dependencies": {
+    "playwright": "^1.49.0",
+    "encoding-japanese": "^2.2.0"
+  }
+}

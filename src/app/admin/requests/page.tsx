@@ -5,10 +5,15 @@ import {
   REQUEST_STATUS_LABELS_JA,
   type Profile,
   type RequestStatus,
+  type Shift,
   type ShiftRequirement,
   type TimeOffRequest,
 } from "@/lib/types";
 import RequestActions from "./RequestActions";
+import CleanupShiftsButton from "./CleanupShiftsButton";
+import ApproveAllButton from "./ApproveAllButton";
+import LineTestButton from "./LineTestButton";
+import ShiftReminderButton from "./ShiftReminderButton";
 
 function fmtRange(r: TimeOffRequest): string {
   if (!r.start_time || !r.end_time) return "終日";
@@ -74,23 +79,29 @@ function findCoverageGaps(
   return { gaps, hasRequirements };
 }
 
-export default async function AdminRequestsPage() {
+export default async function AdminRequestsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ month?: string }>;
+}) {
+  const sp = await searchParams;
   const supabase = await createClient();
 
-  const [{ data: requests }, { data: staff }, { data: latestPeriod }] = await Promise.all([
+  const [{ data: requests }, { data: staff }] = await Promise.all([
     supabase.from("time_off_requests").select("*").order("created_at", { ascending: false }),
     supabase.from("profiles").select("*"),
-    supabase
-      .from("shift_periods")
-      .select("id")
-      .order("year", { ascending: false })
-      .order("month", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
   ]);
 
-  const { data: requirements } = latestPeriod
-    ? await supabase.from("shift_requirements").select("*").eq("period_id", latestPeriod.id)
+  // 必要人数は「最後に設定された期間」のものを使う（最新期間が未設定でも拾えるよう、
+  // 直近で作成された requirements の期間を採用する）。
+  const { data: reqRecent } = await supabase
+    .from("shift_requirements")
+    .select("*")
+    .order("created_at", { ascending: false })
+    .limit(1);
+  const reqPeriodId = (reqRecent?.[0] as ShiftRequirement | undefined)?.period_id;
+  const { data: requirements } = reqPeriodId
+    ? await supabase.from("shift_requirements").select("*").eq("period_id", reqPeriodId)
     : { data: [] };
 
   const staffList = (staff as Profile[] | null) ?? [];
@@ -98,7 +109,42 @@ export default async function AdminRequestsPage() {
   const activeStaff = staffList.filter((s) => s.role === "staff" && s.is_active).length;
 
   const list = (requests ?? []) as TimeOffRequest[];
-  const pending = list.filter((r) => r.status === "pending").length;
+
+  // 月で絞り込み（off_date の YYYY-MM）。未指定は全期間。
+  const months = [...new Set(list.map((r) => r.off_date.slice(0, 7)))].sort().reverse();
+  const month = months.includes(sp.month ?? "") ? sp.month! : "";
+  const shown = month ? list.filter((r) => r.off_date.slice(0, 7) === month) : list;
+  const shownPending = shown.filter((r) => r.status === "pending").length;
+  const monthLabel = (ym: string) => {
+    const [y, m] = ym.split("-");
+    return `${y}年${Number(m)}月`;
+  };
+
+  // 申請日に組まれているシフトを取得（同日の人員カバー確認用）
+  const reqDates = [...new Set(list.map((r) => r.off_date))];
+  const { data: shiftsRaw } = reqDates.length
+    ? await supabase
+        .from("shifts")
+        .select("staff_id, work_date, start_time, end_time")
+        .in("work_date", reqDates)
+    : { data: [] };
+  // 日付ごとに、誰が何時に入っているか（開始時刻順）
+  type DayShift = { staff_id: string; range: string; start: string };
+  const shiftsByDate = new Map<string, DayShift[]>();
+  for (const s of (shiftsRaw ?? []) as Pick<Shift, "staff_id" | "work_date" | "start_time" | "end_time">[]) {
+    const arr = shiftsByDate.get(s.work_date) ?? [];
+    arr.push({
+      staff_id: s.staff_id,
+      start: s.start_time,
+      range: `${s.start_time.slice(0, 5)}–${s.end_time.slice(0, 5)}`,
+    });
+    shiftsByDate.set(s.work_date, arr);
+  }
+  // 申請者本人を除いた、同日の他スタッフのシフト
+  const otherShiftsOf = (r: TimeOffRequest): DayShift[] =>
+    (shiftsByDate.get(r.off_date) ?? [])
+      .filter((s) => s.staff_id !== r.staff_id)
+      .sort((a, b) => a.start.localeCompare(b.start));
 
   const { gaps, hasRequirements } = findCoverageGaps(
     list,
@@ -127,7 +173,11 @@ export default async function AdminRequestsPage() {
       <div className="section">
         <div className="section-head">
           <h2>人員カバー分析</h2>
-          <span className="eyebrow">Coverage Alert</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <ShiftReminderButton />
+            <LineTestButton />
+            <span className="eyebrow">Coverage Alert</span>
+          </span>
         </div>
         <div className="section-body" style={{ paddingTop: 8 }}>
           {!hasRequirements ? (
@@ -185,39 +235,64 @@ export default async function AdminRequestsPage() {
             未対応{" "}
             <span
               className="en"
-              style={{ color: pending ? "var(--accent-ink)" : "var(--ink-3)", marginLeft: 4 }}
+              style={{ color: shownPending ? "var(--accent-ink)" : "var(--ink-3)", marginLeft: 4 }}
             >
-              {pending}
+              {shownPending}
             </span>
-            <span className="muted" style={{ fontWeight: 400 }}> 件 ／ 全 </span>
+            <span className="muted" style={{ fontWeight: 400 }}> 件 ／ {month ? "当月" : "全"} </span>
             <span className="en" style={{ fontWeight: 400 }}>
-              {list.length}
+              {shown.length}
             </span>
             <span className="muted" style={{ fontWeight: 400 }}> 件</span>
           </h2>
-          <span className="eyebrow">Time-off</span>
+          <span style={{ display: "flex", alignItems: "center", gap: 14, flexWrap: "wrap", justifyContent: "flex-end" }}>
+            {/* セレクトとボタンは1つの塊として折り返す（バラけると崩れて見える） */}
+            <form method="get" style={{ display: "inline-flex", alignItems: "center", gap: 6, whiteSpace: "nowrap" }}>
+              <select
+                name="month"
+                defaultValue={month}
+                className="select"
+                style={{ fontSize: 13, padding: "7px 28px 7px 10px" }}
+                // 選択変更で即送信（JSなしでもボタンで送れるようsubmitも併設）
+              >
+                <option value="">全期間</option>
+                {months.map((ym) => (
+                  <option key={ym} value={ym}>
+                    {monthLabel(ym)}
+                  </option>
+                ))}
+              </select>
+              <button type="submit" className="btn-outline" style={{ fontSize: 12, padding: "6px 12px" }}>
+                絞り込み
+              </button>
+            </form>
+            <ApproveAllButton month={month} count={shownPending} />
+            <CleanupShiftsButton />
+            <span className="eyebrow">Time-off</span>
+          </span>
         </div>
         <div className="section-body" style={{ paddingTop: 8 }}>
-          {list.length === 0 ? (
+          {shown.length === 0 ? (
             <p className="help" style={{ margin: 0 }}>
-              休み希望はまだありません。
+              {list.length === 0 ? "休み希望はまだありません。" : "この月の休み希望はありません。"}
             </p>
           ) : (
             <>
-              <table className="staff-table req-table">
+              <table className="staff-table sm-cards req-table">
                 <thead>
                   <tr>
                     <th>スタッフ</th>
                     <th>日付</th>
                     <th>区分</th>
                     <th>時間</th>
+                    <th>当日の出勤者</th>
                     <th>理由</th>
                     <th>状態</th>
                     <th style={{ textAlign: "right" }}>操作</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((r) => {
+                  {shown.map((r) => {
                     const t = typeLabel(r);
                     const [, m, d] = r.off_date.split("-");
                     return (
@@ -229,7 +304,7 @@ export default async function AdminRequestsPage() {
                           </span>
                         </td>
                         <td className="mono soft">
-                          {Number(m)}/{Number(d)}
+                          {Number(m)}/{Number(d)}（{DAY_LABELS_JA[weekdayOf(r.off_date)]}）
                         </td>
                         <td>
                           <span className={`mk ${t.cls}`} style={{ fontSize: 10.5 }}>
@@ -237,6 +312,21 @@ export default async function AdminRequestsPage() {
                           </span>
                         </td>
                         <td className="mono soft">{fmtRange(r)}</td>
+                        <td>
+                          {otherShiftsOf(r).length === 0 ? (
+                            <span className="muted">他に出勤者なし</span>
+                          ) : (
+                            <div className="cover-shifts">
+                              {otherShiftsOf(r).map((s, i) => (
+                                <span className="cover-chip" key={i}>
+                                  <span className="dot" style={{ background: colorOf(s.staff_id) }} />
+                                  <span className="cs-name">{staffMap.get(s.staff_id)?.full_name ?? "?"}</span>
+                                  <span className="cs-time mono">{s.range}</span>
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                        </td>
                         <td className="soft">{r.reason || "—"}</td>
                         <td>
                           <StatusPill status={r.status} />
@@ -252,7 +342,7 @@ export default async function AdminRequestsPage() {
 
               {/* mobile cards */}
               <div className="staff-cards">
-                {list.map((r) => {
+                {shown.map((r) => {
                   const t = typeLabel(r);
                   const [, m, d] = r.off_date.split("-");
                   return (
@@ -268,7 +358,7 @@ export default async function AdminRequestsPage() {
                         <div className="r">
                           <span className="k">日付</span>
                           <span className="v mono">
-                            {Number(m)}/{Number(d)}
+                            {Number(m)}/{Number(d)}（{DAY_LABELS_JA[weekdayOf(r.off_date)]}）
                           </span>
                         </div>
                         <div className="r">
@@ -282,6 +372,24 @@ export default async function AdminRequestsPage() {
                         <div className="r">
                           <span className="k">時間</span>
                           <span className="v mono">{fmtRange(r)}</span>
+                        </div>
+                        <div className="r">
+                          <span className="k">当日の出勤者</span>
+                          <span className="v">
+                            {otherShiftsOf(r).length === 0 ? (
+                              <span className="muted">他に出勤者なし</span>
+                            ) : (
+                              <span className="cover-shifts">
+                                {otherShiftsOf(r).map((s, i) => (
+                                  <span className="cover-chip" key={i}>
+                                    <span className="dot" style={{ background: colorOf(s.staff_id) }} />
+                                    <span className="cs-name">{staffMap.get(s.staff_id)?.full_name ?? "?"}</span>
+                                    <span className="cs-time mono">{s.range}</span>
+                                  </span>
+                                ))}
+                              </span>
+                            )}
+                          </span>
                         </div>
                         <div className="r">
                           <span className="k">理由</span>

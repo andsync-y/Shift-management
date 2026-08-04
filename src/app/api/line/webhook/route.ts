@@ -3,9 +3,6 @@ import { createAdminClient } from "@/lib/supabase/server";
 import { verifyLineSignature, replyLineMessage, locationQuickReply } from "@/lib/line";
 import { handleOfferPostback } from "@/lib/offers/engine";
 import { distanceMeters, storeGeofence, locationRequired } from "@/lib/geo";
-import { emailToLoginId } from "@/lib/login-id";
-import { appUrl } from "@/lib/app-url";
-import { isSesameEnabled, sesameLock, sesameUnlock } from "@/lib/sesame";
 import type { TimeRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
@@ -54,7 +51,7 @@ async function punchIn(
       timeZone: "Asia/Tokyo",
       hour: "2-digit",
       minute: "2-digit",
-    })}〜）。退勤は「お疲れ様です」と送ってください。`;
+    })}〜）。退勤はメニューの「退勤」ボタンからどうぞ。`;
   }
   const { iso, dateStr, hhmm } = jstNow();
   await admin.from("time_records").insert({
@@ -65,24 +62,21 @@ async function punchIn(
     in_lat: loc?.lat ?? null,
     in_lng: loc?.lng ?? null,
   });
-  return `おはようございます！${hhmm} に出勤を記録しました。今日もよろしくお願いします。`;
+  const md = dateStr.slice(5).replace("-", "/");
+  return `✅ 出勤を打刻しました\n🕘 ${md} ${hhmm}\nおはようございます！今日もよろしくお願いします。`;
 }
 
 // 退勤打刻。打刻中が無ければ案内のみ。
 async function punchOut(admin: Admin, staffId: string): Promise<string> {
   const open = await findOpen(admin, staffId);
   if (!open) {
-    return "出勤の打刻が見つかりません。先に「おはようございます」で出勤を記録してください。";
+    return "出勤の打刻が見つかりません。先にメニューの「出勤」ボタンで出勤を記録してください。";
   }
-  const { iso, hhmm } = jstNow();
+  const { iso, dateStr, hhmm } = jstNow();
   await admin.from("time_records").update({ clock_out: iso, updated_at: iso }).eq("id", open.id);
-  return `お疲れ様でした！${hhmm} に退勤を記録しました（勤務 ${fmtDuration(open.clock_in!, iso)}）。`;
+  const md = dateStr.slice(5).replace("-", "/");
+  return `✅ 退勤を打刻しました\n🕕 ${md} ${hhmm}（勤務 ${fmtDuration(open.clock_in!, iso)}）\nお疲れ様でした！`;
 }
-
-const IN_WORDS = ["おはよう", "出勤", "おはよ"];
-const OUT_WORDS = ["お疲れ", "おつかれ", "退勤", "おつ"];
-const LOCK_WORDS = ["施錠", "しじょう", "鍵閉め", "閉錠"];
-const UNLOCK_WORDS = ["解錠", "開錠", "開場", "かいじょう", "鍵開け"];
 
 export async function POST(req: NextRequest) {
   const raw = await req.text();
@@ -154,10 +148,18 @@ export async function POST(req: NextRequest) {
 
     if (ev.type !== "message") continue;
 
+    const msg = ev.message;
+    if (!msg) continue;
+
+    // テキストメッセージには一切応答しない。打刻・解錠・ログイン照会などの操作は
+    // すべてリッチメニューのボタン（postback）から行う方針のため、キーワード判定・
+    // 使い方案内は廃止した（雑談や給与明細への返信にボットが反応しないようにする）。
+    if (msg.type !== "location") continue;
+
     // LINEユーザー → スタッフ照合
     const { data: staff } = await admin
       .from("profiles")
-      .select("id, full_name, initial_password, role")
+      .select("id, full_name")
       .eq("line_user_id", lineUserId)
       .maybeSingle();
 
@@ -169,11 +171,8 @@ export async function POST(req: NextRequest) {
       continue;
     }
 
-    const msg = ev.message;
-    if (!msg) continue;
-
-    // 位置情報メッセージ → 距離を検証して自動で出勤/退勤
-    if (msg.type === "location" && typeof msg.latitude === "number" && typeof msg.longitude === "number") {
+    // 位置情報メッセージ（打刻ボタン→現在地送信の流れ）→ 距離を検証して自動で出勤/退勤
+    if (typeof msg.latitude === "number" && typeof msg.longitude === "number") {
       const gf = storeGeofence();
       if (gf) {
         const dist = distanceMeters(gf.lat, gf.lng, msg.latitude, msg.longitude);
@@ -189,80 +188,6 @@ export async function POST(req: NextRequest) {
       const reply = open
         ? await punchOut(admin, staff.id)
         : await punchIn(admin, staff.id, { lat: msg.latitude, lng: msg.longitude });
-      await replyLineMessage(ev.replyToken, reply);
-      continue;
-    }
-
-    // テキストメッセージ → キーワードで打刻 / ログイン情報照会
-    if (msg.type === "text" && msg.text) {
-      const t = msg.text;
-      const lc = t.toLowerCase();
-
-      // ログイン情報の問い合わせ（本人にのみ自分のID/PWを返す）
-      const wantsCred =
-        ["パスワード", "ぱすわーど", "ログイン", "ろぐいん", "アカウント", "あかうんと"].some((w) =>
-          t.includes(w)
-        ) ||
-        lc.includes("id") ||
-        lc.includes("pw");
-      if (wantsCred) {
-        const { data: authUser } = await admin.auth.admin.getUserById(staff.id);
-        const loginId = emailToLoginId(authUser.user?.email ?? "");
-        const pw = staff.initial_password;
-        const reply = pw
-          ? `${staff.full_name}さんのログイン情報です。\nID：${loginId}\nパスワード：${pw}\n${appUrl("/login")}\n※他の人に教えないでください。`
-          : `ID：${loginId}\nパスワードは管理者にお問い合わせください。\n${appUrl("/login")}`;
-        await replyLineMessage(ev.replyToken, reply);
-        continue;
-      }
-
-      // 入口スマートロック（施錠/解錠）
-      const isLock = LOCK_WORDS.some((w) => t.includes(w));
-      const isUnlock = UNLOCK_WORDS.some((w) => t.includes(w));
-      if (isSesameEnabled() && (isLock || isUnlock)) {
-        // 一般スタッフはジオフェンス判定が必要なため、位置を取得できるメニューのボタンへ誘導。
-        // オーナー(super_admin)は位置制限なしのためテキストから直接操作できる。
-        if (staff.role !== "super_admin") {
-          await replyLineMessage(
-            ev.replyToken,
-            "施錠/解錠はメニューの「🔓解錠」「🔒施錠」ボタンから行ってください（店舗周辺でのみ操作できます）。"
-          );
-          continue;
-        }
-        const ok = isLock ? await sesameLock(staff.full_name) : await sesameUnlock(staff.full_name);
-        await replyLineMessage(
-          ev.replyToken,
-          ok
-            ? isLock
-              ? "🔒 施錠しました。"
-              : "🔓 解錠しました。"
-            : "ロックの操作に失敗しました。少し時間をおいて、もう一度お試しください。"
-        );
-        continue;
-      }
-
-      const isIn = IN_WORDS.some((w) => t.includes(w));
-      const isOut = OUT_WORDS.some((w) => t.includes(w));
-
-      if (!isIn && !isOut) {
-        await replyLineMessage(
-          ev.replyToken,
-          "「おはようございます」で出勤、「お疲れ様です」で退勤を記録します。ログイン情報は「ID」または「パスワード」と送ってください。"
-        );
-        continue;
-      }
-
-      // 位置必須モード：位置情報を送ってもらってから打刻
-      if (locationRequired()) {
-        await replyLineMessage(
-          ev.replyToken,
-          "打刻するには、店舗で現在地を送ってください（下のボタン）。",
-          locationQuickReply
-        );
-        continue;
-      }
-
-      const reply = isIn ? await punchIn(admin, staff.id) : await punchOut(admin, staff.id);
       await replyLineMessage(ev.replyToken, reply);
       continue;
     }

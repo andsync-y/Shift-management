@@ -3,8 +3,60 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient, createAdminClient } from "@/lib/supabase/server";
-import { pushLineMessage } from "@/lib/line";
+import { pushLineMessage, pushLineDetailed } from "@/lib/line";
 import { startOfferForApprovedRequest } from "@/lib/offers/engine";
+import { runShiftReminder } from "@/lib/line/shift-reminder";
+
+// LINE通知の疎通テスト（オーナー自身へ送る）。原因切り分け用。
+export async function testLinePush(): Promise<{ ok: boolean; message: string }> {
+  const me = await requireAdmin();
+  const supabase = await createClient();
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("line_user_id")
+    .eq("id", me.id)
+    .maybeSingle();
+  const lid = (prof as { line_user_id: string | null } | null)?.line_user_id ?? null;
+  if (!lid) {
+    return {
+      ok: false,
+      message:
+        "あなた（オーナー）のLINEが未連携です。先にログイン画面で『LINEでログイン』して連携してください。",
+    };
+  }
+  const res = await pushLineDetailed(lid, "【テスト送信】LINE通知のテストです。これが届けば送信設定は正常です。");
+  if (res.ok) return { ok: true, message: "送信成功。LINEに届いていれば通知設定は正常です。" };
+  if (!res.enabled) {
+    return {
+      ok: false,
+      message: "LINE_MESSAGING_CHANNEL_ACCESS_TOKEN が未設定です。Vercelの環境変数を確認してください。",
+    };
+  }
+  const hint =
+    res.status === 401
+      ? "→ 401: アクセストークンが無効/期限切れ。Messaging APIのChannel access tokenを再発行して設定。"
+      : res.status === 400
+        ? "→ 400: 送信先userIdが不正、または『LINEログイン』と『Messaging API』のチャネルが別プロバイダ、もしくは公式アカウントを友だち未追加の可能性。"
+        : "";
+  return { ok: false, message: `送信失敗（status=${res.status ?? "?"}）：${res.error ?? ""}\n${hint}` };
+}
+
+// 「明日のシフト」連絡を今すぐ手動送信する（オーナー用）。
+// 定時cronが送れなかった（LINE上限等）ときの再送に使う。※二重送信の抑止は無い。
+export async function sendTomorrowShiftReminder(): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  try {
+    const r = await runShiftReminder(createAdminClient());
+    if (r.sent === 0) {
+      const why = r.note ?? (r.noLine ? `LINE未連携 ${r.noLine}名` : "送信対象なし");
+      return { ok: false, message: `送信0件（${r.date}）：${why}` };
+    }
+    const extra = r.noLine ? `（LINE未連携 ${r.noLine}名は除く）` : "";
+    return { ok: true, message: `${r.label} のシフトを ${r.sent}名へ送信しました${extra}。` };
+  } catch (e) {
+    return { ok: false, message: `送信失敗：${e instanceof Error ? e.message : String(e)}` };
+  }
+}
 
 export async function reviewRequest(
   requestId: string,
@@ -20,7 +72,7 @@ export async function reviewRequest(
       reviewed_at: new Date().toISOString(),
     })
     .eq("id", requestId)
-    .select("id, staff_id, off_date, request_type")
+    .select("id, staff_id, off_date, request_type, start_time, end_time")
     .maybeSingle();
 
   // 申請者へ LINE 通知（連携済みのみ・未設定なら no-op）
@@ -38,13 +90,48 @@ export async function reviewRequest(
       `${Number(m)}/${Number(d)} の${kind}が【${verb}】されました。`
     );
 
-    // 承認時: 人員が不足していれば他スタッフへ自動で出勤打診を開始する。
     if (status === "approved") {
+      // 終日休みの承認時: 本人のその日のシフトを削除（不要な出勤予定を消す）。
+      // 削除前にシフト時間を控え、早番/遅番が無人になった枠の打診に使う。
+      const isAllDayOff =
+        updated.request_type === "off" && !updated.start_time && !updated.end_time;
+      let vacatedShifts: { start_time: string; end_time: string }[] = [];
+      if (isAllDayOff) {
+        const { data: mine } = await supabase
+          .from("shifts")
+          .select("start_time, end_time")
+          .eq("staff_id", updated.staff_id)
+          .eq("work_date", updated.off_date);
+        vacatedShifts = (mine ?? []) as { start_time: string; end_time: string }[];
+        await supabase
+          .from("shifts")
+          .delete()
+          .eq("staff_id", updated.staff_id)
+          .eq("work_date", updated.off_date);
+      } else if (
+        updated.request_type === "time_change" &&
+        updated.start_time &&
+        updated.end_time
+      ) {
+        // 時間変更の承認: その日の本人シフトを希望時間へ置き換える（前のシフトを残さない）。
+        await supabase
+          .from("shifts")
+          .update({
+            start_time: updated.start_time,
+            end_time: updated.end_time,
+            note: "時間変更",
+          })
+          .eq("staff_id", updated.staff_id)
+          .eq("work_date", updated.off_date);
+      }
+
+      // 早番/遅番が無人になったら他スタッフへ自動で出勤打診を開始する。
       await startOfferForApprovedRequest(createAdminClient(), {
         id: updated.id,
         staff_id: updated.staff_id,
         off_date: updated.off_date,
         request_type: updated.request_type,
+        vacatedShifts,
       });
     }
   }
@@ -54,6 +141,61 @@ export async function reviewRequest(
   revalidatePath("/admin");
   revalidatePath("/admin/shifts", "layout");
   revalidatePath("/staff");
+}
+
+// 既に承認済みの「終日休み」に対して、本人のその日のシフトが残っていれば一括削除する。
+// 自動削除を導入する前に承認された分を掃除するための一回限りのメンテ操作。
+export async function cleanupApprovedOffShifts(): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  const { data: offs, error } = await supabase
+    .from("time_off_requests")
+    .select("staff_id, off_date, request_type, start_time, end_time")
+    .eq("status", "approved");
+  if (error) return { ok: false, message: error.message };
+
+  // 終日休み（時間指定なし）のみ対象
+  const allDay = (offs ?? []).filter(
+    (o) => o.request_type === "off" && !o.start_time && !o.end_time
+  );
+  let removed = 0;
+  for (const o of allDay) {
+    const { data: deleted } = await supabase
+      .from("shifts")
+      .delete()
+      .eq("staff_id", o.staff_id)
+      .eq("work_date", o.off_date)
+      .select("id");
+    removed += deleted?.length ?? 0;
+  }
+
+  // 承認済みの時間変更を実シフトへ反映（前のシフトが残っているものを置換）
+  const changes = (offs ?? []).filter(
+    (o) => o.request_type === "time_change" && o.start_time && o.end_time
+  );
+  let changed = 0;
+  for (const c of changes) {
+    const { data: updated } = await supabase
+      .from("shifts")
+      .update({ start_time: c.start_time, end_time: c.end_time, note: "時間変更" })
+      .eq("staff_id", c.staff_id)
+      .eq("work_date", c.off_date)
+      .select("id");
+    changed += updated?.length ?? 0;
+  }
+
+  revalidatePath("/admin/requests");
+  revalidatePath("/admin");
+  revalidatePath("/admin/shifts", "layout");
+  revalidatePath("/staff");
+  const parts: string[] = [];
+  if (removed > 0) parts.push(`終日休みのシフト ${removed} 件を削除`);
+  if (changed > 0) parts.push(`時間変更 ${changed} 件をシフトへ反映`);
+  return {
+    ok: true,
+    message: parts.length > 0 ? parts.join("・") + "しました。" : "対象のシフトはありませんでした。",
+  };
 }
 
 // 申請そのものを削除（オーナー用）。テストや誤申請を一覧・カレンダーから完全に消す。
@@ -67,4 +209,31 @@ export async function deleteRequest(requestId: string) {
   revalidatePath("/admin");
   revalidatePath("/admin/shifts", "layout");
   revalidatePath("/staff");
+}
+
+// 未対応（申請中）の休み希望をまとめて承認する（オーナー用）。
+// month="YYYY-MM" で対象月を絞り込み（空文字なら全期間）。
+// 1件ずつ reviewRequest を通すので、LINE通知・終日休みのシフト削除・
+// 欠員の出勤打診など単件承認と同じ処理がすべて実行される。
+export async function approveAllPending(
+  month: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  const supabase = await createClient();
+
+  let q = supabase.from("time_off_requests").select("id").eq("status", "pending");
+  if (/^\d{4}-\d{2}$/.test(month)) {
+    q = q.gte("off_date", `${month}-01`).lte("off_date", `${month}-31`);
+  }
+  const { data, error } = await q;
+  if (error) return { ok: false, message: error.message };
+  const ids = ((data ?? []) as { id: string }[]).map((r) => r.id);
+  if (ids.length === 0) return { ok: false, message: "未対応の申請はありません。" };
+
+  let done = 0;
+  for (const id of ids) {
+    await reviewRequest(id, "approved");
+    done++;
+  }
+  return { ok: true, message: `${done}件の休み希望を承認しました。` };
 }

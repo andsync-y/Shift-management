@@ -1,7 +1,15 @@
 "use client";
 
-import { useMemo, useState } from "react";
-import { DAY_LABELS_JA, type Profile, type Shift, type TimeOffRequest } from "@/lib/types";
+import { useEffect, useMemo, useState } from "react";
+import {
+  DAY_LABELS_JA,
+  STORE_EVENT_KIND_LABELS_JA,
+  type Profile,
+  type Shift,
+  type StoreEvent,
+  type TimeOffRequest,
+} from "@/lib/types";
+import { displayName } from "@/lib/display-name";
 
 type ViewMode = "month" | "week";
 
@@ -29,11 +37,6 @@ function shiftMark(start: string) {
 function band(color: string) {
   return `color-mix(in oklab, ${color} 16%, transparent)`;
 }
-// 苗字（スペース区切りの先頭）
-function surname(fullName: string) {
-  return fullName.split(/[\s　]/)[0];
-}
-
 export default function ShiftCalendarView({
   year,
   month,
@@ -41,6 +44,8 @@ export default function ShiftCalendarView({
   staff,
   highlightStaffId,
   timeOff = [],
+  storeEvents = [],
+  showHours = false,
 }: {
   year: number;
   month: number;
@@ -48,6 +53,8 @@ export default function ShiftCalendarView({
   staff: Profile[];
   highlightStaffId?: string;
   timeOff?: TimeOffRequest[];
+  storeEvents?: StoreEvent[];
+  showHours?: boolean; // 月間総労働時間バーを出す（管理者のシフト表のみ）
 }) {
   const [mode, setMode] = useState<ViewMode>("month");
   // 週ビューの基準日。既定は「最初にシフトがある日」を含む週。
@@ -61,7 +68,52 @@ export default function ShiftCalendarView({
   });
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
+  // 表示月の「最初にシフトがある日」。前月/次月で月が変わったら週ビューの基準日を
+  // その月へ追従させるために使う（月切替時にコンポーネントは再マウントされないため）。
+  const firstShiftYmd = useMemo(() => {
+    const dates = shifts.map((s) => s.work_date).sort();
+    return dates[0] ?? null;
+  }, [shifts]);
+
+  useEffect(() => {
+    if (firstShiftYmd) {
+      const [y, m, d] = firstShiftYmd.split("-").map(Number);
+      setCursor(new Date(y, m - 1, d));
+    } else {
+      setCursor(new Date(year, month - 1, 1));
+    }
+  }, [firstShiftYmd, year, month]);
+
   const staffMap = useMemo(() => new Map(staff.map((s) => [s.id, s])), [staff]);
+
+  // 月間の総労働時間（実働＝休憩自動控除後・給与計算と同じルール：8h超-60分/6h超-45分）と、
+  // スタッフ別内訳。shifts から算出するのでシフトを直すとそのまま反映される。
+  const hours = useMemo(() => {
+    let grossMin = 0;
+    let netMin = 0;
+    const per = new Map<string, number>();
+    for (const s of shifts) {
+      const dur = toMin(s.end_time) - toMin(s.start_time);
+      if (dur <= 0) continue;
+      const brk = dur > 480 ? 60 : dur > 360 ? 45 : 0;
+      const net = Math.max(0, dur - brk);
+      grossMin += dur;
+      netMin += net;
+      per.set(s.staff_id, (per.get(s.staff_id) ?? 0) + net);
+    }
+    const perStaff = [...per.entries()]
+      .map(([id, min]) => {
+        const p = staffMap.get(id);
+        return {
+          id,
+          name: p ? displayName(p) : "?",
+          color: p?.display_color ?? "#8e897f",
+          hours: min / 60,
+        };
+      })
+      .sort((a, b) => b.hours - a.hours);
+    return { gross: grossMin / 60, net: netMin / 60, perStaff };
+  }, [shifts, staffMap]);
 
   const staffInShifts = useMemo(() => {
     const ids = new Set(shifts.map((s) => s.staff_id));
@@ -91,19 +143,47 @@ export default function ShiftCalendarView({
     return m;
   }, [visibleShifts]);
 
-  // 承認済みの休み希望を日付ごとに索引化（スタッフ絞り込みを反映）
+  // 承認済みの「終日/時間帯休み」を日付ごとに索引化（スタッフ絞り込みを反映）。
+  // 時間変更は承認時に実シフトへ反映済みのため、ここでは重ねて表示しない。
   const offByDate = useMemo(() => {
     const m: Record<string, TimeOffRequest[]> = {};
     for (const t of timeOff) {
       if (t.status !== "approved") continue;
+      if (t.request_type === "time_change") continue;
       if (selected.size > 0 && !selected.has(t.staff_id)) continue;
       (m[t.off_date] ??= []).push(t);
     }
     return m;
   }, [timeOff, selected]);
 
+  // 店休・お知らせを日付ごとに索引化（スタッフ絞り込みの影響は受けない＝全員に見せる）
+  const eventsByDate = useMemo(() => {
+    const m: Record<string, StoreEvent[]> = {};
+    for (const e of storeEvents) (m[e.event_date] ??= []).push(e);
+    return m;
+  }, [storeEvents]);
+
   function color(staffId: string) {
     return staffMap.get(staffId)?.display_color ?? "#8e897f";
+  }
+
+  // 店休・お知らせバナー（月/週 共通）
+  function StoreEvt({ e }: { e: StoreEvent }) {
+    const closed = e.kind === "closed";
+    const time = e.start_time && e.end_time ? `${hm(e.start_time)}–${hm(e.end_time)}` : null;
+    const sub = [time, e.all_hands ? "全員参加" : null, e.body].filter(Boolean).join("・");
+    return (
+      <div
+        className={"cal-note" + (closed ? " closed" : "")}
+        title={`${STORE_EVENT_KIND_LABELS_JA[e.kind]}：${e.title}${sub ? `（${sub}）` : ""}`}
+      >
+        <span className="cn-head">
+          <span className="cn-tag">{STORE_EVENT_KIND_LABELS_JA[e.kind]}</span>
+          <span className="cn-title">{e.title}</span>
+        </span>
+        {sub && <span className="cn-sub">{sub}</span>}
+      </div>
+    );
   }
 
   // 休み／時間変更チップ（承認済み）
@@ -116,7 +196,7 @@ export default function ShiftCalendarView({
         className={"evt " + (isChange ? "change" : "off")}
         title={`${p ? p.full_name : "?"} ${isChange ? "時間変更希望" : "休み"}（${time}）`}
       >
-        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+        <span className="nm">{p ? displayName(p) : "?"}</span>
         <span className={"mk " + (isChange ? "change-mk" : "off-mk")}>
           {isChange ? "変" : "休"}
         </span>
@@ -139,7 +219,7 @@ export default function ShiftCalendarView({
         className={"evt" + (mine ? " mine" : "")}
         style={{ background: band(color(s.staff_id)), borderLeftColor: color(s.staff_id) }}
       >
-        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+        <span className="nm">{p ? displayName(p) : "?"}</span>
         <span className={"mk " + (mk === "早" ? "early" : "late")}>{mk}</span>
         {withTime && (
           <span className="tm">
@@ -177,6 +257,7 @@ export default function ShiftCalendarView({
             const key = ymd(date);
             const evts = byDate[key] ?? [];
             const offs = offByDate[key] ?? [];
+            const notes = eventsByDate[key] ?? [];
             const dow = date.getDay();
             const cls =
               "cal-cell" +
@@ -195,6 +276,9 @@ export default function ShiftCalendarView({
               >
                 <div className="cal-daynum">{date.getDate()}</div>
                 <div className="cal-events">
+                  {notes.map((e) => (
+                    <StoreEvt key={e.id} e={e} />
+                  ))}
                   {evts.map((s) => (
                     <Evt key={s.id} s={s} withTime={true} />
                   ))}
@@ -241,6 +325,7 @@ export default function ShiftCalendarView({
           const dow = date.getDay();
           const evts = byDate[ymd(date)] ?? [];
           const offs = offByDate[ymd(date)] ?? [];
+          const notes = eventsByDate[ymd(date)] ?? [];
           return (
             <div key={ymd(date)} className="tl-row">
               <div className="tl-day">
@@ -258,6 +343,14 @@ export default function ShiftCalendarView({
                 </span>
                 <span className="w">（{DAY_LABELS_JA[dow]}）</span>
               </div>
+              <div className="tl-main">
+              {notes.length ? (
+                <div className="tl-notes">
+                  {notes.map((e) => (
+                    <StoreEvt key={e.id} e={e} />
+                  ))}
+                </div>
+              ) : null}
               {evts.length || offs.length ? (
                 <div className="tl-lanes">
                   {evts.map((s) => {
@@ -281,7 +374,7 @@ export default function ShiftCalendarView({
                             outlineOffset: mine ? "-1.5px" : undefined,
                           }}
                         >
-                          <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+                          <span className="nm">{p ? displayName(p) : "?"}</span>
                           <span className={"mk " + (mk === "早" ? "early" : "late")}>{mk}</span>
                           <span className="tm">
                             {hm(s.start_time)}–{hm(s.end_time)}
@@ -302,7 +395,7 @@ export default function ShiftCalendarView({
                         <span className={"mk " + (isChange ? "change-mk" : "off-mk")}>
                           {isChange ? "変" : "休"}
                         </span>
-                        <span className="nm">{p ? surname(p.full_name) : "?"}</span>
+                        <span className="nm">{p ? displayName(p) : "?"}</span>
                         <span className="tm">{isChange ? `→ ${label}` : label}</span>
                       </div>
                     );
@@ -311,6 +404,7 @@ export default function ShiftCalendarView({
               ) : (
                 <div className="tl-empty">— シフトなし</div>
               )}
+              </div>
             </div>
           );
         })}
@@ -326,6 +420,42 @@ export default function ShiftCalendarView({
 
   return (
     <div>
+      {showHours && (
+        <div
+          style={{
+            display: "flex",
+            flexWrap: "wrap",
+            alignItems: "baseline",
+            gap: "6px 16px",
+            marginBottom: 12,
+            paddingBottom: 12,
+            borderBottom: "1px solid var(--line)",
+          }}
+        >
+          <span style={{ fontSize: 15 }}>
+            総労働時間{" "}
+            <b className="en" style={{ fontSize: 21 }}>
+              {hours.net.toFixed(1)}h
+            </b>
+            <span className="muted" style={{ fontSize: 12, marginLeft: 4 }}>
+              （休憩控除後）
+            </span>
+          </span>
+          <span className="muted en" style={{ fontSize: 13 }}>
+            拘束 {hours.gross.toFixed(1)}h
+          </span>
+          {hours.perStaff.length > 0 && (
+            <span style={{ display: "flex", flexWrap: "wrap", gap: "4px 12px", fontSize: 12.5 }}>
+              {hours.perStaff.map((p) => (
+                <span key={p.id} style={{ whiteSpace: "nowrap" }}>
+                  <span className="dot" style={{ background: p.color, marginRight: 4 }} />
+                  {p.name} <b className="en">{p.hours.toFixed(1)}h</b>
+                </span>
+              ))}
+            </span>
+          )}
+        </div>
+      )}
       <div className="cal-toolbar">
         <div className="cal-filter">
           <select
@@ -395,7 +525,7 @@ export default function ShiftCalendarView({
                 }}
               >
                 <span className="dot" style={{ background: s.display_color }} />
-                {surname(s.full_name)}
+                {displayName(s)}
               </button>
             );
           })}

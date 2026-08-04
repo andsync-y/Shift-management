@@ -176,3 +176,48 @@ LINE_MESSAGING_CHANNEL_SECRET=...   # Webhook署名検証用（友だち追加�
 
 > セキュリティ上、Channel Secret / access token は**コードに直接書かず必ず環境変数**に。
 > リポジトリには絶対にコミットしない。
+
+## 打刻リマインド（出勤・退勤）
+
+打刻忘れ防止のため、シフトの開始/終了時刻を過ぎても打刻が無いスタッフへLINEで催促する。
+
+- 実体：`/api/cron/clock-reminder`（`CRON_SECRET` で認証。`?key=` でも可）。
+- **出勤リマインド**：当日シフトの開始時刻を過ぎても**出勤打刻が無い**人へ「出勤の打刻をお願いします」。
+- **退勤リマインド**：終了時刻を過ぎても**退勤打刻が無い（出勤中）**人へ「退勤の打刻をお願いします」。
+- 二重送信は `clock_reminders(shift_id, kind)` で防止（migration 0018）。下書き期間のシフトは対象外。
+- **実行間隔が重要**：時刻どおりに送るには数分〜10分間隔で叩く必要がある。
+  - Vercel Pro なら `vercel.json` に `{ "path": "/api/cron/clock-reminder", "schedule": "*/10 * * * *" }`。
+  - Hobby（Cron 1日1回）の場合は外部スケジューラ（cron-job.org 等）から
+    `https://shift.andsync.jp/api/cron/clock-reminder?key=<CRON_SECRET>` を10分間隔で叩く。
+
+## 明日のシフト連絡（前日リマインド）
+
+翌日に公開済みシフトがあるスタッフへ「【明日のシフト】…」をLINEで送る。
+
+- 実体：`/api/cron/shift-reminder`（定時cron）。ロジックは
+  `src/lib/line/shift-reminder.ts` の `runShiftReminder`。
+- **送信時刻＝前日18:00 JST**。`vercel.json` の `"0 9 * * *"` は **Vercel CronがUTC基準**のため
+  09:00 UTC＝**18:00 JST**になる（時刻を変えたい場合はこのcron式をUTCで調整する。例: 19時JST→`"0 10 * * *"`）。
+  - ⚠️ Vercel Hobbyプランはcronが1日1回・実行が遅延しうる。確実に18時台に送りたい場合は外部スケジューラ
+    （cron-job.org 等）から `https://shift.andsync.jp/api/cron/shift-reminder?key=<CRON_SECRET>` を
+    日本時間18:00に叩く構成でもよい。
+- **手動で今すぐ送信**：オーナーの「休み希望」画面 →「人員カバー分析」見出しの
+  **「明日のシフトを今すぐ送信」**ボタン（`sendTomorrowShiftReminder`）。
+  定時送信が**LINEの送信上限**等で送れなかったときの**再送**に使う。
+  - ⚠️ 二重送信の抑止は無いため、押すたびに対象者へ再送される。
+
+## 公式LINEのメッセージ応答（webhook）
+
+`/api/line/webhook` の処理は**ボタン操作（postback）と位置情報のみ**：
+
+| イベント | 応答 |
+|---|---|
+| postback `t=punch&action=in/out`（リッチメニューの打刻ボタン） | 出勤/退勤打刻（位置必須モードでは現在地の送信を要求） |
+| postback（出勤打診のクイックリプライ） | 打診回答の処理 |
+| 位置情報メッセージ | ジオフェンス判定→出勤/退勤打刻 |
+| **テキストメッセージ** | **一切応答しない** |
+
+- 打刻・解錠・ログイン照会などの操作はすべて**リッチメニューのボタン／LIFF**から行う方針。
+  以前あったテキストのキーワード判定（「おはようございます」で出勤・「ID/パスワード」で
+  ログイン情報返信など）と使い方の自動返信は**全廃**した——雑談や給与明細への返信に
+  ボットが反応しない・打刻ワードを含む雑談で誤打刻しないようにするため。

@@ -11,6 +11,7 @@
 import type { StoreRules } from "@/lib/store-rules";
 import type {
   AvailabilityPreference,
+  FixedShift,
   Profile,
   TimeOffRequest,
 } from "@/lib/types";
@@ -57,6 +58,9 @@ ${shiftTypeLines}
 8. 1日の実働は${rules.maxWorkHoursPerDay}時間以内
 9. 希望休（shift_requests）で「day_off」指定の日は休みにする
 10. 繁忙期（${rules.busyPeriods.join(", ")}）は希望休を原則不可とする
+11. 各スタッフの「固定シフト」は毎週その曜日・時間に必ず配置する（承認済みお休みと重なる日を除く）
+12. 「社会保険=加入」のスタッフは週30時間以上を必ず確保する
+13. 「社会保険=非加入」のスタッフは週30時間未満に抑える（30時間以上にしない＝意図しない社保加入義務を防ぐ）
 
 ## 日別人数配置ルール
 - 土曜: 最低${rules.staffingRules.saturday.min}名、目標${rules.staffingRules.saturday.target}名
@@ -140,6 +144,7 @@ export interface BuildUserPromptParams {
   staff: Profile[];
   availability: AvailabilityPreference[];
   timeOff: TimeOffRequest[];
+  fixedShifts?: FixedShift[];
 }
 
 function pad(n: number) {
@@ -147,7 +152,14 @@ function pad(n: number) {
 }
 
 export function buildUserContent(params: BuildUserPromptParams): string {
-  const { year, month, staff, availability, timeOff } = params;
+  const { year, month, staff, availability, timeOff, fixedShifts } = params;
+
+  // 固定シフトをスタッフ別に索引化（曜日・時間）
+  const fixedByStaff = new Map<string, FixedShift[]>();
+  for (const f of fixedShifts ?? []) {
+    if (!fixedByStaff.has(f.staff_id)) fixedByStaff.set(f.staff_id, []);
+    fixedByStaff.get(f.staff_id)!.push(f);
+  }
 
   // 対象月の日付一覧
   const lastDay = new Date(year, month, 0).getDate();
@@ -193,10 +205,28 @@ export function buildUserContent(params: BuildUserPromptParams): string {
         )
         .join("\n");
 
+      const fixed = (fixedByStaff.get(s.id) ?? [])
+        .sort((a, b) => a.day_of_week - b.day_of_week)
+        .map(
+          (f) =>
+            `      ${DAY_JA[f.day_of_week]}: ${f.start_time.slice(0, 5)}〜${f.end_time.slice(0, 5)}${
+              f.shift_type ? `（${f.shift_type}）` : ""
+            }`
+        )
+        .join("\n");
+
+      // 社保加入者は週30h以上が必須。非加入者は週30h未満に抑える必要がある。
+      const shaho = s.shaho_enrolled
+        ? "加入（週30時間以上を必ず確保）"
+        : "非加入（週30時間未満に抑える／30h以上にしない）";
+
       return `- id: ${s.id}
     氏名: ${s.full_name}
     雇用形態: ${s.employment_type === "full_time" ? "正社員" : "アルバイト"}
+    社会保険: ${shaho}
     週の希望時間: ${s.min_hours_per_week}〜${s.max_hours_per_week}h
+    固定シフト(毎週必ずこの曜日・時間に配置):
+${fixed || "      （なし）"}
     勤務可能(希望シフト):
 ${avail || "      （登録なし＝勤務不可として扱う）"}
     承認済みお休み希望:

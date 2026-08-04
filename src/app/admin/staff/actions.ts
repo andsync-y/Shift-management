@@ -81,9 +81,26 @@ export async function toggleStaffActive(staffId: string, isActive: boolean) {
 
 // 雇用形態・電話・時給・週時間の更新（オーナー専用）
 const profileSchema = z.object({
+  full_name: z.string().trim().min(1, "氏名を入力してください"),
+  display_name: z.string().trim().optional().or(z.literal("")),
+  name_kana: z.string().trim().optional().or(z.literal("")),
+  work_status: z.enum(["active", "on_leave", "retired"]).default("active"),
   employment_type: z.enum(["full_time", "part_time"]),
   phone: z.string().trim().optional().or(z.literal("")),
   hourly_wage: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
+  commute_distance_km: z.coerce.number().nonnegative().max(999).optional().or(z.literal("")),
+  contracted_weekly_hours: z.coerce.number().nonnegative().max(168).optional().or(z.literal("")),
+  tax_column: z.enum(["kou", "otsu"]).default("otsu"),
+  dependents_count: z.coerce.number().int().nonnegative().max(20).default(0),
+  // チェックボックスは未チェックだと送信されない → 値があれば true
+  emp_insurance_enrolled: z.string().optional().transform((v) => v != null),
+  shaho_enrolled: z.string().optional().transform((v) => v != null),
+  kaigo_applicable: z.string().optional().transform((v) => v != null),
+  bank_code: z.string().trim().optional().or(z.literal("")),
+  branch_code: z.string().trim().optional().or(z.literal("")),
+  account_type: z.enum(["1", "2"]).default("1"),
+  account_number: z.string().trim().optional().or(z.literal("")),
+  recipient_kana: z.string().trim().optional().or(z.literal("")),
   min_hours_per_week: z.coerce.number().int().nonnegative(),
   max_hours_per_week: z.coerce.number().int().positive(),
 });
@@ -107,9 +124,31 @@ export async function updateStaffProfile(
   const { error } = await supabase
     .from("profiles")
     .update({
+      full_name: d.full_name,
+      display_name: d.display_name ? d.display_name : null,
+      name_kana: d.name_kana ? d.name_kana : null,
+      work_status: d.work_status,
+      // 在籍状況に連動して稼働フラグも更新（在籍中のみシフト対象）
+      is_active: d.work_status === "active",
       employment_type: d.employment_type,
       phone: d.phone ? d.phone : null,
       hourly_wage: d.hourly_wage === "" || d.hourly_wage === undefined ? null : d.hourly_wage,
+      commute_distance_km:
+        d.commute_distance_km === "" || d.commute_distance_km === undefined ? null : d.commute_distance_km,
+      contracted_weekly_hours:
+        d.contracted_weekly_hours === "" || d.contracted_weekly_hours === undefined
+          ? null
+          : d.contracted_weekly_hours,
+      tax_column: d.tax_column,
+      dependents_count: d.dependents_count,
+      emp_insurance_enrolled: d.emp_insurance_enrolled,
+      shaho_enrolled: d.shaho_enrolled,
+      kaigo_applicable: d.kaigo_applicable,
+      bank_code: d.bank_code ? d.bank_code : null,
+      branch_code: d.branch_code ? d.branch_code : null,
+      account_type: d.account_type,
+      account_number: d.account_number ? d.account_number : null,
+      recipient_kana: d.recipient_kana ? d.recipient_kana : null,
       min_hours_per_week: d.min_hours_per_week,
       max_hours_per_week: d.max_hours_per_week,
     })

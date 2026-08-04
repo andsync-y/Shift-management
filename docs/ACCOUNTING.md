@@ -1,0 +1,132 @@
+# 経理システム（売上・販管費・人件費／確定申告・決算）
+
+シフト管理システム(Supabase + Next.js)に、領収書・カード明細・EC注文を取り込み、
+人件費と合算して月次P&Lを出すための基盤。電子帳簿保存法に配慮し変更履歴を監査ログに残す。
+
+## 構成（マイグレーション）
+
+| ファイル | 内容 |
+|---|---|
+| `0020_accounting.sql` | `receipts` / `ec_orders` / `card_transactions` ＋ `audit_logs`＋監査トリガー＋RLS（オーナーのみ） |
+| `0021_receipt_matching.sql` | 領収書⇔カード明細の自動マッチング（日付±3日・金額一致） |
+| `0022_accounting_views.sql` | 人件費ビュー・経費ビュー・月次P&Lビュー |
+| `0023_monthly_sales.sql` | 月次売上(手入力) `monthly_sales` ＋ P&Lに売上反映 |
+| `0024_expense_account.sql` | カード明細に勘定科目 `account`＋科目別月次ビュー `v_expense_by_account_monthly` |
+| `0040_receipt_payment_method.sql` | 領収書に支払手段 `payment_method`（card/cash/personal・OCR判定＋手修正） |
+| `src/app/api/accounting/receipt-ocr/route.ts` | 領収書まとめ撮り画像→Claudeで複数領収書を一括抽出（オーナーのみ） |
+
+## 1. テーブルと監査ログ
+
+- 財務3テーブルは **RLSでオーナー(is_super_admin)のみ**閲覧・編集可。
+- 変更は `audit_trigger()`（SECURITY DEFINER）が INSERT/UPDATE/DELETE を `audit_logs` に自動記録。
+  - `audit_logs` は **閲覧のみ**（UPDATE/DELETE ポリシー無し＝追記専用＝改ざん防止）。
+  - `changed_by` は `auth.uid()`（サービスロール経由は NULL）。
+
+## 2. 領収書OCR（Next.js APIルート `POST /api/accounting/receipt-ocr`）
+
+- 入力: `{ path, bucket="receipts", insert? }`（Storageの画像パス）。`requireAdmin` でオーナー限定。
+- 処理: Storageから画像取得（service role）→ **Claude ビジョン**（既存 `ANTHROPIC_API_KEY`・`src/lib/accounting/receipt-ocr.ts`）→
+  各領収書を `{date, amount, merchant, account}` で配列返却。`insert:true` で `receipts` に `status='pending'` 登録（オーナーセッションでinsert＝監査ログに記録）。
+- **支払手段のAI判定**：レシートの印字（クレジット/VISA/現金/お預り等）から
+  `card`/`cash` を判定して `receipts.payment_method` に保存（不明はnull・電子マネー/QRはcard扱い）。
+  一覧の「支払」列で手修正できる（カード/現金/立替）。migration **0040**。
+  - **既存分の一括判定**：一覧の「支払手段を一括判定」ボタン
+    （`/api/accounting/receipts-backfill-payment`・GET=残数、POST=数枚ずつ処理）。
+    未設定の行を ①カード明細照合済み→カード ②残りは保存済み画像を再OCRして
+    card/cash 判定（日付＋金額で既存行と突合・曖昧ならスキップ）。
+    **画面側が1リクエスト2画像のループで呼び、進捗%を表示**（サーバータイムアウト回避）。
+    処理済み画像は `skip` で渡して再選択を防ぐ。判別できなかった行は null のまま＝一覧で手修正。
+- **勘定科目のAI提案**：OCR時に店名・品目から勘定科目を推定し（候補は `src/lib/accounting/accounts.ts` の
+  `ACCOUNTS` のみ・候補外の文字列は破棄）、`receipts.suggested_account` に保存。領収書一覧の勘定科目欄に
+  最初から入った状態になる（人が確認・修正して確定する運用は従来どおり）。
+- **重複取込の防止**（`src/lib/accounting/receipt-dedup.ts`・アップロード/OCR両ルートに適用）：
+  取込前に既存の領収書と照合し、**日付＋金額が一致し支払先が矛盾しない**（どちらかが読取不能 or
+  正規化一致）ものはスキップ。同日同額でも支払先が明確に別なら取り込む（誤スキップ防止）。
+  同じ画像内・同バッチの二重検出も除外。スキップ件数は画面メッセージに表示（APIは `skipped` /
+  `skippedItems` を返却）。日付か金額が読めなかったものは判定不能として取り込み、人の確認に回す。
+- **追加の鍵は不要**（本体と同じ `ANTHROPIC_API_KEY`。モデルは `RECEIPT_OCR_MODEL` で上書き可、既定 `claude-opus-4-8`）。
+- ※ 当初仕様の Gemini + Supabase Edge Function は、既存スタックに合わせ **Claude + Next.js ルート**へ変更。
+
+## 2.5 freee用 明細CSVエクスポート（`/api/accounting/receipts-export`）
+
+領収書に取り込み済みの経費明細を **1件=1行のCSV** で書き出し、freee会計の
+「取引の一括登録（インポート）」に取り込めるようにする。
+
+- **UI**：領収書一覧のヘッダー「freee用CSV」ボタン（対象年セレクタ＋「確定のみ」チェック付き）。
+- **API**：`GET /api/accounting/receipts-export?year=2026&status=all|confirmed`（オーナーのみ）。
+- **出力**：`freee_expenses_<year>.csv`・**UTF-8 with BOM**・CRLF。
+  列＝発生日 / 収支区分(支出固定) / 金額 / 取引先 / 勘定科目(未設定は「未分類」) / 税区分 /
+  支払手段(空) / 支払者(空) / 備考(空) / 領収書ID / 画像URL(署名付き30日)。
+- **対象**：発生日（領収日）が対象年で、**日付・金額が読み取れている行のみ**
+  （freee側で必須のため。読み取れていない行は先に領収書画面で入力してから出力）。
+- **税区分**：システムに項目が無いため一律「課対仕入10%」で出力。
+  軽減税率(8%)・対象外の行は **freee取込後に修正**する運用。
+- **支払手段**：`payment_method`（OCR判定＋手修正）から出力（カード/現金/個人立替）。
+  **カード明細と照合済みの行は「カード」扱い**。「カード払いを除外」チェック
+  （`&exclude=card`）でカード払い＋照合済みの行を除いて出力できる
+  （freeeにカード連携がある場合の二重計上防止はこれを使う）。
+- **freee側の取込手順**：［取引］→［取引の一括登録］→CSVアップロード→列マッピング
+  （発生日/金額/取引先/勘定科目/税区分）。決済口座は取込後に設定
+  （現金→現金、個人立替→役員借入金）。
+- ⚠️ **二重計上に注意**：法人カード・法人口座を freee に直接連携している場合、
+  その支払いは自動で取引が入るため、**CSVで入れるのは連携で入らないもの
+  （現金・個人立替）に絞る**（該当行を取込時に外す）。
+
+## 3. 自動マッチング
+
+- 領収書に detected_date/amount が入った時、未紐付けのカード明細を **日付±3日・金額一致** で探し、最も近い1件に紐付け。
+- カード明細INSERT時も、未紐付けの領収書を同条件で探して `receipt_id` をセット。二重紐付けは防止。
+
+## 4. 人件費連動・月次P&L（ビュー）
+
+- 仕様の `staff(時給)` = `profiles.hourly_wage`、勤務 = **実打刻 `time_records`**（＝実績人件費）。
+- `v_labor_cost_staff_daily` / `v_labor_cost_daily` / `v_labor_cost_monthly`：実打刻×時給の集計。
+- `v_expense_monthly`：カード明細の月次合計（販管費の元）。
+- `v_pl_monthly`：月キーで 売上(仮0)・販管費・人件費・営業利益を合算。
+  - **売上テーブルは本仕様未定義**のため `sales=0` を仮置き（売上連携時に差し替え）。
+- ⚠️ ビューの人件費は**簡易**（休憩控除・残業/深夜割増・期間別時給は未反映）。正確な支給額は
+  `/admin/payroll`（`src/lib/payroll.ts`）。決算用に厳密値が要る場合はpayrollロジックの集計を別途用意する。
+
+## 画面（経理セクション・オーナーのみ）
+
+管理ナビは **「運営」「経理」の2グループ**（NavBarのドロップダウン）に整理。経理グループ:
+- **月次P&L** `/admin/accounting`：`v_pl_monthly` を service role で参照（RLS回避ビューのため一般ロールからは revoke 済み）。
+- **領収書** `/admin/accounting/receipts`：画像アップロード→OCR→一覧で日付/金額/支払先/勘定科目を確認・修正→確定。
+  - アップロードは `POST /api/accounting/receipt-upload`（Storage `receipts` バケットへ保存→Claude抽出→receipts登録）。
+  - **画像はブラウザ側で自動縮小**（長辺2200px・JPEG再圧縮・`downscaleImage`）してから送信。
+    スマホのフル解像度写真（4〜6MB）はホスティングのリクエスト上限(4.5MB)やClaudeの画像上限を
+    超えるため。サーバ側でも4MB超は413で明確にエラーを返す。
+  - 画像は署名付きURLで表示（Storageは非公開）。カード明細との照合状況も表示。
+- **売上入力** `/admin/accounting/sales`：月次売上を手入力（同月は上書き）。P&Lの売上に反映。
+  - **Squareから取得**ボタン：選択月の**税抜・純売上（返金控除後）**をSquare Orders APIで集計し monthly_sales に上書き。
+    要 `SQUARE_ACCESS_TOKEN`/`SQUARE_LOCATION_ID`（任意で `SQUARE_ENV`）。実装は `src/lib/accounting/square.ts`。
+- **カード明細** `/admin/accounting/cards`：CSVを取り込む（汎用）。
+  - 文字コードは自動判定（UTF-8↔Shift_JIS）。1行目見出し有無、日付/金額/店名の**列をプルダウンで指定**。
+  - 金額の絶対値化（マイナス無視）対応。プレビュー→取込。**日付+金額+店名が既存と一致する行はスキップ**（重複防止）。
+  - 取込時に自動マッチング（領収書⇔明細）が発火。一覧で照合状況・削除。
+  - 一覧で**勘定科目**を行ごとに設定（候補は `src/lib/accounting/accounts.ts`）。
+- **科目別集計** `/admin/accounting/report`：年次の 勘定科目×月 マトリクス＋年計、**CSV出力**（確定申告/税理士共有用）。
+
+### 必要な準備
+- Supabase Storage の **`receipts` バケット**（非公開）を用意。マイグレーション **0035** が自動作成する（未適用だとアップロードが「receipts バケットが必要」で失敗）。
+- マイグレーション 0020→0021→0022→0023→0024、および 0035 を適用。
+
+## 固定費と経常利益（migration 0033）
+
+毎月の定額費用（家賃・ロイヤリティ・広告・光熱費・借入返済 等）を `fixed_costs` に登録し、月次P&Lに反映する。
+
+- テーブル `fixed_costs`：`name / amount / category / pl_expense / start_month / end_month / sort_order`。
+  - `pl_expense=false`（借入返済など）は**経常利益から除外**し、キャッシュ収支でのみ控除。
+  - `start_month`〜`end_month` で適用月を限定（例：リジョブ〜2026-07、公庫2026-08〜）。
+- 管理画面「経理 > 固定費」（`/admin/accounting/fixed-costs`）で追加・編集・削除。
+- 月次P&L（`/admin/accounting`）に列を追加：
+  - **経常利益 ＝ 売上 − 販管費(カード) − 固定費(経費) − 人件費**
+  - **月次収支 ＝ 経常利益 − 借入返済**（現金ベースの手残り目安）
+- 集計ヘルパー：`src/lib/accounting/fixed-costs.ts`（`isActiveFixedCost` / `sumFixedCosts`）。
+- ⚠️ カード明細に既にある費用を固定費にも入れると**二重計上**になる（どちらか一方に）。
+
+## 未実装・今後
+
+- 管理画面UI（領収書アップロード/確認・カード明細CSV取込・EC注文取込・P&Lダッシュボード）。
+- 売上テーブルと連携（POS/予約実績など）。
+- 勘定科目マスタと確定申告(青色決算書)向け帳票出力。

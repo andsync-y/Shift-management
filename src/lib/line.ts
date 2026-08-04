@@ -168,6 +168,33 @@ export async function pushLineMessage(
   }
 }
 
+// 診断用: LINE push を投げ、成否・HTTPステータス・エラー本文を返す。
+// 「通知が動かない」原因切り分け（トークン未設定/無効、userId不正、友だち未追加 等）に使う。
+export async function pushLineDetailed(
+  lineUserId: string | null | undefined,
+  text: string
+): Promise<{ enabled: boolean; ok: boolean; status: number | null; error?: string }> {
+  if (!process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN) {
+    return { enabled: false, ok: false, status: null, error: "LINE_MESSAGING_CHANNEL_ACCESS_TOKEN 未設定" };
+  }
+  if (!lineUserId) return { enabled: true, ok: false, status: null, error: "送信先の line_user_id が無い" };
+  try {
+    const res = await fetch(PUSH_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN}`,
+      },
+      body: JSON.stringify({ to: lineUserId, messages: [{ type: "text", text }] }),
+    });
+    if (res.ok) return { enabled: true, ok: true, status: res.status };
+    const body = await res.text();
+    return { enabled: true, ok: false, status: res.status, error: body.slice(0, 300) };
+  } catch (e) {
+    return { enabled: true, ok: false, status: null, error: e instanceof Error ? e.message : String(e) };
+  }
+}
+
 // 複数人へ push（公開通知など）。送信できた件数を返す。
 export async function pushLineToMany(
   lineUserIds: (string | null | undefined)[],

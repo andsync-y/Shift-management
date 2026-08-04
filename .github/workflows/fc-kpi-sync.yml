@@ -1,0 +1,34 @@
+name: FC KPI Sync
+
+# 本部システムからKPIを取得してアプリへ送る（Vercel外で実行）。
+# 主トリガは Vercel Cron → workflow_dispatch（時間に正確）。
+# 下の schedule は GitHub 単体のバックアップ＋日中の再取得（当月売上を最新化）。
+#   GitHub の schedule は遅延・スキップが多いので複数時刻を並べて取りこぼしを防ぐ。
+#   07:00 / 13:00 / 19:00 JST = 22:00 / 04:00 / 10:00 UTC。手動実行(workflow_dispatch)も可。
+on:
+  schedule:
+    - cron: "0 22 * * *"
+    - cron: "0 4 * * *"
+    - cron: "0 10 * * *"
+  workflow_dispatch:
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: tools/fc-kpi-sync
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - run: npm install
+      - run: npx playwright install --with-deps chromium
+      - run: npm run sync
+        env:
+          FC_LOGIN_URL: ${{ secrets.FC_LOGIN_URL }}
+          FC_USER: ${{ secrets.FC_USER }}
+          FC_PASS: ${{ secrets.FC_PASS }}
+          APP_INGEST_URL: ${{ secrets.APP_INGEST_URL }}
+          KPI_INGEST_SECRET: ${{ secrets.KPI_INGEST_SECRET }}

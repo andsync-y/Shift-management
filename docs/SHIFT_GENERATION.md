@@ -1,0 +1,56 @@
+# シフト自動生成（ソルバー / Claude）
+
+管理画面「シフト作成」で、スタッフの希望・必要人数・固定シフト・社保加入状況をもとに
+月次シフトを自動生成する。2つのエンジンがある。
+
+| エンジン | ファイル | 特徴 |
+|---|---|---|
+| ソルバー（貪欲法） | `src/lib/shift-generator/solver.ts` | 制約を厳密に守る。必要人数(shift_requirements)ベース |
+| Claude生成 | `src/lib/shift-generator/claude-generator.ts` ＋ `src/lib/shift-prompt.ts` | 店舗ルール＋LLMで柔軟に編成 |
+
+どちらも同じ入力（スタッフ・希望・承認済み休み・個別予定・**固定シフト**）を受け取り、
+`shifts` に `ai_generated=true` で保存する。
+
+## 入力データ
+
+- **スタッフ** `profiles`（在籍中のみ）：`min/max_hours_per_week`、**`shaho_enrolled`（社保加入）**。
+- **希望シフト** `availability_preferences`：曜日ごとの preferred / available / unavailable。
+- **承認済みお休み** `time_off_requests`（status=approved）＋ **個別予定** `staff_blackouts`（不可時間）。
+- **必要人数** `shift_requirements`（曜日×時間帯×人数・ソルバーが使用）。
+- **固定シフト** `fixed_shifts`：毎週決まった曜日・時間の勤務。
+
+## 固定シフトの扱い（両エンジン）
+
+- **生成時に最優先で先に配置**する（承認済みお休みと重なる日は除外）。
+- ソルバー：固定シフトを先に確定 → その分を必要人数から差し引いて残りを埋める。
+- Claude：各スタッフの「固定シフト」欄をプロンプトに渡し、絶対制約として毎週配置させる。
+- ※「固定シフトを展開」ボタン（`expandFixedShifts`）は、生成とは別に固定シフトだけを
+  カレンダーへ一括コピーする従来機能。生成が固定シフトを内包するようになったため、
+  通常は生成だけで固定分も入る。
+
+## 社会保険の扱い（両エンジン）
+
+`profiles.shaho_enrolled` を生成に反映する（ライン＝**週30時間**）。
+
+- **加入者**：週30時間以上を確保するよう最優先で配置（ソルバーはスコアで強く優先／
+  Claudeは絶対制約）。月末に週平均30h未満なら警告を出す。
+- **非加入者**：週30時間未満に抑える（ソルバーはハード上限／Claudeは絶対制約）。
+  意図せず30hを超えると社保加入義務が発生し会社負担が増えるため、これを防ぐ。
+- 定数 `SHAHO_WEEKLY_HOURS = 30`（`solver.ts`）。判定の最終確認は給与画面「社会保険 加入判定」。
+
+## 生成の流れ
+
+1. 期間（年月）を作成 → 希望・必要人数・固定シフト・社保設定を用意。
+2. 「シフト作成」画面で生成（ソルバー or Claude）。
+3. 不足枠（shortages）・社保未達などの警告を確認。
+4. 手直し → 公開。
+
+## 関連ファイル
+
+| ファイル | 役割 |
+|---|---|
+| `src/lib/shift-generator/solver.ts` | ソルバー本体（固定シフト・社保制約を実装） |
+| `src/lib/shift-generator/claude-generator.ts` | Claude生成（プロンプト構築→検証→割当変換） |
+| `src/lib/shift-prompt.ts` | Claude用プロンプト（スタッフ別の社保・固定シフトを含む） |
+| `src/lib/shift-generator/types.ts` | 入出力型（`GenerateInput.fixedShifts`） |
+| `src/app/admin/shifts/actions.ts` | 生成アクション（固定シフト取得→エンジンへ） |

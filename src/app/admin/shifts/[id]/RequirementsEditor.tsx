@@ -5,6 +5,7 @@ import {
   addRequirement,
   deleteRequirement,
   applyDefaultRequirements,
+  applyMinimumRequirements,
 } from "../actions";
 import { DAY_LABELS_JA, type ShiftRequirement } from "@/lib/types";
 
@@ -26,12 +27,25 @@ export default function RequirementsEditor({
   function handleApplyDefault() {
     if (
       !confirm(
-        "現在の必要人数を消して、基本パターン（早番2名・遅番2名 × 全曜日）を設定します。よろしいですか？"
+        "現在の必要人数を消して、基本パターン（曜日別：火木は早1遅1・平日他は早2遅1・土日は厚め）を設定します。よろしいですか？"
       )
     )
       return;
     startTransition(async () => {
       const res = await applyDefaultRequirements(periodId);
+      setMessage(res.message);
+    });
+  }
+
+  function handleApplyMinimum() {
+    if (
+      !confirm(
+        "現在の必要人数を消して、最低人数パターン（9:30–16:00×1・15:30–22:00×1 × 全曜日）を設定します。よろしいですか？"
+      )
+    )
+      return;
+    startTransition(async () => {
+      const res = await applyMinimumRequirements(periodId);
       setMessage(res.message);
     });
   }
@@ -65,11 +79,19 @@ export default function RequirementsEditor({
         <button type="submit" className="btn-primary">追加</button>
         <button
           type="button"
+          onClick={handleApplyMinimum}
+          className="btn-outline"
+          disabled={pending}
+        >
+          最低人数パターンを適用（9:30–16:00×1・15:30–22:00×1 × 全曜日）
+        </button>
+        <button
+          type="button"
           onClick={handleApplyDefault}
           className="btn-outline"
           disabled={pending}
         >
-          基本パターンを適用（早番2・遅番2 × 全曜日）
+          基本パターンを適用（曜日別：火木薄め・土日厚め）
         </button>
       </form>
 

@@ -4,6 +4,13 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "全力ストレッチ岐阜長良店 シフト管理",
   description: "スタッフ管理・AIシフト自動作成・お休み希望申請",
+  // 社内向けの非公開システムのため検索エンジンにインデックスさせない
+  robots: {
+    index: false,
+    follow: false,
+    nocache: true,
+    googleBot: { index: false, follow: false },
+  },
 };
 
 // スマホで開いたときに勝手に拡大されたり、ピンチでズームできたりしないようにする

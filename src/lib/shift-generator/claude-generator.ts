@@ -12,6 +12,7 @@ import { getStoreRules, getAnthropicModel } from "@/lib/store-rules";
 import { buildSystemPrompt, buildUserContent } from "@/lib/shift-prompt";
 import type {
   AvailabilityPreference,
+  FixedShift,
   Profile,
   TimeOffRequest,
 } from "@/lib/types";
@@ -23,6 +24,7 @@ export interface ClaudeGenerateInput {
   staff: Profile[];
   availability: AvailabilityPreference[];
   timeOff: TimeOffRequest[];
+  fixedShifts?: FixedShift[];
 }
 
 export interface ClaudeGenerateResult {
@@ -102,7 +104,14 @@ export async function generateShiftsWithClaude(
 
   const rules = getStoreRules();
   const system = buildSystemPrompt(rules);
-  const userContent = buildUserContent(input);
+  const userContent = buildUserContent({
+    year: input.year,
+    month: input.month,
+    staff: input.staff,
+    availability: input.availability,
+    timeOff: input.timeOff,
+    fixedShifts: input.fixedShifts ?? [],
+  });
 
   const client = new Anthropic({ apiKey });
 

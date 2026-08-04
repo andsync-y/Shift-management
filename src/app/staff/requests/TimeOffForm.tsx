@@ -15,6 +15,10 @@ export default function TimeOffForm() {
   const reqType = allDay ? "off" : "time_change";
   const kind = allDay ? "休み" : "時間変更";
 
+  // 入力欄に有効な日付が入っていれば「追加」を押し忘れても対象日に含める。
+  const draftValid = /^\d{4}-\d{2}-\d{2}$/.test(draft) && !dates.includes(draft);
+  const effectiveDates = draftValid ? [...dates, draft].sort() : dates;
+
   function addDate() {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(draft)) return;
     if (!dates.includes(draft)) setDates((prev) => [...prev, draft].sort());
@@ -80,7 +84,7 @@ export default function TimeOffForm() {
         </p>
 
         <form action={formAction}>
-          <input type="hidden" name="off_dates" value={dates.join(",")} />
+          <input type="hidden" name="off_dates" value={effectiveDates.join(",")} />
           <input type="hidden" name="request_type" value={reqType} />
           {allDay && <input type="hidden" name="all_day" value="on" />}
 
@@ -172,7 +176,7 @@ export default function TimeOffForm() {
           )}
 
           {/* 送信前の確認プレビュー：間違った申請を防ぐ */}
-          {dates.length > 0 && (
+          {effectiveDates.length > 0 && (
             <div
               className="alert-banner ok"
               style={{ marginTop: 26, alignItems: "center" }}
@@ -183,7 +187,7 @@ export default function TimeOffForm() {
                   この内容で申請します
                 </p>
                 <p className="help" style={{ margin: 0 }}>
-                  {dates
+                  {effectiveDates
                     .map((d) => {
                       const [, m, day] = d.split("-");
                       return `${Number(m)}/${Number(day)}`;
@@ -191,20 +195,20 @@ export default function TimeOffForm() {
                     .join("・")}{" "}
                   を{" "}
                   <b className="soft">{allDay ? "終日休み" : `${start}–${end} への時間変更`}</b>{" "}
-                  として申請（{dates.length}日）
+                  として申請（{effectiveDates.length}日）
                 </p>
               </div>
             </div>
           )}
 
           <div style={{ marginTop: 22 }}>
-            <button type="submit" className="btn-fill" disabled={pending || dates.length === 0}>
+            <button type="submit" className="btn-fill" disabled={pending || effectiveDates.length === 0}>
               {pending ? "申請中..." : allDay ? "お休みを申請" : "時間変更を申請"}
-              {dates.length > 0 ? `（${dates.length}日）` : ""}
+              {effectiveDates.length > 0 ? `（${effectiveDates.length}日）` : ""}
             </button>
-            {dates.length === 0 && (
+            {effectiveDates.length === 0 && (
               <span className="help" style={{ marginLeft: 16 }}>
-                対象日を1日以上追加してください。
+                対象日を入力してください（複数日は「追加」で増やせます）。
               </span>
             )}
           </div>

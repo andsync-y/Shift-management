@@ -79,10 +79,10 @@ function json<T>(key: string, fallback: T): T {
 
 // --- 既定値（環境変数未設定時のフォールバック） ----------------------
 const DEFAULT_SHIFT_TYPES: ShiftTypeRule[] = [
-  { id: "early", name: "早番", start: "10:00", end: "19:00", workHours: 8, breakMinutes: 60 },
-  { id: "late", name: "遅番", start: "13:00", end: "22:00", workHours: 8, breakMinutes: 60 },
-  { id: "short_5h", name: "早短5h", start: "10:00", end: "15:00", workHours: 5, breakMinutes: 0 },
-  { id: "short_6h", name: "早短6h", start: "10:00", end: "16:00", workHours: 6, breakMinutes: 0 },
+  { id: "early", name: "早番", start: "09:30", end: "19:00", workHours: 8, breakMinutes: 60 },
+  { id: "late", name: "遅番", start: "12:30", end: "22:00", workHours: 8, breakMinutes: 60 },
+  { id: "short_5h", name: "早短5h", start: "09:30", end: "15:00", workHours: 5, breakMinutes: 0 },
+  { id: "short_6h", name: "早短6h", start: "09:30", end: "16:00", workHours: 6, breakMinutes: 0 },
 ];
 
 const DEFAULT_STAFFING = {
@@ -99,7 +99,7 @@ export function getStoreRules(): StoreRules {
   return {
     name: str("STORE_NAME", "全力ストレッチ岐阜長良店"),
     operatingHours: {
-      start: str("STORE_OPERATING_HOURS_START", "10:00"),
+      start: str("STORE_OPERATING_HOURS_START", "09:30"),
       end: str("STORE_OPERATING_HOURS_END", "22:00"),
     },
     beds: num("STORE_BEDS", 4),

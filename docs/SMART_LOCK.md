@@ -1,0 +1,169 @@
+# 入口スマートロック連携（セサミ + 公式LINE）
+
+店舗入口の鍵（CANDY HOUSE「セサミ」）を、公式LINEから施錠/解錠できる仕組みのメモ。
+コードは実装済み。本番で使うには **環境変数の設定** と **LINE側のリッチメニュー設定** が必要。
+
+## 全体像
+
+```
+公式LINEのリッチメニュー（🔓解錠 / 🔒施錠）
+   │  LIFFリンク https://liff.line.me/{LIFF_ID}/liff/lock?action=unlock|lock
+   ▼
+LIFF画面 /liff/lock        … idToken と現在地(GPS)を取得
+   │  POST { idToken, action, lat, lng }
+   ▼
+/api/lock/control          … 本人確認・権限/ジオフェンス判定
+   │
+   ▼
+src/lib/sesame.ts          … セサミ Web API に署名付きコマンド送信
+   ▼
+セサミ本体（Wi-Fiモジュール2 / Hub3 経由）
+```
+
+テキスト操作も可能：トークに「解錠」「施錠」等を送ると Webhook が処理する
+（オーナーは直接実行、一般スタッフはジオフェンス判定のためメニューのボタンへ誘導）。
+
+## 権限モデル
+
+- 操作できるのは **LINE連携済みのスタッフのみ**（`profiles.line_user_id` で照合）。
+- **オーナー（`role = super_admin`）**：場所の制限なし、どこからでも操作可。
+- **一般スタッフ**：店舗周辺（ジオフェンス）でのみ操作可。判定はサーバー側
+  `/api/lock/control` で `lib/geo` の `storeGeofence()` と距離比較。
+
+## 必要な環境変数
+
+セサミ（`src/lib/sesame.ts` 参照。未設定なら静かに無効＝既存機能は壊れない）:
+
+| 変数 | 内容 |
+|---|---|
+| `SESAME_API_KEY` | CANDY HOUSE で発行する Web API キー（アカウント共通・1つ） |
+| `SESAME_DEVICE_UUID` | セサミのデバイスUUID |
+| `SESAME_SECRET_KEY` | デバイスの secret key（16バイト=32桁の16進） |
+
+鍵が複数（1ドアに錠が2つ等）の場合は連番で追加できる（API キーは共通の1つ）:
+`SESAME_DEVICE_UUID_1` / `SESAME_SECRET_KEY_1` … `_8` まで。施錠/解錠は全台へまとめて送信。
+
+LIFF / ジオフェンス（他機能と共用）:
+
+| 変数 | 内容 |
+|---|---|
+| `NEXT_PUBLIC_LIFF_ID` | LIFFアプリのID（打刻と共用。エンドポイントURLは `/liff`） |
+| 店舗ジオフェンス | `lib/geo` の設定（緯度・経度・半径）。一般スタッフの距離判定に使用 |
+| `AUTO_LOCK_AFTER_MIN` | 無人時の自動施錠までの分数（既定15）。`0` で自動施錠を無効化 |
+| `CRON_SECRET` | Cron認証用シークレット（自動施錠エンドポイントの呼び出しに必須） |
+
+> 前提：セサミ5/6に Wi-Fiモジュール2 / Hub3 をペアリングし、アプリの
+> 「設定 → 連携 → API」を ON にしておくこと（Bluetooth単体ではクラウド操作不可）。
+
+## セサミ Web API の要点（`src/lib/sesame.ts`）
+
+- エンドポイント：`https://app.candyhouse.co/api/sesame2/{uuid}/cmd`（POST）、状態は同URLの GET。
+- ヘッダ：`x-api-key: {SESAME_API_KEY}`
+- コマンド番号（SesameOS3）：**施錠 = 82 / 解錠 = 83**
+- `history`：操作者名を base64 にしたもの（アプリの操作履歴に「誰が」を残す）。
+- `sign`：**AES-CMAC（RFC 4493 / AES-128）** の署名。Unix秒(LE4バイト)の上位3バイトを
+  secret key で CMAC した値。Node に CMAC が無いため自前実装している。
+
+## Wi-Fi/ネット不調への備え
+
+鍵はクラウド→店舗Wi-Fi(Hub3)→本体の順で操作するため、**店舗のネットが落ちると操作不可**になる。
+そのための手当て：
+
+- **送信のタイムアウト＋リトライ**：`sendCmdToDevice` は8秒タイムアウトで最大3回試行
+  （4xx は即終了、5xx/タイムアウトのみ再試行）。状態取得も6秒タイムアウト。
+- **失敗時の案内出し分け**：操作失敗時に `sesameStatus()` で鍵がクラウドから見えるか確認し、
+  - 見えない（＝ネット不通の可能性）→「**鍵に接続できませんでした。店舗のWi-Fi/ネット接続をご確認ください。**」
+  - 見える → 一時的失敗として再試行を促す
+  いずれも**代替手段（セサミ公式アプリのBluetooth操作／物理鍵）**を必ず併記する。
+  LIFF(`/api/lock/control`)・LINEトーク（`webhook`）の両方で同じ案内。
+- **運用前提**：オーナー・開閉担当は**物理鍵を携帯**し、**セサミ公式アプリに招待**しておくこと
+  （Bluetoothなら本体のそばでネット不通でも開けられる）。アプリ側だけで完結する自動復旧はできない。
+
+## LINE側の設定（リッチメニュー）
+
+打刻も鍵も **1つのLIFFアプリ（＝1つのLIFF ID）** で動く。新しいLIFFアプリは不要。
+現状のLIFFアプリ：
+
+| 項目 | 値 |
+|---|---|
+| LIFFアプリ名 | 打刻（打刻・鍵で共用） |
+| LIFF ID | `2010239587-jevvSZzb`（= `NEXT_PUBLIC_LIFF_ID`） |
+| エンドポイントURL | **`https://shift.andsync.jp/liff`（統合ページ）** |
+
+> ⚠️ **エンドポイントは実ページ `/liff` に固定し、ボタンは「パスなし・クエリだけ」**で開く。
+> ルート `/` をエンドポイントにすると、LIFF起動時にまず `/` が読まれ→未ログインだと
+> `src/app/page.tsx` が `/login` へリダイレクトしてしまい、操作ページに到達できない。
+> またパス連結（`liff.line.me/{id}/liff/lock`）はエンドポイントの末尾と二重パスになり
+> やすく不安定。クエリ（`?action=...`）はLIFFが常に保持するため最も壊れにくい。
+
+リッチメニュー各ボタンに設定するURL（タイプ＝**リンク**。`{LIFF_ID}` は上記ID）:
+
+| ボタン | URL |
+|---|---|
+| 出勤 | `https://liff.line.me/{LIFF_ID}?action=in` |
+| 退勤 | `https://liff.line.me/{LIFF_ID}?action=out` |
+| 🔓 解錠 | `https://liff.line.me/{LIFF_ID}?action=unlock` |
+| 🔒 施錠 | `https://liff.line.me/{LIFF_ID}?action=lock` |
+
+`/liff`（`src/app/liff/page.tsx`）が `action` を見て、in/out→打刻、unlock/lock→施錠/解錠に
+振り分ける。シフト管理（Web本体）へ行くボタンだけは通常URL `https://shift.andsync.jp/`。
+
+> 必ず `liff.line.me/...` 形式で。直に `https://本番ドメイン/liff` を貼ると
+> idToken が取れず認証エラーになる。
+
+手順（LINE公式アカウントマネージャー manager.line.biz）:
+1. 対象アカウント →「トークルーム管理」→「リッチメニュー」→「作成」
+2. 表示設定（タイトル・期間・メニューバーのテキスト）
+3. テンプレート選択 → 各エリアのアクションを **タイプ「リンク」** にして上記URLを設定
+4. 背景画像を作成 → 保存 → 公開
+
+`{LIFF_ID}` の確認：LINE Developers → プロバイダー → **LINEログインチャネル** →
+「LIFF」タブの LIFF ID（`NEXT_PUBLIC_LIFF_ID` と同値。現在は `2010239587-jevvSZzb`）。
+
+### スタッフ操作の方式（採用：LIFF・1タップ）
+
+鍵・打刻ともボタンを押すと一瞬LIFF画面が開き、**端末GPSを取得**してサーバーへ送る
+（ジオフェンス判定に必要）。結果を表示して 1.5 秒で自動的に閉じる。
+- 一般スタッフ：店舗周辺（`STORE_LAT/LNG/GEOFENCE_M`）でのみ操作可。
+- オーナー（super_admin）：場所の制限なし。
+
+> 検討した代替案：リッチメニューをテキストにし、LINE純正の「位置情報を送信」
+> （`locationQuickReply`）でGPSを運ぶ画面なし方式も可能だが、タップが1回増え、
+> 鍵の意図（解錠/施錠）を一時記憶する実装が必要になるため、打刻と操作感を揃える
+> 目的で LIFF・1タップ方式を採用した。
+
+## 無人時の自動施錠（かけ忘れ防止）
+
+`/api/cron/auto-lock`（`src/app/api/cron/auto-lock/route.ts`）が判定・施錠する。
+
+- 在店判定は**打刻（time_records）**が根拠。直近16時間以内に出勤があり、いま
+  **誰も勤務中でない（全員 退勤済み）**状態が `AUTO_LOCK_AFTER_MIN` 分続いたら施錠。
+- 重複施錠・重複通知は**「現在のロック状態が `unlocked` のときだけ施錠」**で防止
+  （施錠後は `locked` になり次回以降は何もしない）。
+- 成功時はオーナー（super_admin）へ LINE 通知。
+- **前提：退勤打刻**。退勤し忘れると「無人」と見なさない。逆に、打刻に現れない人
+  （客等）は判定対象外なので、不在の最終確認は運用で担保する。
+
+### 起動方法（重要：Vercel Hobby は Cron が1日1回まで）
+
+Vercel Cron だけでは5分間隔にできないため、**外部スケジューラから5分おきに叩く**：
+
+```
+GET https://shift.andsync.jp/api/cron/auto-lock?key=<CRON_SECRET>
+```
+
+- 認証：`?key=<CRON_SECRET>` または `Authorization: Bearer <CRON_SECRET>`。
+- 推奨：cron-job.org（無料・1分〜）に上記URLを5分間隔で登録。
+- 代替：GitHub Actions のスケジュール、Supabase Cron（pg_cron + pg_net）など。
+
+## 関連ファイル
+
+| ファイル | 役割 |
+|---|---|
+| `src/lib/sesame.ts` | セサミ Web API ラッパ（署名・施錠/解錠/状態取得） |
+| `src/app/api/lock/control/route.ts` | LIFFからの操作API（本人確認・権限/ジオフェンス判定） |
+| `src/app/liff/page.tsx` | **統合LIFFページ（エンドポイント）。`?action=in/out/unlock/lock` を振り分け** |
+| `src/app/liff/lock/page.tsx` | 旧・鍵専用ページ（`/liff` に統合済み。後方互換で残置） |
+| `src/app/liff/punch/page.tsx` | 旧・打刻専用ページ（同上） |
+| `src/app/api/line/webhook/route.ts` | テキスト「解錠/施錠」等のキーワード処理 |
+| `src/app/api/cron/auto-lock/route.ts` | 無人時の自動施錠（外部スケジューラから定期呼び出し） |

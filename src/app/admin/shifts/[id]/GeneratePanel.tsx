@@ -25,6 +25,7 @@ export default function GeneratePanel({
   const [res, setRes] = useState<GenerateActionResult | null>(null);
   const [claudeRes, setClaudeRes] = useState<ClaudeGenerateActionResult | null>(null);
   const [fixedRes, setFixedRes] = useState<ExpandFixedActionResult | null>(null);
+  const [ignoreTimeOff, setIgnoreTimeOff] = useState(false);
 
   function handleGenerate() {
     startTransition(async () => {
@@ -48,7 +49,7 @@ export default function GeneratePanel({
 
   function handleExpandFixed() {
     startTransition(async () => {
-      const r = await expandFixedShifts(periodId);
+      const r = await expandFixedShifts(periodId, ignoreTimeOff);
       setFixedRes(r);
       setRes(null);
       setClaudeRes(null);
@@ -69,6 +70,16 @@ export default function GeneratePanel({
         <button onClick={handleExpandFixed} className="btn-primary" disabled={pending}>
           {pending ? "処理中..." : "📌 固定シフトを展開"}
         </button>
+
+        <label className="flex items-center gap-1.5 text-xs text-gray-600 select-none">
+          <input
+            type="checkbox"
+            checked={ignoreTimeOff}
+            onChange={(e) => setIgnoreTimeOff(e.target.checked)}
+            disabled={pending}
+          />
+          希望休を無視（全員出勤）
+        </label>
 
         <button onClick={handleGenerate} className="btn-secondary" disabled={pending}>
           {pending ? "生成中..." : "🤖 ソルバーで自動生成"}

@@ -10,8 +10,10 @@ import { generateShifts } from "@/lib/shift-generator/solver";
 import { reviewShiftPlan } from "@/lib/shift-generator/llm";
 import { generateShiftsWithClaude } from "@/lib/shift-generator/claude-generator";
 import { getStoreRules } from "@/lib/store-rules";
+import { blackoutsToTimeOff, monthRange } from "@/lib/blackouts";
 import type {
   AvailabilityPreference,
+  FixedShift,
   Profile,
   ShiftRequirement,
   TimeOffRequest,
@@ -44,7 +46,7 @@ export async function createPeriod(_prev: unknown, formData: FormData) {
     };
   }
 
-  // 新しい月は基本パターン（早番2名・遅番2名 × 全曜日）を自動で入れておく。
+  // 新しい月は基本パターン（曜日別・火木薄め・土日厚め）を自動で入れておく。
   await supabase.from("shift_requirements").insert(defaultRequirementRows(created.id));
 
   revalidatePath("/admin/shifts");
@@ -78,15 +80,41 @@ export async function deleteRequirement(id: string, periodId: string) {
   revalidatePath(`/admin/shifts/${periodId}`);
 }
 
-// 基本パターン（全曜日: 早番2名・遅番2名）の必要人数を組み立てる。
-// 時間帯は店舗ルールの早番/遅番（既定 10:00–19:00 / 13:00–22:00）を使う。
+// 基本パターン（曜日別の必要人数）。1週間の実績＋スタッフ稼働制約から、
+// 火木は薄め(早1遅1)、平日他は早2遅1、土日(特に新規多い日曜)は厚め、で組む。
+// 時間帯は店舗ルールの早番/遅番（既定 09:30–19:00 / 12:30–22:00）を使う。
+// day_of_week: 0=日 1=月 2=火 3=水 4=木 5=金 6=土
+const EARLY_BY_DOW: Record<number, number> = { 0: 2, 1: 2, 2: 1, 3: 2, 4: 1, 5: 2, 6: 2 };
+const LATE_BY_DOW: Record<number, number> = { 0: 1, 1: 1, 2: 1, 3: 1, 4: 1, 5: 1, 6: 2 };
+
 function defaultRequirementRows(periodId: string) {
   const rules = getStoreRules();
-  const early = rules.shiftTypes.find((t) => t.id === "early") ?? { start: "10:00", end: "19:00" };
-  const late = rules.shiftTypes.find((t) => t.id === "late") ?? { start: "13:00", end: "22:00" };
+  const early = rules.shiftTypes.find((t) => t.id === "early") ?? { start: "09:30", end: "19:00" };
+  const late = rules.shiftTypes.find((t) => t.id === "late") ?? { start: "12:30", end: "22:00" };
+  const rows = [];
+  for (let dow = 0; dow < 7; dow++) {
+    rows.push({ period_id: periodId, day_of_week: dow, start_time: early.start, end_time: early.end, required_staff: EARLY_BY_DOW[dow] });
+    rows.push({ period_id: periodId, day_of_week: dow, start_time: late.start, end_time: late.end, required_staff: LATE_BY_DOW[dow] });
+  }
+  return rows;
+}
+
+// 基本パターンを適用（既存の必要人数を置き換える）。
+export async function applyDefaultRequirements(periodId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("shift_requirements").delete().eq("period_id", periodId);
+  await supabase.from("shift_requirements").insert(defaultRequirementRows(periodId));
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return { ok: true, message: "基本パターン（火木は早1遅1・平日他は早2遅1・土日は厚め）を設定しました。" };
+}
+
+// 最低人数パターン：店に誰もいない時間を作らない最小構成。
+// 9:30–16:00 に1名、15:30–22:00 に1名（15:30–16:00 が重なるので終日途切れない）。
+function minimumRequirementRows(periodId: string) {
   const slots = [
-    { start: early.start, end: early.end, required: 2 }, // 早番 2名
-    { start: late.start, end: late.end, required: 2 }, // 遅番 2名
+    { start: "09:30", end: "16:00", required: 1 },
+    { start: "15:30", end: "22:00", required: 1 },
   ];
   const rows = [];
   for (let dow = 0; dow < 7; dow++) {
@@ -103,14 +131,16 @@ function defaultRequirementRows(periodId: string) {
   return rows;
 }
 
-// 基本パターンを適用（既存の必要人数を置き換える）。
-export async function applyDefaultRequirements(periodId: string) {
+export async function applyMinimumRequirements(periodId: string) {
   await requireAdmin();
   const supabase = await createClient();
   await supabase.from("shift_requirements").delete().eq("period_id", periodId);
-  await supabase.from("shift_requirements").insert(defaultRequirementRows(periodId));
+  await supabase.from("shift_requirements").insert(minimumRequirementRows(periodId));
   revalidatePath(`/admin/shifts/${periodId}`);
-  return { ok: true, message: "基本パターン（早番2名・遅番2名 × 全曜日）を設定しました。" };
+  return {
+    ok: true,
+    message: "最低人数パターン（9:30–16:00×1・15:30–22:00×1 × 全曜日）を設定しました。",
+  };
 }
 
 // --- AIシフト生成 -----------------------------------------------------
@@ -134,9 +164,9 @@ export async function generatePeriodShifts(
     .single();
   if (!period) return { ok: false, message: "期間が見つかりません。" };
 
-  const [{ data: staff }, { data: availability }, { data: requirements }, { data: timeOff }] =
+  const [{ data: staff }, { data: availability }, { data: requirements }, { data: timeOff }, { data: fixed }] =
     await Promise.all([
-      supabase.from("profiles").select("*").eq("is_active", true),
+      supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true),
       supabase.from("availability_preferences").select("*"),
       supabase.from("shift_requirements").select("*").eq("period_id", periodId),
       supabase
@@ -144,7 +174,16 @@ export async function generatePeriodShifts(
         .select("*")
         .eq("status", "approved")
         .eq("period_id", periodId),
+      supabase.from("fixed_shifts").select("*"),
     ]);
+
+  // 個別予定（不可時間）も取り込み、その時間は割り当て対象から外す
+  const range = monthRange(period.year, period.month);
+  const { data: blackouts } = await supabase
+    .from("staff_blackouts")
+    .select("staff_id, blackout_date, start_time, end_time")
+    .gte("blackout_date", range.first)
+    .lte("blackout_date", range.last);
 
   const result = generateShifts({
     year: period.year,
@@ -152,7 +191,11 @@ export async function generatePeriodShifts(
     staff: (staff ?? []) as Profile[],
     availability: (availability ?? []) as AvailabilityPreference[],
     requirements: (requirements ?? []) as ShiftRequirement[],
-    timeOff: (timeOff ?? []) as TimeOffRequest[],
+    timeOff: [
+      ...((timeOff ?? []) as TimeOffRequest[]),
+      ...blackoutsToTimeOff(blackouts ?? []),
+    ],
+    fixedShifts: (fixed ?? []) as FixedShift[],
   });
 
   // 既存のドラフトシフトを削除して入れ替え
@@ -209,22 +252,34 @@ export async function generatePeriodShiftsWithClaude(
     .single();
   if (!period) return { ok: false, message: "期間が見つかりません。" };
 
-  const [{ data: staff }, { data: availability }, { data: timeOff }] = await Promise.all([
-    supabase.from("profiles").select("*").eq("is_active", true),
+  const [{ data: staff }, { data: availability }, { data: timeOff }, { data: cFixed }] = await Promise.all([
+    supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true),
     supabase.from("availability_preferences").select("*"),
     supabase
       .from("time_off_requests")
       .select("*")
       .eq("status", "approved")
       .eq("period_id", periodId),
+    supabase.from("fixed_shifts").select("*"),
   ]);
+
+  const cRange = monthRange(period.year, period.month);
+  const { data: cBlackouts } = await supabase
+    .from("staff_blackouts")
+    .select("staff_id, blackout_date, start_time, end_time")
+    .gte("blackout_date", cRange.first)
+    .lte("blackout_date", cRange.last);
 
   const result = await generateShiftsWithClaude({
     year: period.year,
     month: period.month,
     staff: (staff ?? []) as Profile[],
     availability: (availability ?? []) as AvailabilityPreference[],
-    timeOff: (timeOff ?? []) as TimeOffRequest[],
+    timeOff: [
+      ...((timeOff ?? []) as TimeOffRequest[]),
+      ...blackoutsToTimeOff(cBlackouts ?? []),
+    ],
+    fixedShifts: (cFixed ?? []) as FixedShift[],
   });
 
   if (!result.ok) {
@@ -262,7 +317,8 @@ export interface ExpandFixedActionResult {
 }
 
 export async function expandFixedShifts(
-  periodId: string
+  periodId: string,
+  ignoreTimeOff = false
 ): Promise<ExpandFixedActionResult> {
   await requireAdmin();
   const supabase = await createClient();
@@ -280,7 +336,7 @@ export async function expandFixedShifts(
   const monthEnd = `${period.year}-${pad(period.month)}-${pad(lastDay)}`;
 
   const [{ data: staff }, { data: fixed }, { data: timeOff }] = await Promise.all([
-    supabase.from("profiles").select("id,is_active").eq("is_active", true),
+    supabase.from("profiles").select("id,is_active").eq("role", "staff").eq("is_active", true),
     supabase.from("fixed_shifts").select("*"),
     supabase
       .from("time_off_requests")
@@ -324,8 +380,8 @@ export async function expandFixedShifts(
     for (const f of fixedList) {
       if (f.day_of_week !== dow) continue;
 
-      // 希望休チェック（終日 or 時間帯重複）
-      const offs = offIndex.get(`${f.staff_id}|${date}`);
+      // 希望休チェック（終日 or 時間帯重複）。ignoreTimeOff のときは無視して全員出勤。
+      const offs = ignoreTimeOff ? null : offIndex.get(`${f.staff_id}|${date}`);
       let isOff = false;
       if (offs) {
         for (const o of offs) {
@@ -366,7 +422,9 @@ export async function expandFixedShifts(
   revalidatePath(`/admin/shifts/${periodId}`);
   return {
     ok: true,
-    message: `固定シフトを展開しました（${rows.length}件作成 / 希望休で${skippedOff}件除外）。`,
+    message: ignoreTimeOff
+      ? `固定シフトを展開しました（${rows.length}件作成 / 希望休を無視して全員出勤）。`
+      : `固定シフトを展開しました（${rows.length}件作成 / 希望休で${skippedOff}件除外）。`,
     created: rows.length,
     skippedOff,
   };
@@ -465,5 +523,55 @@ export async function deleteShift(shiftId: string, periodId: string) {
   await requireAdmin();
   const supabase = await createClient();
   await supabase.from("shifts").delete().eq("id", shiftId);
+  revalidatePath(`/admin/shifts/${periodId}`);
+}
+
+// --- 店休・お知らせ（日単位イベント） -------------------------------
+const storeEventSchema = z.object({
+  event_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "日付を確認してください"),
+  kind: z.enum(["closed", "note"]),
+  title: z.string().trim().min(1, "内容を入力してください").max(100),
+  body: z.string().trim().max(500).optional(),
+  start_time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional()
+    .or(z.literal("")),
+  end_time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional()
+    .or(z.literal("")),
+});
+
+export async function addStoreEvent(periodId: string, formData: FormData) {
+  await requireAdmin();
+  const parsed = storeEventSchema.safeParse(Object.fromEntries(formData));
+  if (!parsed.success) return { ok: false, message: parsed.error.issues[0].message };
+  const d = parsed.data;
+  if (d.start_time && d.end_time && d.start_time >= d.end_time) {
+    return { ok: false, message: "終了時刻は開始時刻より後にしてください。" };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase.from("store_events").insert({
+    event_date: d.event_date,
+    kind: d.kind,
+    title: d.title,
+    body: d.body || null,
+    start_time: d.start_time || null,
+    end_time: d.end_time || null,
+    all_hands: formData.get("all_hands") === "on",
+  });
+  if (error) return { ok: false, message: error.message };
+
+  revalidatePath(`/admin/shifts/${periodId}`);
+  return { ok: true, message: "店休・お知らせを追加しました。" };
+}
+
+export async function deleteStoreEvent(id: string, periodId: string) {
+  await requireAdmin();
+  const supabase = await createClient();
+  await supabase.from("store_events").delete().eq("id", id);
   revalidatePath(`/admin/shifts/${periodId}`);
 }
