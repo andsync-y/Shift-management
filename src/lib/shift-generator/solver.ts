@@ -237,14 +237,22 @@ export function generateShifts(input: GenerateInput): GenerateResult {
     );
   }
 
-  // 社保加入者が週30時間に届かなかった場合の警告（月平均の週時間で判定）
+  // 社保の週時間チェック（週平均で判定＝社保は所定の週労働時間で見るため。
+  // 月末の半端な週で誤警告しないよう平均を使う）。
+  //  - 加入者: 週平均30時間に届かなければ警告（加入要件の未達）。
+  //  - 非加入者: 週平均30時間を超えれば警告（意図しない社保加入義務のリスク・固定シフト由来も検知）。
   const weeksInMonth = new Set(days.map((d) => Math.floor((Number(d.date.slice(-2)) - 1) / 7))).size || 1;
   for (const s of activeStaff) {
-    if (!s.shaho_enrolled) continue;
     const avgWeekly = totalHours[s.id] / weeksInMonth;
-    if (avgWeekly < SHAHO_WEEKLY_HOURS) {
+    if (s.shaho_enrolled) {
+      if (avgWeekly < SHAHO_WEEKLY_HOURS) {
+        warnings.push(
+          `社保加入の ${s.full_name} が週平均${avgWeekly.toFixed(1)}hで30hに未達です。希望シフト・必要人数を増やして労働時間を確保してください。`
+        );
+      }
+    } else if (avgWeekly > SHAHO_WEEKLY_HOURS) {
       warnings.push(
-        `社保加入の ${s.full_name} が週平均${avgWeekly.toFixed(1)}hで30hに未達です。希望シフト・必要人数を増やして労働時間を確保してください。`
+        `⚠️ 非加入の ${s.full_name} が週平均${avgWeekly.toFixed(1)}hで30hを超えています（社保加入義務が発生する恐れ）。固定シフトを減らすか社保加入をご検討ください。`
       );
     }
   }
