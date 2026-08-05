@@ -1,8 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { computePayroll, NOMINATION_BACK_RATE, kaisukenBack, type PayrollRecord } from "@/lib/payroll";
-import { computeDeductions } from "@/lib/deductions";
+import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
 import { buildZenginData, type ZenginTransfer } from "@/lib/zengin";
 import type { Profile, TimeRecord } from "@/lib/types";
 
@@ -67,25 +66,18 @@ export async function GET(req: NextRequest) {
   const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const taxOverrides = new Map(((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount]));
 
-  const byStaff = new Map<string, PayrollRecord[]>();
-  for (const r of records) (byStaff.get(r.staff_id) ?? byStaff.set(r.staff_id, []).get(r.staff_id)!).push(r);
+  const byStaff = groupRecordsByStaff(records);
 
   const transfers: ZenginTransfer[] = [];
   for (const s of staff) {
     if (!s.bank_code || !s.branch_code || !s.account_number || !s.recipient_kana) continue; // 口座未登録は除外
-    const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
-    const back = NOMINATION_BACK_RATE * (nom.get(s.id) ?? 0);
-    const kaisBack = kaisukenBack(kais.get(s.id) ?? 0);
-    const grossTotal = pay.gross + back + kaisBack;
-    // 振込額は控除後の差引支給（手取り）。源泉は令和8年分税額表で自動計算（手入力があれば優先）。
-    const ded = computeDeductions({
-      gross: grossTotal,
-      commute: pay.commute,
-      taxColumn: s.tax_column ?? "otsu",
-      dependents: s.dependents_count ?? 0,
-      empInsuranceEnrolled: s.emp_insurance_enrolled ?? true,
-      shahoEnrolled: s.shaho_enrolled ?? false,
-      kaigoApplicable: s.kaigo_applicable ?? false,
+    // 振込額は控除後の差引支給（手取り）。計算は computeStaffPayroll に集約しており、
+    // 給与画面・給与明細と必ず同じ金額になる。
+    const { deduction: ded } = computeStaffPayroll({
+      staff: s,
+      records: byStaff.get(s.id) ?? [],
+      nominationCount: nom.get(s.id) ?? 0,
+      kaisukenCount: kais.get(s.id) ?? 0,
       taxOverride: taxOverrides.get(s.id) ?? null,
     });
     const amount = ded.net;

@@ -2,8 +2,8 @@
 // （computePayroll + computeDeductions + バック手入力）で1人分ずつ作る。
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Profile, TimeRecord } from "@/lib/types";
-import { computePayroll, hhmm, NOMINATION_BACK_RATE, kaisukenBack, type PayrollRecord } from "@/lib/payroll";
-import { computeDeductions } from "@/lib/deductions";
+import { hhmm } from "@/lib/payroll";
+import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
 import { displayName } from "@/lib/display-name";
 import type { PayslipData } from "./pdf";
 
@@ -45,31 +45,27 @@ export async function collectPayslips(
     ((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount])
   );
 
-  const byStaff = new Map<string, PayrollRecord[]>();
-  for (const r of records) {
-    if (!byStaff.has(r.staff_id)) byStaff.set(r.staff_id, []);
-    byStaff.get(r.staff_id)!.push(r);
-  }
+  const byStaff = groupRecordsByStaff(records);
 
   const entries: PayslipEntry[] = [];
   for (const s of staff) {
-    const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
     const count = nom.get(s.id) ?? 0;
-    const back = NOMINATION_BACK_RATE * count;
     const kaisCount = kais.get(s.id) ?? 0;
-    const kaisBack = kaisukenBack(kaisCount);
-    const gross = pay.gross + back + kaisBack;
-    if (pay.workedMin <= 0 && count === 0 && kaisCount === 0) continue; // 対象なし
-    const ded = computeDeductions({
+    // 計算は computeStaffPayroll に集約（画面・印刷・振込と必ず同じ結果にする）
+    const {
+      pay,
+      nominationBack: back,
+      kaisukenBackYen: kaisBack,
       gross,
-      commute: pay.commute,
-      taxColumn: s.tax_column ?? "otsu",
-      dependents: s.dependents_count ?? 0,
-      empInsuranceEnrolled: s.emp_insurance_enrolled ?? true,
-      shahoEnrolled: s.shaho_enrolled ?? false,
-      kaigoApplicable: s.kaigo_applicable ?? false,
+      deduction: ded,
+    } = computeStaffPayroll({
+      staff: s,
+      records: byStaff.get(s.id) ?? [],
+      nominationCount: count,
+      kaisukenCount: kaisCount,
       taxOverride: taxOverrides.get(s.id) ?? null,
     });
+    if (pay.workedMin <= 0 && count === 0 && kaisCount === 0) continue; // 対象なし
     entries.push({
       staffId: s.id,
       name: displayName(s),

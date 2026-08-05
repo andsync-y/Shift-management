@@ -2,8 +2,9 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
-import { computePayroll, hhmm, NOMINATION_BACK_RATE, kaisukenBack, type PayrollRecord } from "@/lib/payroll";
-import { computeDeductions, TAX_COLUMN_LABELS_JA } from "@/lib/deductions";
+import { hhmm, NOMINATION_BACK_RATE } from "@/lib/payroll";
+import { TAX_COLUMN_LABELS_JA } from "@/lib/deductions";
+import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
 import NominationInput from "./NominationInput";
 import KaisukenInput from "./KaisukenInput";
 import TaxInput from "./TaxInput";
@@ -72,31 +73,22 @@ export default async function PayrollPage({
   const taxOverrides = new Map(
     ((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount])
   );
-  const byStaff = new Map<string, PayrollRecord[]>();
-  for (const r of records) {
-    if (!byStaff.has(r.staff_id)) byStaff.set(r.staff_id, []);
-    byStaff.get(r.staff_id)!.push(r);
-  }
+  const byStaff = groupRecordsByStaff(records);
 
   const rows = staff
     .map((s) => {
-      const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
-      const rate = NOMINATION_BACK_RATE;
       const count = nomCounts.get(s.id) ?? 0;
-      const nominationBack = rate * count;
       const kaisCount = kaisCounts.get(s.id) ?? 0;
-      const kaisukenBackYen = kaisukenBack(kaisCount);
-      const grossTotal = pay.gross + nominationBack + kaisukenBackYen;
-      const ded = computeDeductions({
-        gross: grossTotal,
-        commute: pay.commute,
-        taxColumn: s.tax_column ?? "otsu",
-        dependents: s.dependents_count ?? 0,
-        empInsuranceEnrolled: s.emp_insurance_enrolled ?? true,
-        shahoEnrolled: s.shaho_enrolled ?? false,
-        kaigoApplicable: s.kaigo_applicable ?? false,
-        taxOverride: taxOverrides.get(s.id) ?? null,
-      });
+      // 給与の計算は computeStaffPayroll に集約（画面・PDF・振込で同じ結果になるように）
+      const { pay, nominationBack, kaisukenBackYen, gross: grossTotal, deduction: ded } =
+        computeStaffPayroll({
+          staff: s,
+          records: byStaff.get(s.id) ?? [],
+          nominationCount: count,
+          kaisukenCount: kaisCount,
+          taxOverride: taxOverrides.get(s.id) ?? null,
+        });
+      const rate = NOMINATION_BACK_RATE;
       return {
         staff: s,
         pay,

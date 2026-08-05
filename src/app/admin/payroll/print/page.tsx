@@ -2,8 +2,8 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
-import { computePayroll, hhmm, NOMINATION_BACK_RATE, kaisukenBack, kaisukenBackRate, type PayrollRecord } from "@/lib/payroll";
-import { computeDeductions } from "@/lib/deductions";
+import { hhmm, NOMINATION_BACK_RATE, kaisukenBackRate } from "@/lib/payroll";
+import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
 import PrintBar from "./PrintBar";
 
 function pad(n: number) {
@@ -63,29 +63,23 @@ export default async function PayslipPrintPage({
   const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const taxOverrides = new Map(((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount]));
-  const byStaff = new Map<string, PayrollRecord[]>();
-  for (const r of records) (byStaff.get(r.staff_id) ?? byStaff.set(r.staff_id, []).get(r.staff_id)!).push(r);
+  const byStaff = groupRecordsByStaff(records);
 
   const rows = staff
     .map((s) => {
-      const pay = computePayroll(byStaff.get(s.id) ?? [], s.hourly_wage, s.commute_allowance ?? 0, s.commute_distance_km ?? 0);
-      const rate = NOMINATION_BACK_RATE;
       const count = nom.get(s.id) ?? 0;
-      const back = rate * count;
       const kaisCount = kais.get(s.id) ?? 0;
-      const kaisBack = kaisukenBack(kaisCount);
+      // 計算は computeStaffPayroll に集約（画面・PDF・振込で必ず同じ結果にする）
+      const { pay, nominationBack: back, kaisukenBackYen: kaisBack, gross, deduction: ded } =
+        computeStaffPayroll({
+          staff: s,
+          records: byStaff.get(s.id) ?? [],
+          nominationCount: count,
+          kaisukenCount: kaisCount,
+          taxOverride: taxOverrides.get(s.id) ?? null,
+        });
+      const rate = NOMINATION_BACK_RATE;
       const kaisRate = kaisukenBackRate(kaisCount);
-      const gross = pay.gross + back + kaisBack;
-      const ded = computeDeductions({
-        gross,
-        commute: pay.commute,
-        taxColumn: s.tax_column ?? "otsu",
-        dependents: s.dependents_count ?? 0,
-        empInsuranceEnrolled: s.emp_insurance_enrolled ?? true,
-        shahoEnrolled: s.shaho_enrolled ?? false,
-        kaigoApplicable: s.kaigo_applicable ?? false,
-        taxOverride: taxOverrides.get(s.id) ?? null,
-      });
       return { s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross, ded };
     })
     .filter((r) => r.pay.workedMin > 0 || r.count > 0 || r.kaisCount > 0);
