@@ -66,18 +66,22 @@ export default function TimeCardManager({
 
   const openTotal = useMemo(() => records.filter((r) => !r.clock_out).length, [records]);
 
-  // 時刻のみ編集：日付は勤務日（出勤日）に固定する。退勤も同じ日に揃え、日跨ぎは作らせない。
-  function setTime(rec: TimeRecord, key: "in" | "out", time: string) {
+  // 日付＋時刻で編集する。退勤の打刻を忘れて後日入力する場合や、日跨ぎの
+  // 深夜勤務（例 22:30→翌1:00）にも対応できるよう、日付も変更できるようにしている。
+  function setDateTime(rec: TimeRecord, key: "in" | "out", value: string) {
     setEdit((e) => {
       const cur = e[rec.id] ?? { in: toLocalInput(rec.clock_in), out: toLocalInput(rec.clock_out) };
-      const next = { ...cur };
-      if (key === "in") {
-        next.in = time ? `${rec.work_date}T${time}` : "";
-      } else {
-        next.out = time ? `${rec.work_date}T${time}` : "";
-      }
-      return { ...e, [rec.id]: next };
+      return { ...e, [rec.id]: { ...cur, [key]: value } };
     });
+  }
+
+  // 勤務時間（分）。日付をまたいでいても正しく出す。異常な長さの検知に使う。
+  function spanMinutes(inLocal: string, outLocal: string): number | null {
+    if (!inLocal || !outLocal) return null;
+    const from = new Date(`${inLocal}:00+09:00`).getTime();
+    const to = new Date(`${outLocal}:00+09:00`).getTime();
+    if (Number.isNaN(from) || Number.isNaN(to) || to <= from) return null;
+    return Math.round((to - from) / 60000);
   }
   function save(rec: TimeRecord) {
     const e = edit[rec.id] ?? { in: toLocalInput(rec.clock_in), out: toLocalInput(rec.clock_out) };
@@ -210,6 +214,10 @@ export default function TimeCardManager({
             {g.rows.map((r) => {
               const e = edit[r.id] ?? { in: toLocalInput(r.clock_in), out: toLocalInput(r.clock_out) };
               const open = !r.clock_out;
+              // 退勤の打刻漏れを後日入力した際の異常値を、保存前に画面で気づけるようにする
+              const span = spanMinutes(e.in, e.out);
+              const tooLong = span != null && span > 24 * 60;
+              const nextDay = !!e.in && !!e.out && e.in.split("T")[0] !== e.out.split("T")[0];
               return (
                 <div className={"tc-row" + (open ? " open" : "")} key={r.id}>
                   <span className="tc-name tc-ellip" title={r.staffName}>
@@ -226,21 +234,38 @@ export default function TimeCardManager({
                     )}
                   </span>
                   <input
-                    type="time"
+                    type="datetime-local"
                     className="input en tc-dt"
-                    value={e.in.split("T")[1] ?? ""}
-                    onChange={(ev) => setTime(r, "in", ev.target.value)}
+                    value={e.in}
+                    onChange={(ev) => setDateTime(r, "in", ev.target.value)}
+                    title="出勤の日付と時刻"
                   />
                   <span className="muted arrow">→</span>
                   <input
-                    type="time"
+                    type="datetime-local"
                     className="input en tc-dt"
-                    value={e.out.split("T")[1] ?? ""}
-                    onChange={(ev) => setTime(r, "out", ev.target.value)}
-                    title={e.out && e.out.split("T")[0] !== r.work_date ? `退勤が翌日（${e.out.split("T")[0]}）になっています。正しい時刻を入れ直すと当日に修正されます` : undefined}
-                    style={e.out && e.out.split("T")[0] !== r.work_date ? { borderColor: "#c08a2d", color: "#94650e" } : undefined}
+                    value={e.out}
+                    onChange={(ev) => setDateTime(r, "out", ev.target.value)}
+                    title={
+                      tooLong
+                        ? `勤務が${Math.floor(span! / 60)}時間になっています。退勤の日付をご確認ください`
+                        : nextDay
+                          ? "退勤が翌日（日跨ぎ勤務）になっています"
+                          : "退勤の日付と時刻"
+                    }
+                    style={tooLong ? { borderColor: "#c0392b", color: "#9a3a30" } : undefined}
                   />
-                  <span className="tc-badge">{open && <span className="live-dot" title="打刻中" />}</span>
+                  <span className="tc-badge">
+                    {open && <span className="live-dot" title="打刻中" />}
+                    {tooLong && (
+                      <span className="mk late" style={{ fontSize: 10 }} title="退勤の日付を確認してください">
+                        {Math.floor(span! / 60)}h
+                      </span>
+                    )}
+                    {!tooLong && nextDay && (
+                      <span className="mk" style={{ fontSize: 10 }} title="日跨ぎ勤務">翌日</span>
+                    )}
+                  </span>
                   <button className="btn-mini" onClick={() => save(r)} disabled={pending}>保存</button>
                   <button className="btn-mini ink" onClick={() => remove(r.id)} disabled={pending}>削除</button>
                 </div>

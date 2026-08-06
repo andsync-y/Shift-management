@@ -20,6 +20,21 @@ function jstDateOf(iso: string): string {
   ).padStart(2, "0")}`;
 }
 
+// 1回の勤務として妥当な長さの上限。これを超える場合は退勤の打刻漏れ（後日修正）
+// を疑い、入力ミスとして弾く。深夜営業の日跨ぎ勤務（例 22:30→翌1:00）は許容する。
+const MAX_SHIFT_HOURS = 24;
+
+// 出退勤の妥当性チェック。問題があればエラーメッセージを返す（無ければ null）。
+function validateRange(inIso: string, outIso: string | null): string | null {
+  if (!outIso) return null;
+  if (outIso <= inIso) return "退勤は出勤より後にしてください。";
+  const hours = (new Date(outIso).getTime() - new Date(inIso).getTime()) / 3600000;
+  if (hours > MAX_SHIFT_HOURS) {
+    return `勤務時間が${Math.floor(hours)}時間になっています。退勤の日付（または時刻）をご確認ください。`;
+  }
+  return null;
+}
+
 const addSchema = z.object({
   staff_id: z.string().min(1),
   clock_in: z.string().min(1),
@@ -34,10 +49,8 @@ export async function addTimeRecord(_prev: TcResult | null, formData: FormData):
   if (!inIso) return { ok: false, message: "出勤時刻が不正です。" };
   const outIso = parsed.data.clock_out ? jstLocalToIso(parsed.data.clock_out) : null;
   if (parsed.data.clock_out && !outIso) return { ok: false, message: "退勤時刻が不正です。" };
-  if (outIso && outIso <= inIso) return { ok: false, message: "退勤は出勤より後にしてください。" };
-  if (outIso && jstDateOf(outIso) !== jstDateOf(inIso)) {
-    return { ok: false, message: "退勤は出勤と同じ日にしてください（日をまたぐ設定はできません）。" };
-  }
+  const addError = validateRange(inIso, outIso);
+  if (addError) return { ok: false, message: addError };
 
   const supabase = await createClient();
 
@@ -89,10 +102,8 @@ export async function updateTimeRecord(
   if (!inIso) return { ok: false, message: "出勤時刻が不正です。" };
   const outIso = clockOutLocal ? jstLocalToIso(clockOutLocal) : null;
   if (clockOutLocal && !outIso) return { ok: false, message: "退勤時刻が不正です。" };
-  if (outIso && outIso <= inIso) return { ok: false, message: "退勤は出勤より後にしてください。" };
-  if (outIso && jstDateOf(outIso) !== jstDateOf(inIso)) {
-    return { ok: false, message: "退勤は出勤と同じ日にしてください（日をまたぐ設定はできません）。" };
-  }
+  const updError = validateRange(inIso, outIso);
+  if (updError) return { ok: false, message: updError };
 
   const supabase = await createClient();
   const { error } = await supabase

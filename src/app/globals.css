@@ -2589,7 +2589,8 @@ body {
 
 .tc-row {
   display: grid;
-  grid-template-columns: minmax(96px, 1fr) 104px auto 104px 18px auto auto;
+  /* 日付＋時刻（datetime-local）を表示するため入力欄の幅を確保する */
+  grid-template-columns: minmax(88px, 1fr) 168px auto 168px 40px auto auto;
   gap: 10px; align-items: center;
   padding: 5px 16px; border-bottom: 1px solid var(--line);
   white-space: nowrap;
