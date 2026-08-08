@@ -74,6 +74,31 @@ export function capShiftLength(
     : { start, end: toHHMM(s + cap) };
 }
 
+// --- 週の区切り -------------------------------------------------------
+
+/**
+ * その日付が属する週（月曜始まり）の月曜日を "YYYY-MM-DD" で返す。
+ * 週上限や社保の週30時間は暦の週（月〜日）で見る必要がある。
+ * 「1日〜7日」のような月内の固定バケットで数えると、月初の曜日によって
+ * 2つの実際の週にまたがり、判定がすり抜ける。
+ */
+export function mondayKey(date: string): string {
+  const d = new Date(date + "T00:00:00Z");
+  const offset = (d.getUTCDay() + 6) % 7; // 月曜からの経過日数
+  d.setUTCDate(d.getUTCDate() - offset);
+  return d.toISOString().slice(0, 10);
+}
+
+/**
+ * 月の労働時間から週平均を出す（月 × 12 ヶ月 ÷ 52 週）。
+ * 社保の「週の所定労働時間」はこの換算で見るのが実務の通例。
+ * 月内の週数で単純に割ると、月末の半端な週の分だけ平均が低く出て、
+ * 30時間の判定が甘くなる。
+ */
+export function weeklyAverageFromMonthly(monthlyHours: number): number {
+  return (monthlyHours * 12) / 52;
+}
+
 /** 「8.5h勤務（実働7.5h）」のような表示用ラベル。 */
 export function shiftLengthLabel(capHours: number): string {
   const net = netMinutesFor(Math.round(capHours * 60)) / 60;

@@ -33,7 +33,13 @@ import type {
   GeneratedAssignment,
   GeneratedSlotReport,
 } from "./types";
-import { capShiftLength, netHours, toMinutes } from "@/lib/work-hours";
+import {
+  capShiftLength,
+  mondayKey,
+  netHours,
+  toMinutes,
+  weeklyAverageFromMonthly,
+} from "@/lib/work-hours";
 
 // [aStart,aEnd) が [bStart,bEnd) を完全に包含するか
 function covers(aStart: string, aEnd: string, bStart: string, bEnd: string): boolean {
@@ -97,8 +103,9 @@ export function generateShifts(input: GenerateInput): GenerateResult {
   const totalHours: Record<string, number> = {};
   // 拘束（休憩控除前）の累計。画面での内訳表示・確認用。
   const clockedTotals: Record<string, number> = {};
-  // 週(ISO週番号ざっくり: 月内の週インデックス)ごとの実働時間
-  const weeklyHours: Record<string, Record<number, number>> = {};
+  // 週(暦の月〜日)ごとの実働時間。キーはその週の月曜日。
+  // ※ 月をまたぐ週は当月分しか数えられない（前月の勤務は入力に無いため）。
+  const weeklyHours: Record<string, Record<string, number>> = {};
   // 同一日に既に割り当て済みの時間帯（重複勤務防止）
   const dayAssignments: Record<string, Record<string, Placed[]>> = {};
   // 所定勤務時間で縮めた枠（説明用）
@@ -131,7 +138,7 @@ export function generateShifts(input: GenerateInput): GenerateResult {
         `${mmdd(date)} ${byId.get(staffId)?.full_name ?? ""} ${start}–${end} → ${block.start}–${block.end}（1日${cap}h勤務のため）`
       );
     }
-    const weekIndex = Math.floor((Number(date.slice(-2)) - 1) / 7);
+    const week = mondayKey(date);
     const net = netHours(block.start, block.end);
     assignments.push({
       staff_id: staffId,
@@ -142,7 +149,7 @@ export function generateShifts(input: GenerateInput): GenerateResult {
     });
     totalHours[staffId] += net;
     clockedTotals[staffId] += (toMinutes(block.end) - toMinutes(block.start)) / 60;
-    weeklyHours[staffId][weekIndex] = (weeklyHours[staffId][weekIndex] ?? 0) + net;
+    weeklyHours[staffId][week] = (weeklyHours[staffId][week] ?? 0) + net;
     if (!dayAssignments[staffId][date]) dayAssignments[staffId][date] = [];
     // 縮めても「その枠を埋めた」ことは元の時間帯で覚えておく。
     dayAssignments[staffId][date].push({ ...block, coverStart: start, coverEnd: end });
@@ -150,9 +157,14 @@ export function generateShifts(input: GenerateInput): GenerateResult {
 
   // --- ① 固定シフトを最優先で先に配置する ---
   // 承認済みお休みと重なる固定シフトはスキップ（休み優先）。
+  // 週の上限時間（max_hours_per_week）はここでも守る。以前は固定シフトだけ
+  // 無条件に置いていたため、固定シフトを入れすぎると本人の上限を超えたまま
+  // 総労働時間だけが膨らんでいた（外した件数は警告に出す）。
+  const droppedFixed: string[] = [];
   for (const { date, dow } of days) {
     for (const f of fixedShifts ?? []) {
-      if (f.day_of_week !== dow || !byId.has(f.staff_id)) continue;
+      const s = byId.get(f.staff_id);
+      if (f.day_of_week !== dow || !s) continue;
       const offs = offIndex.get(`${f.staff_id}|${date}`);
       const onLeave = offs?.some(
         (o) => o.start === null || o.end === null || overlaps(o.start, o.end, f.start_time, f.end_time)
@@ -160,13 +172,27 @@ export function generateShifts(input: GenerateInput): GenerateResult {
       if (onLeave) continue;
       const existing = dayAssignments[f.staff_id][date] ?? [];
       if (existing.some((e) => overlaps(e.coverStart, e.coverEnd, f.start_time, f.end_time))) continue;
-      commit(f.staff_id, date, f.start_time.slice(0, 5), f.end_time.slice(0, 5), f.shift_type ?? "固定");
+
+      const start = f.start_time.slice(0, 5);
+      const end = f.end_time.slice(0, 5);
+      const wk = weeklyHours[f.staff_id][mondayKey(date)] ?? 0;
+      if (wk + netHoursForStaff(f.staff_id, start, end) > s.max_hours_per_week) {
+        droppedFixed.push(`${mmdd(date)} ${s.full_name} ${start}–${end}`);
+        continue;
+      }
+      commit(f.staff_id, date, start, end, f.shift_type ?? "固定");
     }
+  }
+  if (droppedFixed.length > 0) {
+    const names = [...new Set(droppedFixed.map((t) => t.split(" ")[1]))].join("、");
+    warnings.push(
+      `週の上限時間を超えるため固定シフトを ${droppedFixed.length} 件外しました（${names}）。上限を上げるか固定シフトを減らしてください。`
+    );
   }
 
   // --- ② 必要人数を埋める（固定シフトで既に埋まった分は差し引く）---
   for (const { date, dow } of days) {
-    const weekIndex = Math.floor((Number(date.slice(-2)) - 1) / 7);
+    const week = mondayKey(date);
     const dayReqs = requirements.filter((r) => r.day_of_week === dow);
 
     for (const req of dayReqs) {
@@ -218,7 +244,7 @@ export function generateShifts(input: GenerateInput): GenerateResult {
 
         // 週上限時間チェック（実働・所定勤務時間で縮まる分も加味）
         const slotHours = netHoursForStaff(s.id, req.start_time, req.end_time);
-        const wk = weeklyHours[s.id][weekIndex] ?? 0;
+        const wk = weeklyHours[s.id][week] ?? 0;
         if (wk + slotHours > s.max_hours_per_week) return false;
 
         // 社保・非加入者は週30時間未満に抑える（意図しない社保加入義務を防ぐ）。
@@ -240,7 +266,7 @@ export function generateShifts(input: GenerateInput): GenerateResult {
               covers(a.start_time, a.end_time, req.start_time, req.end_time)
           );
           const slotHours = netHoursForStaff(s.id, req.start_time, req.end_time);
-          const wk = weeklyHours[s.id][weekIndex] ?? 0;
+          const wk = weeklyHours[s.id][week] ?? 0;
           // 最低希望時間に未達なら強く優先
           const belowMin = wk < s.min_hours_per_week / 4; // 月内の週按分
           // 社保加入者がまだ週30時間に未達なら最優先で埋める（加入要件の確保）
@@ -288,13 +314,13 @@ export function generateShifts(input: GenerateInput): GenerateResult {
     );
   }
 
-  // 社保の週時間チェック（週平均の実働で判定＝社保は所定の週労働時間で見るため。
-  // 月末の半端な週で誤警告しないよう平均を使う）。
+  // 社保の週時間チェック（週平均の実働で判定＝社保は所定の週労働時間で見るため）。
+  // 週平均は「月 × 12 ÷ 52」で出す（実務の通例）。以前は月内の週バケット数で
+  // 割っており、月末の半端な週の分だけ平均が低く出て判定が甘くなっていた。
   //  - 加入者: 週平均30時間に届かなければ警告（加入要件の未達）。
   //  - 非加入者: 週平均30時間を超えれば警告（意図しない社保加入義務のリスク・固定シフト由来も検知）。
-  const weeksInMonth = new Set(days.map((d) => Math.floor((Number(d.date.slice(-2)) - 1) / 7))).size || 1;
   for (const s of activeStaff) {
-    const avgWeekly = totalHours[s.id] / weeksInMonth;
+    const avgWeekly = weeklyAverageFromMonthly(totalHours[s.id]);
     if (s.shaho_enrolled) {
       if (avgWeekly < SHAHO_WEEKLY_HOURS) {
         warnings.push(

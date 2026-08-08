@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { generateShifts } from "@/lib/shift-generator/solver";
 import type { GenerateInput } from "@/lib/shift-generator/types";
 import type { AvailabilityPreference, FixedShift, Profile, ShiftRequirement } from "@/lib/types";
+import { mondayKey } from "@/lib/work-hours";
 
 const EARLY = { start: "09:30", end: "19:00" };
 const LATE = { start: "12:30", end: "22:00" };
@@ -182,6 +183,42 @@ describe("1日の所定勤務時間（standard_shift_hours）", () => {
   });
 });
 
+describe("固定シフトも週の上限時間を守る", () => {
+  // 毎週 月〜金 の早番（実働8.5h × 5日 = 42.5h）を固定シフトで入れた人。
+  const weekdayFixed: FixedShift[] = [1, 2, 3, 4, 5].map((dow) => ({
+    id: `f${dow}`,
+    staff_id: "x",
+    day_of_week: dow,
+    start_time: "09:30",
+    end_time: "19:00",
+    shift_type: "早番",
+    created_at: "",
+  }));
+
+  test("週上限25hの人は固定シフトでも25hを超えない", () => {
+    const x = staffOf({ id: "x", full_name: "Xさん", shaho_enrolled: true, max_hours_per_week: 25 });
+    const r = generateShifts(baseInput({ staff: [x], fixedShifts: weekdayFixed }));
+    const perWeek: Record<string, number> = {};
+    for (const a of r.assignments) {
+      perWeek[mondayKey(a.work_date)] = (perWeek[mondayKey(a.work_date)] ?? 0) + 8.5;
+    }
+    for (const h of Object.values(perWeek)) {
+      assert.ok(h <= 25, `週${h}hは25h以内`);
+    }
+    assert.ok(
+      r.warnings.some((w) => w.includes("固定シフト") && w.includes("Xさん")),
+      "外した旨の警告が出る"
+    );
+  });
+
+  test("上限内に収まる固定シフトはそのまま全部入る", () => {
+    const x = staffOf({ id: "x", full_name: "Xさん", shaho_enrolled: true, max_hours_per_week: 45 });
+    const r = generateShifts(baseInput({ staff: [x], fixedShifts: weekdayFixed }));
+    assert.equal(r.assignments.length, 22, "2026年9月の平日は22日");
+    assert.equal(r.warnings.filter((w) => w.includes("固定シフト")).length, 0);
+  });
+});
+
 describe("社会保険の週30時間チェック（実働ベース）", () => {
   test("非加入者は実働で週30hを超えないよう抑えられる", () => {
     const b = staffOf({ id: "b", full_name: "Bさん", shaho_enrolled: false });
@@ -192,10 +229,10 @@ describe("社会保険の週30時間チェック（実働ベース）", () => {
         requirements: reqs([{ ...EARLY, n: 1 }]),
       })
     );
-    // 実働8.5h/日 → 週30hに収まるのは3日まで（25.5h）。4日目は34hで超える。
-    const perWeek: Record<number, number> = {};
+    // 実働8.5h/日 → 暦の週（月〜日）で30hに収まるのは3日まで（25.5h）。
+    const perWeek: Record<string, number> = {};
     for (const a of r.assignments) {
-      const wk = Math.floor((Number(a.work_date.slice(-2)) - 1) / 7);
+      const wk = mondayKey(a.work_date);
       perWeek[wk] = (perWeek[wk] ?? 0) + 1;
     }
     for (const n of Object.values(perWeek)) {
@@ -212,8 +249,25 @@ describe("社会保険の週30時間チェック（実働ベース）", () => {
         requirements: reqs([{ ...EARLY, n: 1 }]),
       })
     );
-    const week0 = r.assignments.filter((a) => Number(a.work_date.slice(-2)) <= 7);
-    assert.equal(week0.length, 4, "7.5h×4日=30h まで入る");
+    // 2026/9/1は火曜。最初の暦週は 9/1–9/6 で、そこに4日入って30h（=上限）。
+    const firstWeek = r.assignments.filter((a) => mondayKey(a.work_date) === "2026-08-31");
+    assert.equal(firstWeek.length, 4, "7.5h×4日=30h まで入る");
+  });
+
+  test("週平均は月×12÷52で出す（月内の週数で割ると甘くなる）", () => {
+    // 非加入者の30hラインは自動割当では止まるが、固定シフトは owner の明示指定なので通る。
+    // 平日固定（実働8.5h × 22日 = 187h/月）→ 週平均 187×12/52 = 43.2h。
+    // 旧実装は「月内の週バケット5」で割って37.4hと出しており、判定が甘かった。
+    const a = staffOf({ id: "a", full_name: "Aさん", shaho_enrolled: false, max_hours_per_week: 45 });
+    const fixed: FixedShift[] = [1, 2, 3, 4, 5].map((dow) => ({
+      id: `f${dow}`, staff_id: "a", day_of_week: dow,
+      start_time: "09:30", end_time: "19:00", shift_type: "早番", created_at: "",
+    }));
+    const r = generateShifts(baseInput({ staff: [a], fixedShifts: fixed }));
+    assert.equal(r.staffHours["a"], 8.5 * 22);
+    const w = r.warnings.find((x) => x.includes("Aさん") && x.includes("30h"));
+    assert.ok(w, "30h超の警告が出る");
+    assert.ok(w!.includes("43.2"), `週平均43.2hと出る（実際: ${w}）`);
   });
 
   test("社保加入者が週30hに届かなければ警告が出る", () => {

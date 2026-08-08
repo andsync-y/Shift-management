@@ -11,19 +11,11 @@
 // すべて分単位で集計し、最後に円へ丸める（四捨五入）。
 // =====================================================================
 
-import { breakMinutesFor } from "@/lib/work-hours";
+import { breakMinutesFor, mondayKey } from "@/lib/work-hours";
 
 const DAY = 86400000;
 const HOUR = 3600000;
 const JST = 9 * HOUR;
-
-// その日付が属する週（月曜始まり）の月曜日を "YYYY-MM-DD" で返す。
-function mondayKey(date: string): string {
-  const d = new Date(date + "T00:00:00Z");
-  const offset = (d.getUTCDay() + 6) % 7; // 月曜からの経過日数
-  d.setUTCDate(d.getUTCDate() - offset);
-  return d.toISOString().slice(0, 10);
-}
 
 export interface PayrollRecord {
   work_date: string; // "YYYY-MM-DD"（JST出勤日）
