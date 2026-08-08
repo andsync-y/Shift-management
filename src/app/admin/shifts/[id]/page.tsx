@@ -10,6 +10,7 @@ import {
   type StoreEvent,
   type TimeOffRequest,
 } from "@/lib/types";
+import { clockedHours, netHours } from "@/lib/work-hours";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import RequirementsEditor from "./RequirementsEditor";
 import GeneratePanel from "./GeneratePanel";
@@ -66,15 +67,19 @@ export default async function PeriodDetailPage({
   const timeOffList = (timeOff ?? []) as TimeOffRequest[];
   const storeEventList = (storeEvents ?? []) as StoreEvent[];
 
-  // スタッフごとの合計時間
+  // スタッフごとの合計時間。
+  // 実働（休憩控除後）を主に見せる＝給与計算と同じ数え方なので、
+  // 「シフトは912h なのに給与は727h」というズレが起きない。拘束は括弧で併記。
   const hours: Record<string, number> = {};
+  const clocked: Record<string, number> = {};
+  const shiftDays: Record<string, number> = {};
   for (const s of shiftList) {
-    const dur =
-      (Number(s.end_time.slice(0, 2)) * 60 + Number(s.end_time.slice(3, 5)) -
-        Number(s.start_time.slice(0, 2)) * 60 - Number(s.start_time.slice(3, 5))) /
-      60;
-    hours[s.staff_id] = (hours[s.staff_id] ?? 0) + dur;
+    hours[s.staff_id] = (hours[s.staff_id] ?? 0) + netHours(s.start_time, s.end_time);
+    clocked[s.staff_id] = (clocked[s.staff_id] ?? 0) + clockedHours(s.start_time, s.end_time);
+    shiftDays[s.staff_id] = (shiftDays[s.staff_id] ?? 0) + 1;
   }
+  const totalNet = Object.values(hours).reduce((a, b) => a + b, 0);
+  const totalClocked = Object.values(clocked).reduce((a, b) => a + b, 0);
 
   const published = p.status === "published";
 
@@ -304,7 +309,9 @@ export default async function PeriodDetailPage({
         <div className="section">
           <div className="section-head">
             <h2>スタッフ別 合計勤務時間</h2>
-            <span className="eyebrow">Totals</span>
+            <span className="eyebrow">
+              実働 {totalNet.toFixed(1)}h（拘束 {totalClocked.toFixed(1)}h）
+            </span>
           </div>
           <div className="section-body">
             <div className="totals-grid">
@@ -317,10 +324,17 @@ export default async function PeriodDetailPage({
                     <span className="thours en">
                       {hours[s.id].toFixed(1)}
                       <small>h</small>
+                      <small className="tsub">
+                        {shiftDays[s.id]}日 / 拘束{clocked[s.id].toFixed(1)}h
+                      </small>
                     </span>
                   </div>
                 ))}
             </div>
+            <p className="help" style={{ marginTop: 10 }}>
+              表示は<strong>実働</strong>（休憩の自動控除後：8時間超→60分・6時間超→45分）。
+              給与計算と同じ数え方なので、給与明細の実働時間とそのまま比較できます。
+            </p>
           </div>
         </div>
       )}

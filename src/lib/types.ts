@@ -21,6 +21,9 @@ export interface Profile {
   commute_allowance?: number; // 月額交通費（円・固定。距離未設定時のフォールバック）
   commute_distance_km?: number | null; // 片道距離(km)。設定時は 片道×2×15円×勤務日数 で自動計算
   contracted_weekly_hours?: number | null; // 週の所定労働時間（社保判定用）
+  // 1日の所定勤務時間（拘束・時間）。例 8.5 → 実働7.5h（休憩60分）。
+  // 設定するとシフト生成がこの長さを上限に割り当てる。null=枠の長さのまま。
+  standard_shift_hours?: number | null;
   tax_column?: "kou" | "otsu"; // 源泉の税区分。甲=扶養控除等申告書を当店に提出済み / 乙=未提出（他社が本業）
   dependents_count?: number; // 扶養親族等の数（甲欄の源泉計算用）
   emp_insurance_enrolled?: boolean; // 雇用保険 加入

@@ -11,6 +11,8 @@
 // すべて分単位で集計し、最後に円へ丸める（四捨五入）。
 // =====================================================================
 
+import { breakMinutesFor } from "@/lib/work-hours";
+
 const DAY = 86400000;
 const HOUR = 3600000;
 const JST = 9 * HOUR;
@@ -201,7 +203,7 @@ export function computePayroll(
       dayNight += nightMinutes(inMs, outMs);
       inOut.push({ in: hmJst(inMs), out: hmJst(outMs) });
     }
-    const brk = rawMin > 480 ? 60 : rawMin > 360 ? 45 : 0;
+    const brk = breakMinutesFor(rawMin);
     // 1分単位（丸めなし）で賃金計算する。
     const net = Math.max(0, rawMin - brk);
     const ot = Math.max(0, net - 480);

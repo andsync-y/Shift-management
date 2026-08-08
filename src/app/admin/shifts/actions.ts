@@ -11,6 +11,7 @@ import { reviewShiftPlan } from "@/lib/shift-generator/llm";
 import { generateShiftsWithClaude } from "@/lib/shift-generator/claude-generator";
 import { getStoreRules } from "@/lib/store-rules";
 import { blackoutsToTimeOff, monthRange } from "@/lib/blackouts";
+import { capShiftLength } from "@/lib/work-hours";
 import type {
   AvailabilityPreference,
   FixedShift,
@@ -336,7 +337,11 @@ export async function expandFixedShifts(
   const monthEnd = `${period.year}-${pad(period.month)}-${pad(lastDay)}`;
 
   const [{ data: staff }, { data: fixed }, { data: timeOff }] = await Promise.all([
-    supabase.from("profiles").select("id,is_active").eq("role", "staff").eq("is_active", true),
+    supabase
+      .from("profiles")
+      .select("id,is_active,full_name,standard_shift_hours")
+      .eq("role", "staff")
+      .eq("is_active", true),
     supabase.from("fixed_shifts").select("*"),
     supabase
       .from("time_off_requests")
@@ -347,6 +352,10 @@ export async function expandFixedShifts(
   ]);
 
   const activeIds = new Set((staff ?? []).map((s) => s.id));
+  // 1日の所定勤務時間（正社員など）。固定シフトがこれより長い場合はこの長さに縮める。
+  const capById = new Map(
+    (staff ?? []).map((s) => [s.id as string, (s.standard_shift_hours as number | null) ?? null])
+  );
   const fixedList = (fixed ?? []).filter((f) => activeIds.has(f.staff_id));
   if (fixedList.length === 0) {
     return { ok: false, message: "固定シフトが未登録です。スタッフ詳細で登録してください。" };
@@ -373,6 +382,7 @@ export async function expandFixedShifts(
     ai_generated: boolean;
   }[] = [];
   let skippedOff = 0;
+  let trimmedCount = 0;
 
   for (let d = 1; d <= lastDay; d++) {
     const date = `${period.year}-${pad(period.month)}-${pad(d)}`;
@@ -400,12 +410,21 @@ export async function expandFixedShifts(
         continue;
       }
 
+      // 所定勤務時間があればその長さに収める（例: 9.5h枠の固定シフト → 8.5h勤務）
+      const block = capShiftLength(
+        f.start_time.slice(0, 5),
+        f.end_time.slice(0, 5),
+        capById.get(f.staff_id) ?? null
+      );
+      if (block.start !== f.start_time.slice(0, 5) || block.end !== f.end_time.slice(0, 5)) {
+        trimmedCount++;
+      }
       rows.push({
         period_id: periodId,
         staff_id: f.staff_id,
         work_date: date,
-        start_time: f.start_time,
-        end_time: f.end_time,
+        start_time: block.start,
+        end_time: block.end,
         note: f.shift_type ? `固定(${f.shift_type})` : "固定シフト",
         ai_generated: false,
       });
@@ -420,11 +439,12 @@ export async function expandFixedShifts(
   }
 
   revalidatePath(`/admin/shifts/${periodId}`);
+  const trimNote = trimmedCount > 0 ? ` / 1日の所定勤務時間に合わせて${trimmedCount}件短縮` : "";
   return {
     ok: true,
     message: ignoreTimeOff
-      ? `固定シフトを展開しました（${rows.length}件作成 / 希望休を無視して全員出勤）。`
-      : `固定シフトを展開しました（${rows.length}件作成 / 希望休で${skippedOff}件除外）。`,
+      ? `固定シフトを展開しました（${rows.length}件作成 / 希望休を無視して全員出勤${trimNote}）。`
+      : `固定シフトを展開しました（${rows.length}件作成 / 希望休で${skippedOff}件除外${trimNote}）。`,
     created: rows.length,
     skippedOff,
   };

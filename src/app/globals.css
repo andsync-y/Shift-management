@@ -2334,7 +2334,11 @@ body {
 .total-item .tname { font-size:14px; color:var(--ink); }
 .total-item .thours { font-family:"Archivo",sans-serif; font-weight:300; font-size:24px;
   letter-spacing:-0.01em; color:var(--ink); }
+.total-item .thours { text-align:right; }
 .total-item .thours small { font-size:13px; color:var(--ink-3); margin-left:2px; font-weight:400; }
+/* 実働の下に「日数 / 拘束h」を小さく添える（1画面で内訳まで分かるように） */
+.total-item .thours .tsub { display:block; margin:1px 0 0; font-size:11px; letter-spacing:0;
+  font-family:inherit; color:var(--ink-3); }
 
 /* シフト期間一覧：狭い画面でバッジが見切れないように */
 @media (max-width: 760px) {

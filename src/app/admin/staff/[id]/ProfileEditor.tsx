@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updateStaffProfile } from "../actions";
 import { EMPLOYMENT_LABELS_JA, ROLE_LABELS_JA, WORK_STATUS_LABELS_JA, type Profile } from "@/lib/types";
+import { shiftLengthLabel } from "@/lib/work-hours";
 
 // 雇用形態・電話・時給・週時間の編集（オーナー専用ページ内）。
 export default function ProfileEditor({
@@ -84,6 +85,15 @@ export default function ProfileEditor({
             <div className="field">
               <label>週の所定労働時間（社保判定）</label>
               <input name="contracted_weekly_hours" type="number" min={0} max={168} step={0.5} className="input" defaultValue={profile.contracted_weekly_hours ?? ""} placeholder="例: 20（空欄=実績）" />
+            </div>
+            <div className="field">
+              <label>1日の勤務時間（拘束・h）</label>
+              <input name="standard_shift_hours" type="number" min={0} max={24} step={0.25} className="input" defaultValue={profile.standard_shift_hours ?? ""} placeholder="例: 8.5（空欄=枠のまま）" />
+              <p className="help" style={{ margin: "4px 0 0" }}>
+                {profile.standard_shift_hours
+                  ? `${shiftLengthLabel(profile.standard_shift_hours)}。シフト生成はこの長さで割り当てます。`
+                  : "正社員など1日の勤務時間が決まっている人に設定。例: 8.5 → 実働7.5h（休憩60分）。"}
+              </p>
             </div>
             <div className="field">
               <label>週の最低時間</label>
