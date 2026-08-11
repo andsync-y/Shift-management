@@ -30,23 +30,37 @@ export async function GET(req: NextRequest) {
   // 既定は総合振込（21）。給与振込は銀行側の締めが早い（通常3営業日前）ことに注意。
   const typeCode = url.searchParams.get("kind") === "salary" ? ("11" as const) : ("21" as const);
 
-  // 委託者情報（SMBCから付与される委託者コード等。環境変数で設定）
+  // 委託者情報（取引銀行から付与される委託者コード等。すべて環境変数で設定）。
+  // ⚠️ 銀行名・銀行コードに既定値を持たせないこと。
+  //    以前は三井住友の 0009 / ﾐﾂｲｽﾐﾄﾓｷﾞﾝｺｳ を既定値にしていたため、取引銀行を
+  //    変更したときに古い銀行名が黙ってファイルに混入した。未設定なら空欄にして、
+  //    銀行側がコードから補完するのに任せる（受取人側の銀行名も同じ扱い）。
   const consignor = {
     consignorCode: process.env.ZENGIN_CONSIGNOR_CODE ?? "",
     consignorName: process.env.ZENGIN_CONSIGNOR_NAME ?? "",
-    bankCode: process.env.ZENGIN_BANK_CODE ?? "0009", // 三井住友銀行
-    bankName: process.env.ZENGIN_BANK_NAME ?? "ﾐﾂｲｽﾐﾄﾓｷﾞﾝｺｳ",
+    bankCode: process.env.ZENGIN_BANK_CODE ?? "",
+    bankName: process.env.ZENGIN_BANK_NAME ?? "",
     branchCode: process.env.ZENGIN_BRANCH_CODE ?? "",
     branchName: process.env.ZENGIN_BRANCH_NAME ?? "",
     accountType: process.env.ZENGIN_ACCOUNT_TYPE ?? "1", // 依頼人口座 預金種目（1=普通）
-    accountNumber: process.env.ZENGIN_ACCOUNT_NUMBER ?? "", // 依頼人口座番号(7桁)。Web21では必須
+    accountNumber: process.env.ZENGIN_ACCOUNT_NUMBER ?? "", // 依頼人口座番号(7桁)
   };
-  if (!consignor.consignorCode || !consignor.consignorName || !consignor.branchCode || !consignor.accountNumber) {
+  const missingEnv = (
+    [
+      ["ZENGIN_CONSIGNOR_CODE", consignor.consignorCode],
+      ["ZENGIN_CONSIGNOR_NAME", consignor.consignorName],
+      ["ZENGIN_BANK_CODE", consignor.bankCode],
+      ["ZENGIN_BRANCH_CODE", consignor.branchCode],
+      ["ZENGIN_ACCOUNT_NUMBER", consignor.accountNumber],
+    ] as const
+  )
+    .filter(([, v]) => !v)
+    .map(([k]) => k);
+  if (missingEnv.length > 0) {
     return NextResponse.json(
       {
         ok: false,
-        error:
-          "委託者情報が未設定です。環境変数 ZENGIN_CONSIGNOR_CODE / ZENGIN_CONSIGNOR_NAME / ZENGIN_BRANCH_CODE / ZENGIN_ACCOUNT_NUMBER（引落口座番号7桁。必要なら ZENGIN_ACCOUNT_TYPE / ZENGIN_BANK_CODE / ZENGIN_BANK_NAME / ZENGIN_BRANCH_NAME）を設定してください。",
+        error: `委託者情報が未設定です。環境変数 ${missingEnv.join(" / ")} を設定してください（任意: ZENGIN_ACCOUNT_TYPE / ZENGIN_BANK_NAME / ZENGIN_BRANCH_NAME）。`,
       },
       { status: 400 }
     );
