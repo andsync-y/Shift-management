@@ -98,9 +98,12 @@ export async function GET(req: NextRequest) {
     if (amount <= 0) continue;
     transfers.push({
       bankCode: s.bank_code,
-      bankName: "", // 名称はコードから銀行側で補完される（Web21等）
+      // 銀行名・支店名は銀行によって扱いが違う。三井住友(Web21)はコードから補完するが、
+      // しょうしんの総合振込は空だとエラー（BZBE311164 / BZBE311170）。
+      // スタッフ管理で登録しておけば入る（半角カナへは自動変換）。
+      bankName: s.bank_name ?? "",
       branchCode: s.branch_code,
-      branchName: "",
+      branchName: s.branch_name ?? "",
       accountType: s.account_type ?? "1",
       accountNumber: s.account_number,
       recipientName: s.recipient_kana,

@@ -31,7 +31,9 @@ export interface Profile {
   kaigo_applicable?: boolean; // 介護保険 第2号（40〜64歳）
   nomination_back_rate?: number; // 指名バック単価（円/指名）
   bank_code?: string | null; // 振込先 銀行コード(4)
+  bank_name?: string | null; // 振込先 銀行名（カナ）。銀行によっては全銀ファイルで必須
   branch_code?: string | null; // 振込先 支店コード(3)
+  branch_name?: string | null; // 振込先 支店名（カナ）
   account_type?: string | null; // 預金種目 1=普通 2=当座
   account_number?: string | null; // 口座番号
   recipient_kana?: string | null; // 受取人名カナ

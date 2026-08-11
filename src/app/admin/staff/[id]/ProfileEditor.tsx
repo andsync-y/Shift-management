@@ -152,8 +152,16 @@ export default function ProfileEditor({
               <input name="bank_code" type="text" inputMode="numeric" className="input" defaultValue={profile.bank_code ?? ""} placeholder="例: 0009" />
             </div>
             <div className="field">
+              <label>銀行名（カナ）</label>
+              <input name="bank_name" type="text" className="input" defaultValue={profile.bank_name ?? ""} placeholder="例: ｼﾞｭｳﾛｸ" />
+            </div>
+            <div className="field">
               <label>支店コード（3桁）</label>
               <input name="branch_code" type="text" inputMode="numeric" className="input" defaultValue={profile.branch_code ?? ""} placeholder="例: 123" />
+            </div>
+            <div className="field">
+              <label>支店名（カナ）</label>
+              <input name="branch_name" type="text" className="input" defaultValue={profile.branch_name ?? ""} placeholder="例: ﾅｶﾞﾗｼﾃﾝ" />
             </div>
             <div className="field">
               <label>預金種目</label>
@@ -170,6 +178,10 @@ export default function ProfileEditor({
               <label>受取人名（カナ）</label>
               <input name="recipient_kana" type="text" className="input" defaultValue={profile.recipient_kana ?? ""} placeholder="例: ﾌｸﾀﾞ ｱｲﾅ" />
             </div>
+            <p className="help" style={{ gridColumn: "1 / -1", margin: "2px 0 0" }}>
+              銀行名・支店名は全角カナで入れても自動で半角に変換されます。三井住友はコードから
+              自動補完しますが、<strong>しょうしんの総合振込は名称が空だとエラー</strong>になるため登録してください。
+            </p>
           </div>
         </section>
       </div>

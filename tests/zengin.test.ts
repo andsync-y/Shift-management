@@ -92,6 +92,20 @@ describe("ヘッダーの桁位置（1始まり）", () => {
   });
 });
 
+// 受取人の銀行名・支店名。三井住友はコードから補完するが、しょうしんの総合振込は
+// 空だとエラー（BZBE311164 / BZBE311170）。全角で入れても半角カナで出ること。
+describe("受取人の銀行名・支店名", () => {
+  test("6〜20桁目=金融機関名 / 24〜38桁目=支店名（左詰め15桁）", () => {
+    const named: ZenginTransfer[] = [
+      { ...transfers[0], bankName: "ジュウロク", branchName: "ナガラシテン" },
+    ];
+    const d = buildZenginData(consignor, named, "2026-08-14").text.split("\r\n")[1];
+    assert.equal(d.slice(5, 20), "ｼﾞｭｳﾛｸ".padEnd(15, " "));
+    assert.equal(d.slice(23, 38), "ﾅｶﾞﾗｼﾃﾝ".padEnd(15, " "));
+    assert.equal(d.length, 120, "名称を入れても120桁のまま");
+  });
+});
+
 describe("データレコードの桁位置（1始まり）", () => {
   const d = linesOf()[1];
   const at = (from: number, len: number) => d.slice(from - 1, from - 1 + len);

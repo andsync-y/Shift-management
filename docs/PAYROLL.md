@@ -125,6 +125,7 @@
 - `supabase/migrations/0037_kaisuken_back.sql`：`kaisuken_counts`（月別 回数券販売本数）。回数券バック（本数連動）の元データ。
 - `supabase/migrations/0038_payroll_deductions.sql`：`profiles` に税・保険設定（`tax_column` / `dependents_count` / `emp_insurance_enrolled` / `shaho_enrolled` / `kaigo_applicable`）＋ `income_tax_overrides`（月別 源泉の手入力）。
 - `supabase/migrations/0031_bank_account.sql`：`profiles` に振込先口座（銀行/支店コード・預金種目・口座番号・受取人カナ）。
+- `supabase/migrations/0042_bank_names.sql`：`profiles.bank_name` / `branch_name`（振込先の金融機関名・支店名。銀行によっては全銀ファイルで必須）。
 - `supabase/migrations/0039_payslips_bucket.sql`：給与明細PDFの非公開バケット `payslips`。
 
 ## 給与振込データ（全銀フォーマット）
@@ -138,7 +139,12 @@
   一方、データの締めが早い（通常3営業日前）。**支給日が土日なら前営業日に前倒す**ため、
   締めに間に合わないときは総合振込（前営業日締め）に切り替える。
 - 振込金額＝**差引支給（手取り・控除後）**。口座情報が未登録のスタッフは対象外（画面に警告表示）。
-- 各スタッフの口座は「スタッフ管理」で登録（受取人カナは半角に自動変換）。
+- 各スタッフの口座は「スタッフ管理」で登録：銀行コード/**銀行名**/支店コード/**支店名**/預金種目/
+  口座番号/受取人カナ（カナは全角で入れても半角に自動変換）。
+  - ⚠️ **銀行名・支店名は銀行によって必須。** 三井住友(Web21)はコードから自動補完するため
+    空欄で通っていたが、しょうしんの総合振込は空だとエラーになる
+    （`BZBE311164 振込先金融機関名の指定がありません` / `BZBE311170 振込先支店名の指定がありません`）。
+    要マイグレーション `0042_bank_names.sql`。
 - **依頼人名（`ZENGIN_CONSIGNOR_NAME`）は出金口座の名義と完全一致させる**（スペースの有無も
   一致判定される。例: `ｶ) ｱﾝﾄﾞｼﾝｸ`＝「ｶ)」の後に半角スペース）。不一致だと銀行画面で警告が出る。
 - 委託者情報は環境変数。**必須**は `ZENGIN_CONSIGNOR_CODE`（委託者コード）/ `ZENGIN_CONSIGNOR_NAME`（依頼人カナ）/
