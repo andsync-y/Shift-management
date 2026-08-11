@@ -3,7 +3,7 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
 import { buildZenginData, type ZenginTransfer } from "@/lib/zengin";
-import type { Profile, TimeRecord } from "@/lib/types";
+import type { PayrollAdjustment, Profile, TimeRecord } from "@/lib/types";
 
 export const dynamic = "force-dynamic";
 
@@ -67,18 +67,22 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }, { data: adjRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
     supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
     supabase.from("income_tax_overrides").select("staff_id, amount").eq("month", month),
+    supabase.from("payroll_adjustments").select("staff_id, amount, label, taxable").eq("month", month),
   ]);
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
   const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const taxOverrides = new Map(((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount]));
+  const adjustments = new Map(
+    ((adjRaw as PayrollAdjustment[] | null) ?? []).map((r) => [r.staff_id, { amount: r.amount, label: r.label, taxable: r.taxable }])
+  );
 
   const byStaff = groupRecordsByStaff(records);
 
@@ -93,6 +97,7 @@ export async function GET(req: NextRequest) {
       nominationCount: nom.get(s.id) ?? 0,
       kaisukenCount: kais.get(s.id) ?? 0,
       taxOverride: taxOverrides.get(s.id) ?? null,
+      adjustment: adjustments.get(s.id) ?? null,
     });
     const amount = ded.net;
     if (amount <= 0) continue;

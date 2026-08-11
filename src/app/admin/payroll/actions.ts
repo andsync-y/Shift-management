@@ -130,3 +130,41 @@ export async function applyFcNominations(
   const warn = unmatched.length ? `（未一致: ${unmatched.join("・")}）` : "";
   return { ok: true, message: `FCの指名数を ${rows.length}名 取り込みました${warn}。` };
 }
+
+// 月別の給与調整（立替精算・臨時手当・貸付返済など）を保存する。
+// amount>0=支給 / amount<0=控除 / taxable=false は課税対象から除く（非課税）。
+// 金額0かつ摘要なしなら行ごと削除する。
+export async function setPayrollAdjustment(
+  staffId: string,
+  month: string,
+  amount: number,
+  label: string,
+  taxable: boolean
+): Promise<{ ok: boolean; message?: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+
+  const n = Math.round(amount) || 0;
+  const l = label.trim().slice(0, 60);
+  const supabase = await createClient();
+
+  if (n === 0 && l === "") {
+    const { error } = await supabase
+      .from("payroll_adjustments")
+      .delete()
+      .eq("staff_id", staffId)
+      .eq("month", month);
+    if (error) return { ok: false, message: error.message };
+  } else {
+    const { error } = await supabase
+      .from("payroll_adjustments")
+      .upsert(
+        { staff_id: staffId, month, amount: n, label: l || null, taxable },
+        { onConflict: "staff_id,month" }
+      );
+    if (error) return { ok: false, message: error.message };
+  }
+
+  revalidatePath("/admin/payroll");
+  return { ok: true };
+}

@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, TimeRecord } from "@/lib/types";
+import type { PayrollAdjustment, Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
 import { hhmm, NOMINATION_BACK_RATE } from "@/lib/payroll";
 import { TAX_COLUMN_LABELS_JA } from "@/lib/deductions";
@@ -8,6 +8,7 @@ import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-pa
 import NominationInput from "./NominationInput";
 import KaisukenInput from "./KaisukenInput";
 import TaxInput from "./TaxInput";
+import AdjustmentInput from "./AdjustmentInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
 import SendPayslipsButton from "./SendPayslipsButton";
@@ -54,12 +55,13 @@ export default async function PayrollPage({
   const next = m === 12 ? `${y + 1}-01` : `${y}-${pad(m + 1)}`;
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }, { data: adjRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
     supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
     supabase.from("income_tax_overrides").select("staff_id, amount").eq("month", month),
+    supabase.from("payroll_adjustments").select("staff_id, amount, label, taxable").eq("month", month),
   ]);
 
   const staff = (staffRaw as Profile[] | null) ?? [];
@@ -69,6 +71,12 @@ export default async function PayrollPage({
   );
   const kaisCounts = new Map(
     ((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count])
+  );
+  const adjustments = new Map(
+    ((adjRaw as PayrollAdjustment[] | null) ?? []).map((r) => [
+      r.staff_id,
+      { amount: r.amount, label: r.label, taxable: r.taxable },
+    ])
   );
   const taxOverrides = new Map(
     ((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount])
@@ -80,13 +88,14 @@ export default async function PayrollPage({
       const count = nomCounts.get(s.id) ?? 0;
       const kaisCount = kaisCounts.get(s.id) ?? 0;
       // 給与の計算は computeStaffPayroll に集約（画面・PDF・振込で同じ結果になるように）
-      const { pay, nominationBack, kaisukenBackYen, gross: grossTotal, deduction: ded } =
+      const { pay, nominationBack, kaisukenBackYen, adjustment, adjustmentLabel, gross: grossTotal, deduction: ded } =
         computeStaffPayroll({
           staff: s,
           records: byStaff.get(s.id) ?? [],
           nominationCount: count,
           kaisukenCount: kaisCount,
           taxOverride: taxOverrides.get(s.id) ?? null,
+          adjustment: adjustments.get(s.id) ?? null,
         });
       const rate = NOMINATION_BACK_RATE;
       return {
@@ -97,11 +106,15 @@ export default async function PayrollPage({
         nominationBack,
         kaisCount,
         kaisukenBackYen,
+        adjustment,
+        adjustmentLabel,
         grossTotal,
         ded,
       };
     })
-    .filter((r) => r.pay.workedMin > 0 || r.pay.openCount > 0 || r.count > 0 || r.kaisCount > 0);
+    .filter(
+      (r) => r.pay.workedMin > 0 || r.pay.openCount > 0 || r.count > 0 || r.kaisCount > 0 || r.adjustment !== 0
+    );
 
   const totalGross = rows.reduce((sum, r) => sum + r.grossTotal, 0);
   const totalNet = rows.reduce((sum, r) => sum + r.ded.net, 0);
@@ -180,11 +193,12 @@ export default async function PayrollPage({
                   <th style={{ textAlign: "right" }}>指名バック</th>
                   <th style={{ textAlign: "right" }}>回数券本数</th>
                   <th style={{ textAlign: "right" }}>回数券バック</th>
+                  <th style={{ textAlign: "right" }}>調整（金額・摘要・区分）</th>
                   <th style={{ textAlign: "right" }}>総支給</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map(({ staff: s, pay, count, nominationBack, kaisCount, kaisukenBackYen, grossTotal }) => (
+                {rows.map(({ staff: s, pay, count, nominationBack, kaisCount, kaisukenBackYen, adjustment, adjustmentLabel, grossTotal }) => (
                   <tr key={s.id}>
                     <td style={{ whiteSpace: "nowrap" }}>
                       <span className="dot" style={{ background: s.display_color, marginRight: 6 }} />
@@ -236,6 +250,15 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right" }}>
                       {kaisukenBackYen > 0 ? yen(kaisukenBackYen) : <span className="muted">—</span>}
                     </td>
+                    <td style={{ textAlign: "right", whiteSpace: "nowrap" }}>
+                      <AdjustmentInput
+                        staffId={s.id}
+                        month={month}
+                        initialAmount={adjustment}
+                        initialLabel={adjustmentLabel ?? ""}
+                        initialTaxable={adjustments.get(s.id)?.taxable ?? true}
+                      />
+                    </td>
                     <td className="en" style={{ textAlign: "right", fontWeight: 700 }}>{yen(grossTotal)}</td>
                   </tr>
                 ))}
@@ -248,6 +271,8 @@ export default async function PayrollPage({
             時給は期間別（6/8〜6/19は¥1,060／6/20〜は¥1,600フロア・全員一律／80万超の売上連動UPは売上接続後に反映）、範囲外は各自の時給。
             交通費は片道距離(km)から自動計算（「スタッフ管理」で設定）。控除（源泉・雇用保険・社保）と手取りは下の「控除・差引支給」を参照。
             <strong>指名バック＝指名本数×3,000円（税抜・固定）</strong>を総支給に加算（本数はこの表で入力＝自動保存）。
+            <strong>調整</strong>は立替精算・臨時手当・貸付返済などの増減（プラス=支給／マイナス=控除）。
+            摘要は給与明細に印字。<strong>非課税</strong>を選ぶと交通費と同じく課税対象から外れます（立替金の精算など）。
             <strong>回数券バック＝本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）×本数</strong>を加算（新規＋更新の合計本数をこの表で入力）。
           </p>
           <p className="help" style={{ marginTop: 6, marginBottom: 0 }}>

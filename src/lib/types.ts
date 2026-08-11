@@ -49,6 +49,15 @@ export interface Profile {
   updated_at: string;
 }
 
+/** 月別の給与調整（立替精算・臨時手当・貸付返済など）。amount>0=支給 / <0=控除 */
+export interface PayrollAdjustment {
+  staff_id: string;
+  month: string; // "YYYY-MM"
+  amount: number;
+  label: string | null;
+  taxable: boolean; // false=非課税（課税対象から除外）
+}
+
 export interface AvailabilityPreference {
   id: string;
   staff_id: string;

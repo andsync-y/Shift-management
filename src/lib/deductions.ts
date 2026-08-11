@@ -101,6 +101,7 @@ function roundZeni(x: number): number {
 export interface DeductionInput {
   gross: number; // 総支給（額面・交通費含む）
   commute: number; // うち非課税交通費（課税対象から除外）
+  nonTaxable?: number; // うち非課税の調整額（立替精算など・課税対象から除外）
   taxColumn: TaxColumn;
   dependents: number; // 扶養親族等の数（甲欄）
   empInsuranceEnrolled: boolean;
@@ -148,8 +149,8 @@ export function computeDeductions(input: DeductionInput): DeductionResult {
 
   const socialTotal = empInsurance + healthInsurance + pension;
 
-  // 課税対象 = 総支給 − 非課税交通費 − 社会保険料
-  const taxableBase = Math.max(0, gross - commute - socialTotal);
+  // 課税対象 = 総支給 − 非課税交通費 − 非課税の調整 − 社会保険料
+  const taxableBase = Math.max(0, gross - commute - (input.nonTaxable ?? 0) - socialTotal);
 
   const incomeTaxAuto = withholdingTax(taxableBase, input.taxColumn, input.dependents);
   const incomeTax = input.taxOverride ?? incomeTaxAuto;

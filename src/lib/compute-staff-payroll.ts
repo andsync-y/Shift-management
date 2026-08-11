@@ -33,6 +33,11 @@ export interface StaffPayrollInput {
   kaisukenCount: number;
   /** 源泉所得税の手入力（あれば自動計算より優先。無ければ null） */
   taxOverride: number | null;
+  /**
+   * 月別の調整（立替精算・臨時手当・貸付返済など）。無ければ null。
+   * amount > 0 は支給・amount < 0 は控除。taxable=false は課税対象から除く。
+   */
+  adjustment?: { amount: number; label?: string | null; taxable: boolean } | null;
 }
 
 /** 月次給与の計算結果。画面・PDF・振込のすべてがこれを使う。 */
@@ -43,7 +48,11 @@ export interface StaffPayrollResult {
   nominationBack: number;
   /** 回数券バック（本数連動の段階単価 × 本数） */
   kaisukenBackYen: number;
-  /** 総支給（額面）＝ pay.gross + 指名バック + 回数券バック */
+  /** 月別の調整額（支給は正・控除は負）。無ければ0 */
+  adjustment: number;
+  /** 調整額の摘要（明細に出す） */
+  adjustmentLabel: string | null;
+  /** 総支給（額面）＝ pay.gross + 指名バック + 回数券バック + 調整額 */
   gross: number;
   /** 控除（雇用保険・社保・源泉）と差引支給額 */
   deduction: DeductionResult;
@@ -59,6 +68,8 @@ export interface StaffPayrollResult {
  */
 export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResult {
   const { staff, records, nominationCount, kaisukenCount, taxOverride } = input;
+  const adj = input.adjustment ?? null;
+  const adjustment = Math.round(adj?.amount ?? 0);
 
   const pay = computePayroll(
     records,
@@ -69,7 +80,9 @@ export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResul
 
   const nominationBack = NOMINATION_BACK_RATE * nominationCount;
   const kaisukenBackYen = kaisukenBack(kaisukenCount);
-  const gross = pay.gross + nominationBack + kaisukenBackYen;
+  // 調整額（立替精算・臨時手当・貸付返済など）は総支給の一部として足し引きする。
+  // 負の調整で総支給がマイナスになると保険料計算が壊れるため0で止める。
+  const gross = Math.max(0, pay.gross + nominationBack + kaisukenBackYen + adjustment);
 
   const deduction = computeDeductions({
     gross,
@@ -80,6 +93,9 @@ export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResul
     empInsuranceEnrolled: staff.emp_insurance_enrolled ?? true,
     shahoEnrolled: staff.shaho_enrolled ?? false,
     kaigoApplicable: staff.kaigo_applicable ?? false,
+    // 非課税の調整（立替金の精算など）は交通費と同じく課税対象から外す。
+    // 控除側（負）の非課税は課税対象を増やしてしまうため対象外にする。
+    nonTaxable: adj && !adj.taxable && adjustment > 0 ? adjustment : 0,
     taxOverride,
   });
 
@@ -87,9 +103,12 @@ export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResul
     pay,
     nominationBack,
     kaisukenBackYen,
+    adjustment,
+    adjustmentLabel: adj?.label?.trim() ? adj.label.trim() : null,
     gross,
     deduction,
-    hasPayroll: pay.workedMin > 0 || pay.openCount > 0 || nominationCount > 0 || kaisukenCount > 0,
+    hasPayroll:
+      pay.workedMin > 0 || pay.openCount > 0 || nominationCount > 0 || kaisukenCount > 0 || adjustment !== 0,
   };
 }
 

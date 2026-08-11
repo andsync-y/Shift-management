@@ -1,6 +1,6 @@
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import type { Profile, TimeRecord } from "@/lib/types";
+import type { PayrollAdjustment, Profile, TimeRecord } from "@/lib/types";
 import { displayName } from "@/lib/display-name";
 import { hhmm, NOMINATION_BACK_RATE, kaisukenBackRate } from "@/lib/payroll";
 import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
@@ -51,18 +51,22 @@ export default async function PayslipPrintPage({
   const end = `${y}-${pad(m)}-${pad(new Date(y, m, 0).getDate())}`;
 
   const supabase = await createClient();
-  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }] = await Promise.all([
+  const [{ data: recordsRaw }, { data: staffRaw }, { data: nomRaw }, { data: kaisRaw }, { data: taxRaw }, { data: adjRaw }] = await Promise.all([
     supabase.from("time_records").select("*").gte("work_date", start).lte("work_date", end),
     supabase.from("profiles").select("*").eq("role", "staff").eq("is_active", true).order("full_name"),
     supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
     supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
     supabase.from("income_tax_overrides").select("staff_id, amount").eq("month", month),
+    supabase.from("payroll_adjustments").select("staff_id, amount, label, taxable").eq("month", month),
   ]);
   const staff = (staffRaw as Profile[] | null) ?? [];
   const records = (recordsRaw as TimeRecord[] | null) ?? [];
   const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
   const taxOverrides = new Map(((taxRaw as { staff_id: string; amount: number }[] | null) ?? []).map((r) => [r.staff_id, r.amount]));
+  const adjustments = new Map(
+    ((adjRaw as PayrollAdjustment[] | null) ?? []).map((r) => [r.staff_id, { amount: r.amount, label: r.label, taxable: r.taxable }])
+  );
   const byStaff = groupRecordsByStaff(records);
 
   const rows = staff
@@ -70,19 +74,20 @@ export default async function PayslipPrintPage({
       const count = nom.get(s.id) ?? 0;
       const kaisCount = kais.get(s.id) ?? 0;
       // 計算は computeStaffPayroll に集約（画面・PDF・振込で必ず同じ結果にする）
-      const { pay, nominationBack: back, kaisukenBackYen: kaisBack, gross, deduction: ded } =
+      const { pay, nominationBack: back, kaisukenBackYen: kaisBack, adjustment, adjustmentLabel, gross, deduction: ded } =
         computeStaffPayroll({
           staff: s,
           records: byStaff.get(s.id) ?? [],
           nominationCount: count,
           kaisukenCount: kaisCount,
           taxOverride: taxOverrides.get(s.id) ?? null,
+      adjustment: adjustments.get(s.id) ?? null,
         });
       const rate = NOMINATION_BACK_RATE;
       const kaisRate = kaisukenBackRate(kaisCount);
-      return { s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, gross, ded };
+      return { s, pay, rate, count, back, kaisCount, kaisBack, kaisRate, adjustment, adjustmentLabel, gross, ded };
     })
-    .filter((r) => r.pay.workedMin > 0 || r.count > 0 || r.kaisCount > 0);
+    .filter((r) => r.pay.workedMin > 0 || r.count > 0 || r.kaisCount > 0 || r.adjustment !== 0);
 
   // 支給日＝翌月15日（当店の給与支払日）
   const payDate = m === 12 ? `${y + 1}年1月15日` : `${y}年${m + 1}月15日`;
@@ -92,7 +97,7 @@ export default async function PayslipPrintPage({
       <style>{PRINT_CSS}</style>
       <PrintBar label={`${y}年${m}月 給与明細`} />
 
-      {rows.map(({ s, pay, count, back, kaisCount, kaisBack, gross, ded }) => (
+      {rows.map(({ s, pay, count, back, kaisCount, kaisBack, adjustment, adjustmentLabel, gross, ded }) => (
         <div className="payslip" key={s.id}>
           <table className="ps-grid">
             <colgroup>
@@ -133,12 +138,13 @@ export default async function PayslipPrintPage({
                 <td className="v">{yen(pay.commute)}</td>
               </tr>
               <tr>
-                <th>指名バック（{count}本）</th><th>回数券バック（{kaisCount}本）</th><th></th><th>支給額合計</th>
+                <th>指名バック（{count}本）</th><th>回数券バック（{kaisCount}本）</th>
+                <th>{adjustment !== 0 ? adjustmentLabel ?? "調整" : "調整"}</th><th>支給額合計</th>
               </tr>
               <tr>
                 <td className="v">{yen(back)}</td>
                 <td className="v">{yen(kaisBack)}</td>
-                <td className="v"></td>
+                <td className="v">{adjustment !== 0 ? yen(adjustment) : "—"}</td>
                 <td className="v" style={{ fontWeight: 700 }}>{yen(gross)}</td>
               </tr>
 

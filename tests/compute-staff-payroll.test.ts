@@ -190,3 +190,67 @@ describe("2026年7月の実績と一致すること（4画面共通の金額）"
     assert.equal(r.deduction.net, r.gross - r.deduction.socialTotal - r.deduction.incomeTax);
   });
 });
+
+describe("月別の調整（立替精算・臨時手当・貸付返済）", () => {
+  const base = {
+    staff: staffOf(),
+    records: [rec("2026-07-01", "10:00", "18:00")],
+    nominationCount: 0,
+    kaisukenCount: 0,
+    taxOverride: null,
+  };
+
+  test("プラスの調整は総支給に加算される", () => {
+    const plain = computeStaffPayroll(base);
+    const r = computeStaffPayroll({ ...base, adjustment: { amount: 2200, label: "立替精算", taxable: true } });
+    assert.equal(r.gross, plain.gross + 2200);
+    assert.equal(r.adjustment, 2200);
+    assert.equal(r.adjustmentLabel, "立替精算");
+  });
+
+  test("マイナスの調整は総支給から差し引かれる", () => {
+    const plain = computeStaffPayroll(base);
+    const r = computeStaffPayroll({ ...base, adjustment: { amount: -3000, label: "制服代", taxable: true } });
+    assert.equal(r.gross, plain.gross - 3000);
+  });
+
+  test("課税の調整は課税対象に入る", () => {
+    const r = computeStaffPayroll({ ...base, adjustment: { amount: 20000, label: "手当", taxable: true } });
+    assert.equal(r.deduction.taxableBase, r.gross - r.pay.commute - r.deduction.socialTotal);
+  });
+
+  test("非課税の調整は交通費と同じく課税対象から外れる", () => {
+    const r = computeStaffPayroll({ ...base, adjustment: { amount: 20000, label: "立替精算", taxable: false } });
+    assert.equal(r.deduction.taxableBase, r.gross - r.pay.commute - 20000 - r.deduction.socialTotal);
+  });
+
+  test("非課税でも控除（マイナス）は課税対象を増やさない", () => {
+    const taxed = computeStaffPayroll({ ...base, adjustment: { amount: -5000, label: "返済", taxable: true } });
+    const nonTaxed = computeStaffPayroll({ ...base, adjustment: { amount: -5000, label: "返済", taxable: false } });
+    assert.equal(taxed.deduction.taxableBase, nonTaxed.deduction.taxableBase);
+  });
+
+  test("調整で総支給がマイナスになっても0で止まる", () => {
+    const r = computeStaffPayroll({ ...base, adjustment: { amount: -999999, label: "", taxable: true } });
+    assert.equal(r.gross, 0);
+    assert.equal(r.deduction.socialTotal, 0);
+  });
+
+  test("実働ゼロでも調整があれば対象になる", () => {
+    const r = computeStaffPayroll({
+      ...base,
+      records: [],
+      adjustment: { amount: 2200, label: "立替精算", taxable: false },
+    });
+    assert.equal(r.hasPayroll, true);
+    assert.equal(r.gross, 2200);
+  });
+
+  test("調整を渡さなければ従来どおり（後方互換）", () => {
+    const plain = computeStaffPayroll(base);
+    const withNull = computeStaffPayroll({ ...base, adjustment: null });
+    assert.equal(plain.gross, withNull.gross);
+    assert.equal(plain.adjustment, 0);
+    assert.equal(plain.deduction.net, withNull.deduction.net);
+  });
+});
