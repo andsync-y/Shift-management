@@ -64,7 +64,7 @@ describe("社会保険（健保・厚年）", () => {
       shahoEnrolled: true,
     });
     assert.equal(r.smr, 240000);
-    assert.equal(r.healthInsurance, 11892, "240,000×9.91%÷2");
+    assert.equal(r.healthInsurance, 11760, "240,000×9.80%÷2（令和8年度・岐阜）");
     assert.equal(r.pension, 21960, "240,000×18.3%÷2");
     assert.equal(r.socialTotal, r.healthInsurance + r.pension + r.empInsurance);
   });
@@ -91,9 +91,10 @@ describe("社会保険（健保・厚年）", () => {
   });
 
   test("料率の現行値（年度改定時はここが変わる）", () => {
-    assert.equal(KENPO_RATE, 0.0991);
-    assert.equal(KAIGO_RATE, 0.0159);
-    assert.equal(KOSEI_NENKIN_RATE, 0.183);
+    // 協会けんぽは毎年3月分（4月納付分）から改定。都道府県ごとに異なる。
+    assert.equal(KENPO_RATE, 0.098, "健保 9.80%（令和8年度・岐阜県）");
+    assert.equal(KAIGO_RATE, 0.0159, "介護 1.59%（令和8年度の告示に要確認）");
+    assert.equal(KOSEI_NENKIN_RATE, 0.183, "厚年 18.3%（法定固定）");
   });
 });
 
@@ -216,22 +217,22 @@ describe("差引支給額（手取り）", () => {
     assert.equal(r.net, 183644);
   });
 
-  test("2026年7月 AINA の実績と一致する（甲欄・社保あり）", () => {
-    // 明細PDF: 総支給244,307 / 健保11,892 / 厚年21,960 / 雇用1,222 / 所得税4,410 / 差引204,823
+  test("2026年7月 AINA の実績と一致する（甲欄・社保なし）", () => {
+    // 社会保険の加入は2026年8月分から。7月分は健保・厚年ともに控除なしで支払った。
+    // 2026-08-14 にしょうしんへ送った全銀ファイルの実額が ¥237,405。
     const r = computeDeductions({
       ...base,
       gross: 244307,
       commute: 6840,
       taxColumn: "kou",
-      shahoEnrolled: true,
+      shahoEnrolled: false,
     });
-    assert.equal(r.healthInsurance, 11892);
-    assert.equal(r.pension, 21960);
+    assert.equal(r.healthInsurance, 0);
+    assert.equal(r.pension, 0);
     assert.equal(r.empInsurance, 1222);
-    assert.equal(r.socialTotal, 35074);
-    assert.equal(r.taxableBase, 202393);
-    assert.equal(r.incomeTax, 4410);
-    assert.equal(r.net, 204823);
+    assert.equal(r.taxableBase, 236245);
+    assert.equal(r.incomeTax, 5680);
+    assert.equal(r.net, 237405, "全銀ファイルの振込額と一致すること");
   });
 });
 
@@ -251,18 +252,18 @@ describe("標準報酬月額の正式決定額（年金機構の通知書）", (
     assert.equal(a.socialTotal, b.socialTotal);
   });
 
-  test("紙坂香代 標準報酬240千円 → 健保11,892・厚年21,960", () => {
+  test("紙坂香代 標準報酬240千円 → 健保11,760・厚年21,960", () => {
     const d = computeDeductions({ ...base, gross: 220000, smrOfficial: 240000 });
-    assert.equal(d.healthInsurance, 11892);
+    assert.equal(d.healthInsurance, 11760);
     assert.equal(d.pension, 21960);
-    assert.equal(d.socialTotal, 33852);
+    assert.equal(d.socialTotal, 33720);
   });
 
-  test("橋本美佑香・福田愛奈 標準報酬300千円 → 健保14,865・厚年27,450", () => {
+  test("橋本美佑香・福田愛奈 標準報酬300千円 → 健保14,700・厚年27,450", () => {
     const d = computeDeductions({ ...base, gross: 270000, smrOfficial: 300000 });
-    assert.equal(d.healthInsurance, 14865);
+    assert.equal(d.healthInsurance, 14700);
     assert.equal(d.pension, 27450);
-    assert.equal(d.socialTotal, 42315);
+    assert.equal(d.socialTotal, 42150);
   });
 
   test("未設定なら従来どおり当月報酬から推計する（後方互換）", () => {
