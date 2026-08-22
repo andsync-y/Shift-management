@@ -140,6 +140,15 @@ export default function ProfileEditor({
                 介護保険 第2号（40〜64歳）
               </label>
             </div>
+            <div className="field">
+              <label>標準報酬月額（円）</label>
+              <input name="smr_official" type="number" min={0} step={1000} className="input" defaultValue={profile.smr_official ?? ""} placeholder="例: 300000（空欄=推計）" />
+              <p className="help" style={{ margin: "4px 0 0" }}>
+                年金機構の<strong>「資格取得確認および標準報酬決定通知書」</strong>の額を入れる。
+                標準報酬月額は資格取得時・定時決定で固定されるため、通知が来たら必ず登録すること。
+                空欄だと当月報酬から推計するため、残業やバックで等級がずれる。
+              </p>
+            </div>
           </div>
         </section>
 

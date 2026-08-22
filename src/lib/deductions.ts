@@ -106,6 +106,12 @@ export interface DeductionInput {
   dependents: number; // 扶養親族等の数（甲欄）
   empInsuranceEnrolled: boolean;
   shahoEnrolled: boolean;
+  /**
+   * 標準報酬月額の正式決定額（年金機構の通知書の額）。
+   * 標準報酬月額は資格取得時・定時決定で固定されるため、決まっていれば必ずこれを使う。
+   * 未設定（null）のときだけ当月報酬から等級表で推計する（簡易方式）。
+   */
+  smrOfficial?: number | null;
   kaigoApplicable: boolean;
   taxOverride: number | null; // 源泉の手入力（あれば常に優先）
 }
@@ -140,7 +146,10 @@ export function computeDeductions(input: DeductionInput): DeductionResult {
   let pension = 0;
   let smr: number | null = null;
   if (input.shahoEnrolled && gross > 0) {
-    smr = standardMonthlyRemuneration(gross);
+    // 正式決定額があればそれを使う。無ければ当月報酬から推計（簡易方式）。
+    smr = input.smrOfficial && input.smrOfficial > 0
+      ? input.smrOfficial
+      : standardMonthlyRemuneration(gross);
     const healthRate = KENPO_RATE + (input.kaigoApplicable ? KAIGO_RATE : 0);
     healthInsurance = roundZeni((smr * healthRate) / 2);
     const pensionSmr = Math.min(650000, Math.max(88000, smr));

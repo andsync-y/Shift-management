@@ -97,6 +97,7 @@ const profileSchema = z.object({
   emp_insurance_enrolled: z.string().optional().transform((v) => v != null),
   shaho_enrolled: z.string().optional().transform((v) => v != null),
   kaigo_applicable: z.string().optional().transform((v) => v != null),
+  smr_official: z.coerce.number().int().min(58000).max(1390000).optional().or(z.literal("")),
   bank_code: z.string().trim().optional().or(z.literal("")),
   bank_name: z.string().trim().optional().or(z.literal("")),
   branch_code: z.string().trim().optional().or(z.literal("")),
@@ -151,6 +152,8 @@ export async function updateStaffProfile(
       emp_insurance_enrolled: d.emp_insurance_enrolled,
       shaho_enrolled: d.shaho_enrolled,
       kaigo_applicable: d.kaigo_applicable,
+      smr_official:
+        d.smr_official === "" || d.smr_official === undefined ? null : d.smr_official,
       bank_code: d.bank_code ? d.bank_code : null,
       bank_name: d.bank_name ? d.bank_name : null,
       branch_code: d.branch_code ? d.branch_code : null,

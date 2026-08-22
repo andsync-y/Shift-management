@@ -29,6 +29,9 @@ export interface Profile {
   emp_insurance_enrolled?: boolean; // 雇用保険 加入
   shaho_enrolled?: boolean; // 社会保険（健保・厚年）加入
   kaigo_applicable?: boolean; // 介護保険 第2号（40〜64歳）
+  // 標準報酬月額（年金機構の決定通知書の額）。設定時はこの額で保険料を計算する。
+  // null なら当月報酬から等級表で推計（簡易方式）。
+  smr_official?: number | null;
   nomination_back_rate?: number; // 指名バック単価（円/指名）
   bank_code?: string | null; // 振込先 銀行コード(4)
   bank_name?: string | null; // 振込先 銀行名（カナ）。銀行によっては全銀ファイルで必須

@@ -234,3 +234,48 @@ describe("差引支給額（手取り）", () => {
     assert.equal(r.net, 204823);
   });
 });
+
+describe("標準報酬月額の正式決定額（年金機構の通知書）", () => {
+  // 2026-08-10付「資格取得確認および標準報酬決定通知書」の額
+  const base = {
+    commute: 0, taxColumn: "otsu" as const, dependents: 0,
+    empInsuranceEnrolled: false, shahoEnrolled: true, kaigoApplicable: false, taxOverride: 0,
+  };
+
+  test("正式決定額があれば当月報酬に関係なくその額で計算する", () => {
+    // 総支給が上下しても保険料は変わらない（標準報酬月額は固定のため）
+    const a = computeDeductions({ ...base, gross: 250000, smrOfficial: 300000 });
+    const b = computeDeductions({ ...base, gross: 340000, smrOfficial: 300000 });
+    assert.equal(a.smr, 300000);
+    assert.equal(b.smr, 300000);
+    assert.equal(a.socialTotal, b.socialTotal);
+  });
+
+  test("紙坂香代 標準報酬240千円 → 健保11,892・厚年21,960", () => {
+    const d = computeDeductions({ ...base, gross: 220000, smrOfficial: 240000 });
+    assert.equal(d.healthInsurance, 11892);
+    assert.equal(d.pension, 21960);
+    assert.equal(d.socialTotal, 33852);
+  });
+
+  test("橋本美佑香・福田愛奈 標準報酬300千円 → 健保14,865・厚年27,450", () => {
+    const d = computeDeductions({ ...base, gross: 270000, smrOfficial: 300000 });
+    assert.equal(d.healthInsurance, 14865);
+    assert.equal(d.pension, 27450);
+    assert.equal(d.socialTotal, 42315);
+  });
+
+  test("未設定なら従来どおり当月報酬から推計する（後方互換）", () => {
+    const auto = computeDeductions({ ...base, gross: 270000 });
+    const nullish = computeDeductions({ ...base, gross: 270000, smrOfficial: null });
+    assert.equal(auto.smr, 280000, "推計は等級表どおり");
+    assert.equal(nullish.smr, auto.smr);
+    assert.equal(nullish.socialTotal, auto.socialTotal);
+  });
+
+  test("社保未加入なら正式決定額があっても控除しない", () => {
+    const d = computeDeductions({ ...base, gross: 270000, shahoEnrolled: false, smrOfficial: 300000 });
+    assert.equal(d.smr, null);
+    assert.equal(d.socialTotal, 0);
+  });
+});

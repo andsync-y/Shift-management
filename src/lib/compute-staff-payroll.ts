@@ -93,6 +93,7 @@ export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResul
     empInsuranceEnrolled: staff.emp_insurance_enrolled ?? true,
     shahoEnrolled: staff.shaho_enrolled ?? false,
     kaigoApplicable: staff.kaigo_applicable ?? false,
+    smrOfficial: staff.smr_official ?? null,
     // 非課税の調整（立替金の精算など）は交通費と同じく課税対象から外す。
     // 控除側（負）の非課税は課税対象を増やしてしまうため対象外にする。
     nonTaxable: adj && !adj.taxable && adjustment > 0 ? adjustment : 0,
