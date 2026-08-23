@@ -148,12 +148,15 @@ body {
     gap: 16px;
     padding: 24px 34px;
     border-bottom: 1px solid var(--line);
+    /* 操作ボタンが増えても見出しを潰さない。入り切らなければ丸ごと次の行に送る。 */
+    flex-wrap: wrap;
   }
   .section-head h2 {
     font-size: 17px;
     font-weight: 500;
     margin: 0;
     letter-spacing: 0.01em;
+    flex-shrink: 0;
   }
   .section-body {
     padding: 28px 34px 34px;

@@ -105,6 +105,17 @@ function monthLabel(month: string): string {
   return `${y}年${Number(mo)}月`;
 }
 
+// 今すぐ数字を入れる手段（自動取得を待たなくてよい）。
+const KAISUKEN_HINT =
+  "　今すぐ入れるなら「📄 来店記録CSVで回数券を取込」、または「店舗KPI」の担当別入力を使ってください。";
+const NOMINATION_HINT = "　今すぐ入れるなら「店舗KPI」の担当別入力か、給与表に直接入力してください。";
+
+// スナップショット自体はあるのに項目だけ無い＝その項目に対応する前に取得されたデータ。
+// 「日次取得を待て」だけだと永久に入らないので、対応後の取得が要ることを明示する。
+function missingFieldMessage(month: string, what: string): string {
+  return `${monthLabel(month)}のKPIは取得済みですが、担当別の${what}が入っていません（この項目に対応する前に取得されたデータです）。次回の日次取得から入ります。`;
+}
+
 // 当月なら「日次取得がまだ」、過去月なら「遡取得は不可＝手入力で十分」を正しく案内する。
 function noSnapshotMessage(month: string, what: string): string {
   const jstNow = new Date(Date.now() + 9 * 3600 * 1000);
@@ -127,8 +138,9 @@ export async function applyFcNominations(month: string): Promise<{ ok: boolean; 
   const supabase = await createClient();
 
   const m = await fetchMonthSnapshot(supabase, month);
-  if (!m || !Array.isArray(m.staffNominations)) {
-    return { ok: false, message: noSnapshotMessage(month, "指名数") };
+  if (!m) return { ok: false, message: noSnapshotMessage(month, "指名数") + NOMINATION_HINT };
+  if (!Array.isArray(m.staffNominations) || m.staffNominations.length === 0) {
+    return { ok: false, message: missingFieldMessage(month, "指名数") + NOMINATION_HINT };
   }
 
   const index = await fetchNameIndex(supabase);
@@ -153,8 +165,9 @@ export async function applyFcKaisuken(month: string): Promise<{ ok: boolean; mes
   const supabase = await createClient();
 
   const m = await fetchMonthSnapshot(supabase, month);
-  if (!m || !Array.isArray(m.staffTicketSales) || m.staffTicketSales.length === 0) {
-    return { ok: false, message: noSnapshotMessage(month, "回数券販売数") };
+  if (!m) return { ok: false, message: noSnapshotMessage(month, "回数券販売数") + KAISUKEN_HINT };
+  if (!Array.isArray(m.staffTicketSales) || m.staffTicketSales.length === 0) {
+    return { ok: false, message: missingFieldMessage(month, "回数券販売数") + KAISUKEN_HINT };
   }
 
   const { entries, renewalMissing } = ticketCountsFrom(m.staffTicketSales);
