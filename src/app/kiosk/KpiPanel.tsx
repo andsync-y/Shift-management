@@ -12,7 +12,8 @@ export default function KpiPanel({ data, asOf }: { data: FcKpiData; asOf?: strin
   const m = data.month ?? {};
   const y = data.yesterday ?? {};
   const hasMonth = m.sales != null || m.newCount != null || m.nominationCount != null;
-  const hasY = (y.newSales?.length ?? 0) > 0 || (y.nominations?.length ?? 0) > 0;
+  const hasY =
+    (y.newSales?.length ?? 0) > 0 || (y.renewals?.length ?? 0) > 0 || (y.nominations?.length ?? 0) > 0;
   if (!hasMonth && !hasY) return null;
 
   return (
@@ -69,6 +70,19 @@ export default function KpiPanel({ data, asOf }: { data: FcKpiData; asOf?: strin
               )}
             </span>
           </div>
+          {(y.renewals ?? []).length > 0 && (
+            <div className="kpi-yrow">
+              <span className="kpi-ylabel">昨日 更新</span>
+              <span className="kpi-chips">
+                {(y.renewals ?? []).map((s, i) => (
+                  <span className="kpi-chip" key={i}>
+                    {s.staff}
+                    {s.ticket ? ` ×${s.ticket}回` : ""}
+                  </span>
+                ))}
+              </span>
+            </div>
+          )}
           <div className="kpi-yrow">
             <span className="kpi-ylabel">昨日 指名</span>
             <span className="kpi-chips">

@@ -36,7 +36,19 @@
 - **回数券バック**（**2026年7月分から運用**）：`回数券バック = 本数連動の段階単価 × 本数`（`kaisukenBack` / `KAISUKEN_BACK_TIERS`・`src/lib/payroll.ts`）。
   - 段階単価（当月の回数券本数で決まる）：**1〜3本 ¥1,000 ／ 4〜7本 ¥2,000 ／ 8本〜 ¥3,000**。1本目から支給・0本なら0。
   - 判定は「販売率(%)」ではなく「**本数（絶対数）**」＝多く売るほど単価UP。新規を多く取る動機と同方向で、%の小サンプル・新規敬遠を回避。
-  - **本数 = 新規販売＋更新販売の合計**。給与画面の表で月ごとに手入力（`kaisuken_counts`・フォーカスアウトで自動保存）。
+  - **本数 = 新規販売＋更新販売の合計**（`kaisuken_counts`）。入れ方は2通り。
+    - **CSV取込（推奨）**：本部システムの「来店記録」CSVを出力し、給与画面の
+      **「📄 来店記録CSVで回数券を取込」**に読ませる（`importKaisukenFromVisitCsv` →
+      `src/lib/fc-hq/visits-csv.ts` の `tallyVisitCsv`）。CSVはブラウザで読んで文字列で送るだけで、
+      アプリから本部システムへは接続しない。UTF-8(BOM付き)・Shift_JIS どちらでも可。
+      - 数え方：**「回数券購入」に券種が入っている行＝1本**（券の回数ではない）。来店種別で絞らないのは、
+        更新（ラスト1枚／途中更新）やチケ消化中からの更新も同じ1本だから。実データ 2026-07 は
+        新規23本＋更新1本＝**24本**で本部の月次記録と一致。
+      - 突合は担当名 → `profiles.display_name`（なければ `full_name`）。**一致しなかった担当は
+        取り込まずメッセージで名前を出す**ので、表示名を本部の表記に合わせる。
+      - CSVに出てくる担当は**0本でも0で上書き**する（再取込で前回の過大分を戻せる）。
+        CSVに載っていない人（当月出勤なし）は触らない。
+    - **手入力**：給与画面の表に直接入力（フォーカスアウトで自動保存）。CSV取込後の手直しもここ。
   - 時給とは別の「上乗せ」（基本給からの減額はしない）。指名バックとも別立て。
 - **給与明細の印刷**：「🖨 給与明細を印刷」→ `/admin/payroll/print?month=`（**A4横**・余白16×20mm・1人1枚・`window.print()`）。
   - 形式は一般的な**給与明細書グリッド**（勤務＝日数/実働/残業/深夜 → 支給＝基本給/残業・深夜手当/
@@ -143,6 +155,7 @@
 - `supabase/migrations/0027_contracted_hours.sql`：`profiles.contracted_weekly_hours`（週の所定労働時間・社保判定用）。
 - `supabase/migrations/0029_nomination_back.sql`：`profiles.nomination_back_rate`（指名バック単価）＋ `nomination_counts`（月別指名本数）。
 - `supabase/migrations/0037_kaisuken_back.sql`：`kaisuken_counts`（月別 回数券販売本数）。回数券バック（本数連動）の元データ。
+- `src/lib/fc-hq/visits-csv.ts`：本部「来店記録」CSVのパース・担当別集計（回数券本数／指名／新規成約率）。テストは `tests/visits-csv.test.ts`。
 - `supabase/migrations/0038_payroll_deductions.sql`：`profiles` に税・保険設定（`tax_column` / `dependents_count` / `emp_insurance_enrolled` / `shaho_enrolled` / `kaigo_applicable`）＋ `income_tax_overrides`（月別 源泉の手入力）。
 - `supabase/migrations/0031_bank_account.sql`：`profiles` に振込先口座（銀行/支店コード・預金種目・口座番号・受取人カナ）。
 - `supabase/migrations/0042_bank_names.sql`：`profiles.bank_name` / `branch_name`（振込先の金融機関名・支店名。銀行によっては全銀ファイルで必須）。

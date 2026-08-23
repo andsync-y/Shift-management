@@ -248,17 +248,20 @@ async function extractYesterday(page) {
     const text = Encoding.codeToString(Encoding.convert(buf, { to: "UNICODE", from: "AUTO" }));
     const rows = parseCsvVisits(text).filter((r) => (r["来店日"] || "").startsWith(yStr));
 
+    // 回数券が売れた行は「新規」と「それ以外＝更新（ラスト1枚／途中更新など）」に分ける。
+    // 給与の回数券バックは 新規＋更新 の合計本数なので、更新を落とすと本数が足りなくなる。
     const newSales = [];
+    const renewals = [];
     const nomMap = new Map();
     for (const r of rows) {
       const staff = (r["担当"] || "").trim();
       if (!staff) continue;
       const ticket = parseTicket(r["回数券購入"]);
-      if (r["来店種別"] === "新規" && ticket) newSales.push({ staff, ticket });
+      if (ticket) (r["来店種別"] === "新規" ? newSales : renewals).push({ staff, ticket });
       if ((r["指名"] || "").startsWith("あり")) nomMap.set(staff, (nomMap.get(staff) || 0) + 1);
     }
     const nominations = [...nomMap.entries()].map(([staff, count]) => ({ staff, count }));
-    return { date: yStr, newSales, nominations };
+    return { date: yStr, newSales, renewals, nominations };
   } catch (e) {
     console.warn("来店記録CSVの取得に失敗、ダッシュボード(担当別)にフォールバック:", e.message);
     try {
@@ -270,8 +273,9 @@ async function extractYesterday(page) {
       await page.waitForLoadState("networkidle").catch(() => {});
       await page.waitForTimeout(1500);
     } catch {}
+    // ダッシュボードの担当別表からは更新（回数券の更新販売）を取れないため renewals は空。
     const { newSales, nominations } = await readStaffTable(page);
-    return { date: yStr, newSales, nominations };
+    return { date: yStr, newSales, renewals: [], nominations };
   }
 }
 

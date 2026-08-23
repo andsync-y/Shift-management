@@ -47,6 +47,7 @@ export async function saveKpi(
     yesterday: {
       date: g("yDate") || undefined,
       newSales: parseStaffLines(g("newSales")),
+      renewals: parseStaffLines(g("renewals")),
       nominations: parseStaffLines(g("nominations")).map((x) => ({ staff: x.staff, count: x.ticket })),
     },
   };

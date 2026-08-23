@@ -4,6 +4,9 @@ export interface FcKpiData {
   yesterday?: {
     date?: string; // 対象日 "YYYY-MM-DD"
     newSales?: { staff: string; ticket?: number | null }[]; // 新規販売（回数券の回数 ticket）
+    // 更新販売（ラスト1枚／途中更新など、新規以外の回数券販売）。
+    // 給与の回数券バックは「新規＋更新」なので、新規と分けて持つ。
+    renewals?: { staff: string; ticket?: number | null }[];
     nominations?: { staff: string; count?: number | null }[]; // 指名獲得
   };
   month?: {

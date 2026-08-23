@@ -11,6 +11,7 @@ import TaxInput from "./TaxInput";
 import AdjustmentInput from "./AdjustmentInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
+import KaisukenCsvImport from "./KaisukenCsvImport";
 import SendPayslipsButton from "./SendPayslipsButton";
 
 function pad(n: number) {
@@ -163,6 +164,7 @@ export default async function PayrollPage({
           <h2>スタッフ別 給与</h2>
           <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <FinalizeButton month={month} />
+            <KaisukenCsvImport month={month} />
             <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px" }} href={`/admin/payroll/print?month=${month}`}>
               🖨 給与明細を印刷
             </a>
@@ -273,7 +275,8 @@ export default async function PayrollPage({
             <strong>指名バック＝指名本数×3,000円（税抜・固定）</strong>を総支給に加算（本数はこの表で入力＝自動保存）。
             <strong>調整</strong>は立替精算・臨時手当・貸付返済などの増減（プラス=支給／マイナス=控除）。
             摘要は給与明細に印字。<strong>非課税</strong>を選ぶと交通費と同じく課税対象から外れます（立替金の精算など）。
-            <strong>回数券バック＝本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）×本数</strong>を加算（新規＋更新の合計本数をこの表で入力）。
+            <strong>回数券バック＝本数連動（1〜3本¥1,000／4〜7本¥2,000／8本〜¥3,000）×本数</strong>を加算。
+            本数は本部システムの<strong>「来店記録」CSV</strong>を上の「来店記録CSVで回数券を取込」に読ませると担当別に自動集計されます（この表で手直しも可）。
           </p>
           <p className="help" style={{ marginTop: 6, marginBottom: 0 }}>
             <strong>週平均</strong>は月内の各週（月〜日）の実働合計の平均（実績）。社保加入の目安は下の「社会保険 加入判定」を参照。

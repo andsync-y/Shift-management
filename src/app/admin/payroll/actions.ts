@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { tallyVisitCsv, type VisitTallyResult } from "@/lib/fc-hq/visits-csv";
 
 // 月ごとの指名本数を保存（オーナーのみ）。指名バック＝単価×本数 が総支給に加算される。
 export async function setNominationCount(
@@ -167,4 +168,64 @@ export async function setPayrollAdjustment(
 
   revalidatePath("/admin/payroll");
   return { ok: true };
+}
+
+// 本部システムの「来店記録」CSVから、当月の回数券販売本数を担当別に取り込む。
+// 手入力していた回数券本数を置き換える（CSVに出てくる担当は0本でも0で上書きする）。
+// CSVはブラウザ側で読んで文字列で渡す（本部システムへ直接アクセスはしない）。
+export async function importKaisukenFromVisitCsv(
+  month: string,
+  csvText: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+  if (!csvText.trim()) return { ok: false, message: "CSVが空です。" };
+
+  let tally: VisitTallyResult;
+  try {
+    tally = tallyVisitCsv(csvText, month);
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "CSVの解析に失敗しました。" };
+  }
+
+  const [y, mo] = month.split("-");
+  const label = `${y}年${Number(mo)}月`;
+  if (tally.monthRows === 0) {
+    const has = tally.monthsInCsv.length ? `（このCSVに入っているのは ${tally.monthsInCsv.join("・")}）` : "";
+    return { ok: false, message: `${label}の来店記録がCSVにありません${has}。本部システムで期間を変えて出力してください。` };
+  }
+
+  const supabase = await createClient();
+  const { data: staff } = await supabase
+    .from("profiles")
+    .select("id, full_name, display_name")
+    .eq("role", "staff");
+  const byName = new Map<string, string>();
+  for (const s of (staff ?? []) as { id: string; full_name: string; display_name: string | null }[]) {
+    if (s.display_name) byName.set(s.display_name.trim(), s.id);
+    byName.set(s.full_name.trim(), s.id);
+  }
+
+  const rows: { staff_id: string; month: string; count: number }[] = [];
+  const unmatched: string[] = [];
+  for (const t of tally.tallies) {
+    const id = byName.get(t.staff);
+    if (id) rows.push({ staff_id: id, month, count: t.kaisuken });
+    else unmatched.push(`${t.staff}(${t.kaisuken}本)`);
+  }
+  if (rows.length) {
+    const { error } = await supabase
+      .from("kaisuken_counts")
+      .upsert(rows, { onConflict: "staff_id,month" });
+    if (error) return { ok: false, message: `取込に失敗: ${error.message}` };
+  }
+
+  revalidatePath("/admin/payroll");
+  const warn = unmatched.length
+    ? `／スタッフ名が一致せず取り込めなかった担当: ${unmatched.join("・")}（表示名を本部の表記に合わせてください）`
+    : "";
+  return {
+    ok: true,
+    message: `${label}の回数券 計${tally.totalKaisuken}本を ${rows.length}名 に取り込みました（来店${tally.monthRows}件）${warn}。`,
+  };
 }

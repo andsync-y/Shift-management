@@ -60,6 +60,10 @@ export default function KpiForm({ initial, asOf }: { initial: FcKpiData; asOf: s
               <textarea name="newSales" className="input" rows={4} defaultValue={linesNew(y.newSales)} placeholder={"AINA,10\nKAYO,6"} />
             </div>
             <div className="field">
+              <label>更新販売スタッフ（1行に「名前,回数券の回数」）</label>
+              <textarea name="renewals" className="input" rows={4} defaultValue={linesNew(y.renewals)} placeholder={"AINA,3\nKAYO,5"} />
+            </div>
+            <div className="field">
               <label>指名獲得スタッフ（1行に「名前,件数」※件数は任意）</label>
               <textarea name="nominations" className="input" rows={4} defaultValue={linesNom(y.nominations)} placeholder={"AINA,3\nMIYUKA"} />
             </div>
