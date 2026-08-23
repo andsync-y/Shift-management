@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/server";
 import { tallyVisitCsv, type VisitTallyResult } from "@/lib/fc-hq/visits-csv";
 import { buildNameIndex, matchStaffCounts, ticketCountsFrom, type StaffNameRow } from "@/lib/fc-kpi/match";
 import type { FcKpiData } from "@/lib/fc-kpi/types";
+import { dispatchKpiSync } from "@/lib/fc-kpi/dispatch";
 
 type SupabaseLike = Awaited<ReturnType<typeof createClient>>;
 
@@ -194,12 +195,45 @@ export async function applyFcKaisuken(month: string): Promise<{ ok: boolean; mes
 
 // 給与確定ボタン用。指名数と回数券本数をまとめて取り込む。
 // 片方だけ取れないこともある（更新販売数の列が無い等）ので、結果は個別に返す。
-export async function applyFcMonthly(month: string): Promise<{ ok: boolean; message: string }> {
+// kaisukenMissing=true のときは画面側が「本部から今すぐ取得」に進む。
+export async function applyFcMonthly(
+  month: string
+): Promise<{ ok: boolean; message: string; kaisukenMissing: boolean }> {
   const [nom, kais] = await Promise.all([applyFcNominations(month), applyFcKaisuken(month)]);
   return {
     ok: nom.ok || kais.ok,
     message: [nom.message, kais.message].join(" / "),
+    kaisukenMissing: !kais.ok,
   };
+}
+
+// 本部スクレイパ（GitHub Actions）を今すぐ起動する。
+// アプリからは本部システムへ直接アクセスできない（Chromiumが動かない・自動アクセスは
+// ランナー側の資格情報で行う）ため、取得は Actions に投げて結果を待つ形になる。
+export async function requestFcSync(): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  const r = await dispatchKpiSync();
+  return { ok: r.ok, message: r.message };
+}
+
+// 取得完了の判定用。対象月のスナップショットの更新時刻と、回数券販売数の有無を返す。
+// 画面側はこれを数秒おきに呼び、updatedAt が変わる（＝新しい取得が入った）のを待つ。
+export async function fcSnapshotState(
+  month: string
+): Promise<{ updatedAt: string | null; hasTicketSales: boolean }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { updatedAt: null, hasTicketSales: false };
+  const supabase = await createClient();
+  const { data } = await supabase
+    .from("fc_kpi")
+    .select("updated_at, data")
+    .eq("data->month->>month", month)
+    .order("as_of", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  const row = data as { updated_at: string; data?: FcKpiData } | null;
+  const t = row?.data?.month?.staffTicketSales;
+  return { updatedAt: row?.updated_at ?? null, hasTicketSales: Array.isArray(t) && t.length > 0 };
 }
 
 // 月別の給与調整（立替精算・臨時手当・貸付返済など）を保存する。
