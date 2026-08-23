@@ -4,6 +4,10 @@ import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { tallyVisitCsv, type VisitTallyResult } from "@/lib/fc-hq/visits-csv";
+import { buildNameIndex, matchStaffCounts, ticketCountsFrom, type StaffNameRow } from "@/lib/fc-kpi/match";
+import type { FcKpiData } from "@/lib/fc-kpi/types";
+
+type SupabaseLike = Awaited<ReturnType<typeof createClient>>;
 
 // 月ごとの指名本数を保存（オーナーのみ）。指名バック＝単価×本数 が総支給に加算される。
 export async function setNominationCount(
@@ -75,61 +79,114 @@ export async function setIncomeTaxOverride(
   return { ok: true };
 }
 
-// 本部KPI（最新スナップショット）の担当別 指名数を、当月の指名本数として一括取込する。
-export async function applyFcNominations(
-  month: string
-): Promise<{ ok: boolean; message: string }> {
-  await requireAdmin();
-  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
-  const supabase = await createClient();
+// ===== 本部KPI（fc_kpi スナップショット）からの一括取込 =====
+// 指名数・回数券本数（新規＋更新）を担当別に取り込む。取り込み元は日次スクレイパが
+// 保存した当月スナップショット。過去月は月内に取得した分が残っていれば取り込める。
 
-  // 対象月のKPIを持つ最新スナップショットを検索（過去月は月末頃のスナップショットが該当）。
-  type Snap = { data?: { month?: { month?: string; staffNominations?: { name: string; count: number }[] } } };
-  const { data: snap } = await supabase
+type MonthSnapshot = NonNullable<FcKpiData["month"]>;
+
+// 対象月のKPIを持つ最新スナップショットを取る（過去月は月末頃の取得分が該当）。
+async function fetchMonthSnapshot(
+  supabase: SupabaseLike,
+  month: string
+): Promise<MonthSnapshot | null> {
+  const { data } = await supabase
     .from("fc_kpi")
     .select("data")
     .eq("data->month->>month", month)
     .order("as_of", { ascending: false })
     .limit(1)
     .maybeSingle();
-  const m = (snap as Snap | null)?.data?.month;
+  return ((data as { data?: FcKpiData } | null)?.data?.month as MonthSnapshot | undefined) ?? null;
+}
+
+function monthLabel(month: string): string {
+  const [y, mo] = month.split("-");
+  return `${y}年${Number(mo)}月`;
+}
+
+// 当月なら「日次取得がまだ」、過去月なら「遡取得は不可＝手入力で十分」を正しく案内する。
+function noSnapshotMessage(month: string, what: string): string {
+  const jstNow = new Date(Date.now() + 9 * 3600 * 1000);
+  const currentMonth = `${jstNow.getUTCFullYear()}-${String(jstNow.getUTCMonth() + 1).padStart(2, "0")}`;
+  const label = monthLabel(month);
+  return month === currentMonth
+    ? `本部の${label}の${what}データがまだありません。「店舗KPI」の日次取得の実行後にもう一度お試しください。`
+    : `${label}のKPIスナップショットが見つかりませんでした。過去月のデータは本部から遡って取得できないため、${what}は表に直接入力してください（すでに入力済みであればこの取込は不要です）。`;
+}
+
+async function fetchNameIndex(supabase: SupabaseLike): Promise<Map<string, string>> {
+  const { data } = await supabase.from("profiles").select("id, full_name, display_name").eq("role", "staff");
+  return buildNameIndex((data ?? []) as StaffNameRow[]);
+}
+
+// 担当別 指名数 → nomination_counts。
+export async function applyFcNominations(month: string): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+  const supabase = await createClient();
+
+  const m = await fetchMonthSnapshot(supabase, month);
   if (!m || !Array.isArray(m.staffNominations)) {
-    // 当月なら「日次取得がまだ」、過去月なら「遡取得は不可＝手入力で十分」を正しく案内する。
-    const jstNow = new Date(Date.now() + 9 * 3600 * 1000);
-    const currentMonth = `${jstNow.getUTCFullYear()}-${String(jstNow.getUTCMonth() + 1).padStart(2, "0")}`;
-    const [y, mo] = month.split("-");
-    const label = `${y}年${Number(mo)}月`;
-    return {
-      ok: false,
-      message:
-        month === currentMonth
-          ? `本部の${label}の指名数データがまだありません。「店舗KPI」の日次取得の実行後にもう一度お試しください。`
-          : `${label}のKPIスナップショットが見つかりませんでした。過去月のデータは本部から遡って取得できないため、指名本数は表に直接入力してください（すでに入力済みであればこの取込は不要です）。`,
-    };
+    return { ok: false, message: noSnapshotMessage(month, "指名数") };
   }
 
-  const { data: staff } = await supabase.from("profiles").select("id, full_name, display_name").eq("role", "staff");
-  const byName = new Map<string, string>();
-  for (const s of (staff ?? []) as { id: string; full_name: string; display_name: string | null }[]) {
-    if (s.display_name) byName.set(s.display_name.trim(), s.id);
-    byName.set(s.full_name.trim(), s.id);
-  }
-
-  const rows: { staff_id: string; month: string; count: number }[] = [];
-  const unmatched: string[] = [];
-  for (const x of m.staffNominations) {
-    const id = byName.get((x.name ?? "").trim());
-    if (id) rows.push({ staff_id: id, month, count: Math.max(0, Math.round(x.count) || 0) });
-    else if (x.name) unmatched.push(x.name);
-  }
+  const index = await fetchNameIndex(supabase);
+  const { rows, unmatched } = matchStaffCounts(index, m.staffNominations, "件");
   if (rows.length) {
-    const { error } = await supabase.from("nomination_counts").upsert(rows, { onConflict: "staff_id,month" });
-    if (error) return { ok: false, message: `取込に失敗: ${error.message}` };
+    const { error } = await supabase
+      .from("nomination_counts")
+      .upsert(rows.map((r) => ({ ...r, month })), { onConflict: "staff_id,month" });
+    if (error) return { ok: false, message: `指名数の取込に失敗: ${error.message}` };
   }
 
   revalidatePath("/admin/payroll");
   const warn = unmatched.length ? `（未一致: ${unmatched.join("・")}）` : "";
   return { ok: true, message: `FCの指名数を ${rows.length}名 取り込みました${warn}。` };
+}
+
+// 担当別 新規販売数＋更新販売数 → kaisuken_counts（回数券バックの本数）。
+// 来店記録CSVの取込と同じ表に書き込むので、どちらで入れても結果は同じになる。
+export async function applyFcKaisuken(month: string): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+  const supabase = await createClient();
+
+  const m = await fetchMonthSnapshot(supabase, month);
+  if (!m || !Array.isArray(m.staffTicketSales) || m.staffTicketSales.length === 0) {
+    return { ok: false, message: noSnapshotMessage(month, "回数券販売数") };
+  }
+
+  const { entries, renewalMissing } = ticketCountsFrom(m.staffTicketSales);
+  const index = await fetchNameIndex(supabase);
+  const { rows, unmatched, total } = matchStaffCounts(index, entries, "本");
+  if (rows.length) {
+    const { error } = await supabase
+      .from("kaisuken_counts")
+      .upsert(rows.map((r) => ({ ...r, month })), { onConflict: "staff_id,month" });
+    if (error) return { ok: false, message: `回数券本数の取込に失敗: ${error.message}` };
+  }
+
+  revalidatePath("/admin/payroll");
+  const warn = unmatched.length ? `（未一致: ${unmatched.join("・")}）` : "";
+  // 更新が取れていないと本数が不足＝バックの段階単価まで下がるので、黙って通さない。
+  const miss = renewalMissing
+    ? "　⚠️本部の担当別表から「更新販売数」を取得できていないため新規のみの本数です。来店記録CSVの取込で補ってください。"
+    : "";
+  return {
+    ok: true,
+    message: `FCの回数券 計${total}本（新規＋更新）を ${rows.length}名 取り込みました${warn}。${miss}`,
+  };
+}
+
+// 給与確定ボタン用。指名数と回数券本数をまとめて取り込む。
+// 片方だけ取れないこともある（更新販売数の列が無い等）ので、結果は個別に返す。
+export async function applyFcMonthly(month: string): Promise<{ ok: boolean; message: string }> {
+  const [nom, kais] = await Promise.all([applyFcNominations(month), applyFcKaisuken(month)]);
+  return {
+    ok: nom.ok || kais.ok,
+    message: [nom.message, kais.message].join(" / "),
+  };
 }
 
 // 月別の給与調整（立替精算・臨時手当・貸付返済など）を保存する。
@@ -188,35 +245,23 @@ export async function importKaisukenFromVisitCsv(
     return { ok: false, message: e instanceof Error ? e.message : "CSVの解析に失敗しました。" };
   }
 
-  const [y, mo] = month.split("-");
-  const label = `${y}年${Number(mo)}月`;
+  const label = monthLabel(month);
   if (tally.monthRows === 0) {
     const has = tally.monthsInCsv.length ? `（このCSVに入っているのは ${tally.monthsInCsv.join("・")}）` : "";
     return { ok: false, message: `${label}の来店記録がCSVにありません${has}。本部システムで期間を変えて出力してください。` };
   }
 
   const supabase = await createClient();
-  const { data: staff } = await supabase
-    .from("profiles")
-    .select("id, full_name, display_name")
-    .eq("role", "staff");
-  const byName = new Map<string, string>();
-  for (const s of (staff ?? []) as { id: string; full_name: string; display_name: string | null }[]) {
-    if (s.display_name) byName.set(s.display_name.trim(), s.id);
-    byName.set(s.full_name.trim(), s.id);
-  }
-
-  const rows: { staff_id: string; month: string; count: number }[] = [];
-  const unmatched: string[] = [];
-  for (const t of tally.tallies) {
-    const id = byName.get(t.staff);
-    if (id) rows.push({ staff_id: id, month, count: t.kaisuken });
-    else unmatched.push(`${t.staff}(${t.kaisuken}本)`);
-  }
+  const index = await fetchNameIndex(supabase);
+  const { rows, unmatched } = matchStaffCounts(
+    index,
+    tally.tallies.map((t) => ({ name: t.staff, count: t.kaisuken })),
+    "本"
+  );
   if (rows.length) {
     const { error } = await supabase
       .from("kaisuken_counts")
-      .upsert(rows, { onConflict: "staff_id,month" });
+      .upsert(rows.map((r) => ({ ...r, month })), { onConflict: "staff_id,month" });
     if (error) return { ok: false, message: `取込に失敗: ${error.message}` };
   }
 

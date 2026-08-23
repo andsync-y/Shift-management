@@ -10,6 +10,12 @@ function linesNew(rows?: { staff: string; ticket?: number | null }[]) {
 function linesNom(rows?: { staff: string; count?: number | null }[]) {
   return (rows ?? []).map((r) => (r.count ? `${r.staff},${r.count}` : r.staff)).join("\n");
 }
+function linesNameCount(rows?: { name: string; count: number }[]) {
+  return (rows ?? []).map((r) => `${r.name},${r.count}`).join("\n");
+}
+function linesTicket(rows?: { name: string; newCount: number; renewalCount: number | null }[]) {
+  return (rows ?? []).map((r) => `${r.name},${r.newCount},${r.renewalCount ?? ""}`).join("\n");
+}
 
 // 本部KPIの手入力フォーム（フォールバック）。スクレイパが入れた最新値を初期表示し、上書き保存できる。
 export default function KpiForm({ initial, asOf }: { initial: FcKpiData; asOf: string }) {
@@ -43,6 +49,20 @@ export default function KpiForm({ initial, asOf }: { initial: FcKpiData; asOf: s
             <div className="field"><label>新規販売率（%）</label><input name="newRate" type="number" step="0.1" className="input" defaultValue={pctVal(m.newRate)} /></div>
             <div className="field"><label>指名数</label><input name="nominationCount" type="number" className="input" defaultValue={m.nominationCount ?? ""} /></div>
             <div className="field"><label>指名率（%）</label><input name="nominationRate" type="number" step="0.1" className="input" defaultValue={pctVal(m.nominationRate)} /></div>
+            <div className="field"><label>更新販売数</label><input name="renewalCount" type="number" className="input" defaultValue={m.renewalCount ?? ""} /></div>
+          </div>
+          {/* 担当別＝給与の「FC実績を取込んで給与確定」が読む値。自動取得が失敗したらここで直す。 */}
+          <div className="profile-cols" style={{ marginTop: 14 }}>
+            <div className="field">
+              <label>担当別 回数券販売数（1行に「名前,新規,更新」）</label>
+              <textarea name="staffTicketSales" className="input" rows={5} defaultValue={linesTicket(m.staffTicketSales)} placeholder={"AINA,5,2\nKAYO,2,0"} />
+              <p className="help" style={{ margin: "4px 0 0" }}>給与の回数券バックの本数＝新規＋更新。更新を空にすると新規のみで取り込まれます。</p>
+            </div>
+            <div className="field">
+              <label>担当別 指名数（1行に「名前,件数」）</label>
+              <textarea name="staffNominations" className="input" rows={5} defaultValue={linesNameCount(m.staffNominations)} placeholder={"AINA,12\nKAYO,5"} />
+              <p className="help" style={{ margin: "4px 0 0" }}>名前は本部の表記（スタッフの<strong>表示名</strong>）に合わせてください。</p>
+            </div>
           </div>
         </div>
       </div>

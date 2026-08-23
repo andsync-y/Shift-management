@@ -127,7 +127,8 @@ async function extractMonth(page) {
   }
   const t = await readTable(page, ["売上", "総来店数", "指名率"]);
   const month = ymd(new Date()).slice(0, 7);
-  if (!t || t.rows.length === 0) return { month, sales: null, newCount: null, newRate: null, nominationCount: null, nominationRate: null };
+  if (!t || t.rows.length === 0)
+    return { month, sales: null, newCount: null, newRate: null, nominationCount: null, nominationRate: null, renewalCount: null, staffNominations: [], staffTicketSales: [] };
   const r = t.rows[0];
   const get = (name) => r[colIndex(t.headers, name)];
 
@@ -144,15 +145,30 @@ async function extractMonth(page) {
     designationSales = toNum(gb("指名"));
   }
 
-  // 担当別の指名数（給与の指名本数 自動入力用）
+  // 担当別の実績（給与の指名本数・回数券本数の自動入力用）。
+  // 同じ「担当別」テーブルから 指名数 / 新規販売数 / 更新販売数 をまとめて読む。
+  // 回数券バックは 新規＋更新 の合計本数なので、更新販売数の列も必ず拾う。
   const staffNominations = [];
+  const staffTicketSales = [];
   const ts = await readTable(page, ["担当", "指名数"]);
   if (ts) {
     const iN = colIndex(ts.headers, "担当");
     const iNom = colIndex(ts.headers, "指名数");
+    const iNew = colIndex(ts.headers, "新規販売数");
+    const iRenew = colIndex(ts.headers, "更新販売数");
+    if (iRenew < 0) console.warn("担当別テーブルに「更新販売数」の列が見つからない:", ts.headers.join("/"));
     for (const r of ts.rows) {
       const name = (r[iN] || "").replace(/\s+/g, " ").trim();
-      if (name) staffNominations.push({ name, count: toNum(r[iNom]) ?? 0 });
+      if (!name) continue;
+      if (iNom >= 0) staffNominations.push({ name, count: toNum(r[iNom]) ?? 0 });
+      if (iNew >= 0) {
+        staffTicketSales.push({
+          name,
+          newCount: toNum(r[iNew]) ?? 0,
+          // 列自体が無いときは 0 ではなく null。取込側で「更新が取れていない」と警告するため。
+          renewalCount: iRenew >= 0 ? toNum(r[iRenew]) ?? 0 : null,
+        });
+      }
     }
   }
 
@@ -166,7 +182,9 @@ async function extractMonth(page) {
     newRate: toRate(get("新規販売率")),
     nominationCount: toNum(get("指名数")),
     nominationRate: toRate(get("指名率")),
+    renewalCount: toNum(get("更新販売数")),
     staffNominations,
+    staffTicketSales,
   };
 }
 

@@ -3,7 +3,7 @@
 本部システム(zn-stretch)に表示される実績を1日1回取得し、受付タブレット（kiosk）に表示する。
 
 ## 表示する内容（kiosk下部「店舗実績」）
-- **当月**：売上 / 新規販売数 / 新規販売率 / 指名数 / 指名率
+- **当月**：売上 / 新規販売数 / 更新販売数 / 新規販売率 / 指名数 / 指名率
 - **昨日**：新規販売したスタッフ（回数券の回数つき）／ **更新販売したスタッフ**（あるときだけ表示）／ 指名を獲得したスタッフ
 
 ## 構成（取得→保存→表示）
@@ -25,7 +25,9 @@
 {
   "asOf": "2026-06-28",
   "month": { "month": "2026-06", "sales": 1234567, "newCount": 42, "newRate": 0.28,
-             "nominationCount": 30, "nominationRate": 0.2 },
+             "nominationCount": 30, "nominationRate": 0.2, "renewalCount": 6,
+             "staffNominations": [ { "name": "AINA", "count": 12 } ],
+             "staffTicketSales": [ { "name": "AINA", "newCount": 5, "renewalCount": 2 } ] },
   "yesterday": { "date": "2026-06-27",
     "newSales": [ { "staff": "AINA", "ticket": 10 } ],
     "renewals": [ { "staff": "KAYO", "ticket": 3 } ],
@@ -44,9 +46,18 @@
 - `tools/fc-kpi-sync/sync.mjs` の `extractMonth` / `extractYesterday` は**実画面に合わせてセレクタを確定**する
   （未確定の間は手入力で運用）。
 
-## 給与への取込（回数券本数）
-月次の回数券バックは、この日次KPIではなく**本部の「来店記録」CSVを給与画面に読ませて**集計する
-（`docs/PAYROLL.md` の回数券バック参照）。日次KPIは kiosk 表示用、CSVは給与用と役割が分かれている。
+## 給与への取込
+スナップショットの **`month.staffNominations`（担当別 指名数）** と
+**`month.staffTicketSales`（担当別 新規販売数・更新販売数）** は、給与画面の
+**「FC実績を取込んで給与確定」** が読む値。指名本数（`nomination_counts`）と
+回数券本数（`kaisuken_counts` ＝ **新規＋更新**）に一括で入る（`docs/PAYROLL.md` 参照）。
+
+- 担当名は本部の表記のまま入るので、スタッフの **表示名（`display_name`）を本部に合わせる**。
+  一致しない担当は取り込まず、給与画面のメッセージに名前と本数を出す。
+- 本部の担当別表から**「更新販売数」の列が取れなかった場合**は `renewalCount: null` で保存され、
+  取込時に⚠️警告が出る。その月は「来店記録CSVの取込」で本数を入れ直す。
+- **自動取得が失敗したときは `/admin/kpi` の「担当別 回数券販売数 / 担当別 指名数」に手入力**すれば
+  同じボタンで取り込める（1行「名前,新規,更新」／「名前,件数」）。
 
 ## 関連
 | ファイル | 役割 |

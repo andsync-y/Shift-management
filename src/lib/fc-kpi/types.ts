@@ -20,6 +20,10 @@ export interface FcKpiData {
     nominationCount?: number; // 指名数
     nominationRate?: number; // 指名率 0-1
     staffNominations?: { name: string; count: number }[]; // 担当別の指名数（給与の指名本数 取込用）
+    renewalCount?: number; // 更新販売数（店舗合計）
+    // 担当別の回数券販売数（給与の回数券本数 取込用）。回数券バックは 新規＋更新 の合計。
+    // renewalCount が null＝本部の表に更新販売数の列が見つからなかった（新規だけで取り込むと不足する）。
+    staffTicketSales?: { name: string; newCount: number; renewalCount: number | null }[];
   };
 }
 
@@ -34,4 +38,37 @@ export function parseStaffLines(text: string): { staff: string; ticket?: number 
       const n = Number(num);
       return { staff: staff || l, ticket: Number.isFinite(n) ? n : null };
     });
+}
+
+// "AINA,3" 形式の行配列 → {name, count}[]（担当別 指名数の手入力用）
+export function parseNameCountLines(text: string): { name: string; count: number }[] {
+  return (text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const [name, num] = l.split(/[,，\t]/).map((x) => x.trim());
+      return { name, count: Math.max(0, Math.round(Number(num)) || 0) };
+    })
+    .filter((x) => x.name);
+}
+
+// "AINA,5,2"（名前,新規販売数,更新販売数）→ 担当別の回数券販売数。
+// 3つ目を省いた "AINA,5" は更新が不明なので renewalCount=null（取込側で警告を出す）。
+export function parseTicketSaleLines(
+  text: string
+): { name: string; newCount: number; renewalCount: number | null }[] {
+  return (text || "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+    .map((l) => {
+      const [name, a, b] = l.split(/[,，\t]/).map((x) => x.trim());
+      return {
+        name,
+        newCount: Math.max(0, Math.round(Number(a)) || 0),
+        renewalCount: b === undefined || b === "" ? null : Math.max(0, Math.round(Number(b)) || 0),
+      };
+    })
+    .filter((x) => x.name);
 }

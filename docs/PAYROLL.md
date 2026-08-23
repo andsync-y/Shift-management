@@ -29,15 +29,22 @@
   - 単価は `NOMINATION_BACK_RATE`（`src/lib/payroll.ts`・既定3000）。スタッフ個別設定は廃止
     （旧 `profiles.nomination_back_rate` 列は残置・未使用）。
   - 指名本数は**給与画面の表で月ごとに手入力**（`nomination_counts`・フォーカスアウトで自動保存）。
-  - **「FC指名数を取込んで給与確定」ボタン**で、本部KPIスナップショットの担当別 指名数を対象月の指名本数に
-    一括取込できる（`applyFcNominations`・表示名で突合）。**対象月のKPIを持つスナップショットを検索**する
+  - **「FC実績を取込んで給与確定」ボタン**で、本部KPIスナップショットの担当別 指名数を対象月の指名本数に
+    一括取込できる（`applyFcMonthly` → `applyFcNominations`・表示名で突合。同じボタンで回数券本数も入る）。
+    **対象月のKPIを持つスナップショットを検索**する
     ため、過去月も月内に取得したスナップショットが残っていれば取込可。見つからない場合は
     当月＝「日次取得後に再実行」／過去月＝「遡取得は不可・手入力で対応（入力済みなら取込不要）」を案内する。
 - **回数券バック**（**2026年7月分から運用**）：`回数券バック = 本数連動の段階単価 × 本数`（`kaisukenBack` / `KAISUKEN_BACK_TIERS`・`src/lib/payroll.ts`）。
   - 段階単価（当月の回数券本数で決まる）：**1〜3本 ¥1,000 ／ 4〜7本 ¥2,000 ／ 8本〜 ¥3,000**。1本目から支給・0本なら0。
   - 判定は「販売率(%)」ではなく「**本数（絶対数）**」＝多く売るほど単価UP。新規を多く取る動機と同方向で、%の小サンプル・新規敬遠を回避。
-  - **本数 = 新規販売＋更新販売の合計**（`kaisuken_counts`）。入れ方は2通り。
-    - **CSV取込（推奨）**：本部システムの「来店記録」CSVを出力し、給与画面の
+  - **本数 = 新規販売＋更新販売の合計**（`kaisuken_counts`）。入れ方は3通り（どれも同じ表に書く）。
+    - **FC実績の取込（既定）**：給与画面の **「FC実績を取込んで給与確定」** で、指名数と一緒に
+      当月の回数券本数も入る（`applyFcMonthly` → `applyFcKaisuken`）。元データは日次スクレイパが
+      保存した `fc_kpi` スナップショットの `month.staffTicketSales`（本部ダッシュボードの担当別
+      **新規販売数＋更新販売数**）。
+      - 本部の表から**更新販売数の列を取れなかった場合は新規のみ**になるため、取込結果に
+        ⚠️付きで警告を出す（黙って少ない本数を通さない）。その場合は下のCSV取込で補う。
+    - **CSV取込（検算・過去月用）**：本部システムの「来店記録」CSVを出力し、給与画面の
       **「📄 来店記録CSVで回数券を取込」**に読ませる（`importKaisukenFromVisitCsv` →
       `src/lib/fc-hq/visits-csv.ts` の `tallyVisitCsv`）。CSVはブラウザで読んで文字列で送るだけで、
       アプリから本部システムへは接続しない。UTF-8(BOM付き)・Shift_JIS どちらでも可。
@@ -156,6 +163,7 @@
 - `supabase/migrations/0029_nomination_back.sql`：`profiles.nomination_back_rate`（指名バック単価）＋ `nomination_counts`（月別指名本数）。
 - `supabase/migrations/0037_kaisuken_back.sql`：`kaisuken_counts`（月別 回数券販売本数）。回数券バック（本数連動）の元データ。
 - `src/lib/fc-hq/visits-csv.ts`：本部「来店記録」CSVのパース・担当別集計（回数券本数／指名／新規成約率）。テストは `tests/visits-csv.test.ts`。
+- `src/lib/fc-kpi/match.ts`：本部の担当名 → スタッフの突合（表示名優先）と 新規＋更新 の合算。FC取込・CSV取込で共用。テストは `tests/fc-kpi-match.test.ts`。
 - `supabase/migrations/0038_payroll_deductions.sql`：`profiles` に税・保険設定（`tax_column` / `dependents_count` / `emp_insurance_enrolled` / `shaho_enrolled` / `kaigo_applicable`）＋ `income_tax_overrides`（月別 源泉の手入力）。
 - `supabase/migrations/0031_bank_account.sql`：`profiles` に振込先口座（銀行/支店コード・預金種目・口座番号・受取人カナ）。
 - `supabase/migrations/0042_bank_names.sql`：`profiles.bank_name` / `branch_name`（振込先の金融機関名・支店名。銀行によっては全銀ファイルで必須）。
