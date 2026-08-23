@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { parseStaffLines, type FcKpiData } from "@/lib/fc-kpi/types";
+import { parseNameCountLines, parseTicketSaleLines, parseStaffLines, type FcKpiData } from "@/lib/fc-kpi/types";
 
 function pad(n: number) {
   return String(n).padStart(2, "0");
@@ -43,10 +43,14 @@ export async function saveKpi(
       newRate: pctOr("newRate"),
       nominationCount: numOr("nominationCount"),
       nominationRate: pctOr("nominationRate"),
+      renewalCount: numOr("renewalCount"),
+      staffNominations: parseNameCountLines(g("staffNominations")),
+      staffTicketSales: parseTicketSaleLines(g("staffTicketSales")),
     },
     yesterday: {
       date: g("yDate") || undefined,
       newSales: parseStaffLines(g("newSales")),
+      renewals: parseStaffLines(g("renewals")),
       nominations: parseStaffLines(g("nominations")).map((x) => ({ staff: x.staff, count: x.ticket })),
     },
   };

@@ -26,6 +26,8 @@ export interface PayslipData {
   nominationBack: number;
   kaisukenCount: number;
   kaisukenBack: number;
+  adjustment: number; // 月別の調整（立替精算・臨時手当など。プラス=支給／マイナス=控除）
+  adjustmentLabel: string | null;
   gross: number;
   healthInsurance: number;
   pension: number;
@@ -146,8 +148,18 @@ function drawPayslip(page: PDFPage, font: PDFFont, d: PayslipData) {
       values: [yen(d.basePay), yen(d.overtimePay), yen(d.nightPay), yen(d.commute)],
     },
     {
-      labels: [`指名バック（${d.nominationCount}本）`, `回数券バック（${d.kaisukenCount}本）`, "", "支給額合計"],
-      values: [yen(d.nominationBack), yen(d.kaisukenBack), "", yen(d.gross)],
+      labels: [
+        `指名バック（${d.nominationCount}本）`,
+        `回数券バック（${d.kaisukenCount}本）`,
+        d.adjustment !== 0 ? d.adjustmentLabel ?? "調整" : "調整",
+        "支給額合計",
+      ],
+      values: [
+        yen(d.nominationBack),
+        yen(d.kaisukenBack),
+        d.adjustment !== 0 ? yen(d.adjustment) : "—",
+        yen(d.gross),
+      ],
       bold: [3],
     },
   ]);

@@ -17,6 +17,7 @@ import type {
   TimeOffRequest,
 } from "@/lib/types";
 import type { GeneratedAssignment } from "./types";
+import { capShiftLength, netHours } from "@/lib/work-hours";
 
 export interface ClaudeGenerateInput {
   year: number;
@@ -60,12 +61,6 @@ interface ScheduleJson {
 }
 
 const TIME_RE = /^\d{2}:\d{2}$/;
-
-function durationHours(start: string, end: string): number {
-  const [sh, sm] = start.split(":").map(Number);
-  const [eh, em] = end.split(":").map(Number);
-  return (eh * 60 + em - (sh * 60 + sm)) / 60;
-}
 
 // テキストから JSON オブジェクトを抽出する（コードフェンスや前後文を許容）。
 function extractJson(text: string): ScheduleJson | null {
@@ -148,6 +143,10 @@ export async function generateShiftsWithClaude(
 
   const assignments: GeneratedAssignment[] = [];
   const staffHours: Record<string, number> = {};
+  // 1日の所定勤務時間（正社員など）。Claudeが長い枠を返してもその長さに収める。
+  const capById = new Map(
+    input.staff.filter((s) => s.is_active).map((s) => [s.id, s.standard_shift_hours ?? null])
+  );
   let rejected = 0;
 
   for (const member of parsed.schedule) {
@@ -175,14 +174,16 @@ export async function generateShiftsWithClaude(
         continue;
       }
 
+      const block = capShiftLength(start_time, end_time, capById.get(staff_id) ?? null);
       assignments.push({
         staff_id,
         work_date,
-        start_time,
-        end_time,
+        start_time: block.start,
+        end_time: block.end,
         note: shiftType || null,
       });
-      staffHours[staff_id] = (staffHours[staff_id] ?? 0) + durationHours(start_time, end_time);
+      // 集計は実働（休憩控除後）。給与の実働時間とそのまま比較できるようにする。
+      staffHours[staff_id] = (staffHours[staff_id] ?? 0) + netHours(block.start, block.end);
     }
   }
 

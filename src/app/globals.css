@@ -148,12 +148,15 @@ body {
     gap: 16px;
     padding: 24px 34px;
     border-bottom: 1px solid var(--line);
+    /* 操作ボタンが増えても見出しを潰さない。入り切らなければ丸ごと次の行に送る。 */
+    flex-wrap: wrap;
   }
   .section-head h2 {
     font-size: 17px;
     font-weight: 500;
     margin: 0;
     letter-spacing: 0.01em;
+    flex-shrink: 0;
   }
   .section-body {
     padding: 28px 34px 34px;
@@ -2334,7 +2337,11 @@ body {
 .total-item .tname { font-size:14px; color:var(--ink); }
 .total-item .thours { font-family:"Archivo",sans-serif; font-weight:300; font-size:24px;
   letter-spacing:-0.01em; color:var(--ink); }
+.total-item .thours { text-align:right; }
 .total-item .thours small { font-size:13px; color:var(--ink-3); margin-left:2px; font-weight:400; }
+/* 実働の下に「日数 / 拘束h」を小さく添える（1画面で内訳まで分かるように） */
+.total-item .thours .tsub { display:block; margin:1px 0 0; font-size:11px; letter-spacing:0;
+  font-family:inherit; color:var(--ink-3); }
 
 /* シフト期間一覧：狭い画面でバッジが見切れないように */
 @media (max-width: 760px) {
@@ -2589,7 +2596,8 @@ body {
 
 .tc-row {
   display: grid;
-  grid-template-columns: minmax(96px, 1fr) 104px auto 104px 18px auto auto;
+  /* 日付＋時刻（datetime-local）を表示するため入力欄の幅を確保する */
+  grid-template-columns: minmax(88px, 1fr) 168px auto 168px 40px auto auto;
   gap: 10px; align-items: center;
   padding: 5px 16px; border-bottom: 1px solid var(--line);
   white-space: nowrap;

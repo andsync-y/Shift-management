@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import { applyFcNominations } from "./actions";
+import { applyFcMonthly } from "./actions";
 
-// FCの当月指名数を一括取込んで給与を確定（再計算）するボタン。
+// FCの当月実績（指名数・回数券本数＝新規＋更新）を一括取込んで給与を確定（再計算）するボタン。
 export default function FinalizeButton({ month }: { month: string }) {
   const [pending, start] = useTransition();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
@@ -17,12 +17,12 @@ export default function FinalizeButton({ month }: { month: string }) {
         disabled={pending}
         onClick={() =>
           start(async () => {
-            const r = await applyFcNominations(month);
+            const r = await applyFcMonthly(month);
             setMsg({ ok: r.ok, text: r.message });
           })
         }
       >
-        {pending ? "取込中…" : "FC指名数を取込んで給与確定"}
+        {pending ? "取込中…" : "FC実績を取込んで給与確定"}
       </button>
       {msg && (
         <span className="help" style={{ margin: 0, color: msg.ok ? "#3d6b4f" : "#9a3a30" }}>

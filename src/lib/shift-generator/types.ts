@@ -41,7 +41,11 @@ export interface GenerateResult {
   assignments: GeneratedAssignment[];
   // 充足できなかった枠（人手不足）の一覧
   shortages: GeneratedSlotReport[];
-  // 集計（スタッフごとの合計労働時間など）
+  // 集計：スタッフごとの合計【実働】時間（休憩控除後・給与と同じ数え方）
   staffHours: Record<string, number>;
+  // 同じく合計【拘束】時間（出勤〜退勤・休憩控除前）
+  staffClockedHours: Record<string, number>;
+  // 1日の所定勤務時間に合わせて短縮したシフトの説明（人が読む用）
+  trimmed: string[];
   warnings: string[];
 }

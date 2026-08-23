@@ -15,6 +15,7 @@ import type {
   Profile,
   TimeOffRequest,
 } from "@/lib/types";
+import { shiftLengthLabel } from "@/lib/work-hours";
 
 const DAY_JA = ["日", "月", "火", "水", "木", "金", "土"];
 
@@ -61,6 +62,9 @@ ${shiftTypeLines}
 11. 各スタッフの「固定シフト」は毎週その曜日・時間に必ず配置する（承認済みお休みと重なる日を除く）
 12. 「社会保険=加入」のスタッフは週30時間以上を必ず確保する
 13. 「社会保険=非加入」のスタッフは週30時間未満に抑える（30時間以上にしない＝意図しない社保加入義務を防ぐ）
+14. 「1日の勤務時間」が指定されているスタッフ（正社員など）は、その拘束時間ちょうどで配置する
+    （例: 8.5h勤務＝実働7.5h。早番なら 09:30〜18:00、遅番なら 13:30〜22:00）
+15. 週の時間はすべて【実働】（休憩控除後）で数える。拘束時間ではない
 
 ## 日別人数配置ルール
 - 土曜: 最低${rules.staffingRules.saturday.min}名、目標${rules.staffingRules.saturday.target}名
@@ -223,8 +227,12 @@ export function buildUserContent(params: BuildUserPromptParams): string {
       return `- id: ${s.id}
     氏名: ${s.full_name}
     雇用形態: ${s.employment_type === "full_time" ? "正社員" : "アルバイト"}
-    社会保険: ${shaho}
-    週の希望時間: ${s.min_hours_per_week}〜${s.max_hours_per_week}h
+    社会保険: ${shaho}${
+      s.standard_shift_hours
+        ? `\n    1日の勤務時間: ${shiftLengthLabel(s.standard_shift_hours)}（この長さで固定・超えない）`
+        : ""
+    }
+    週の希望時間: ${s.min_hours_per_week}〜${s.max_hours_per_week}h（実働）
     固定シフト(毎週必ずこの曜日・時間に配置):
 ${fixed || "      （なし）"}
     勤務可能(希望シフト):

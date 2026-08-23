@@ -20,8 +20,10 @@ export const EMP_INSURANCE_RATE = 0.005; // 0.5%
 // --- 社会保険 料率 -----------------------------------------------------
 // ⚠️ 健康保険は協会けんぽ岐阜支部の当年度料率に更新すること（毎年3月改定）。
 //    下記は暫定値。shaho_enrolled=false のスタッフには使われない。
-export const KENPO_RATE = 0.0991; // 健康保険 9.91%（労使計・暫定/要更新）
-export const KAIGO_RATE = 0.0159; // 介護保険 1.59%（40〜64歳・労使計・暫定/要更新）
+// 協会けんぽ 岐阜県支部の料率（労使計）。⚠️ 毎年3月分（4月納付分）から改定される。
+// 改定が公表されたら必ずここを更新すること（都道府県ごとに異なる）。
+export const KENPO_RATE = 0.098; // 健康保険 9.80%（令和8年度・3月分〜・岐阜県）
+export const KAIGO_RATE = 0.0159; // 介護保険 1.59%（40〜64歳・労使計・⚠️令和8年度の告示に要確認）
 export const KOSEI_NENKIN_RATE = 0.183; // 厚生年金 18.3%（労使計・法定固定）
 
 // 標準報酬月額（健康保険 全50等級の下限→標準報酬）。厚生年金はこのうち
@@ -101,10 +103,17 @@ function roundZeni(x: number): number {
 export interface DeductionInput {
   gross: number; // 総支給（額面・交通費含む）
   commute: number; // うち非課税交通費（課税対象から除外）
+  nonTaxable?: number; // うち非課税の調整額（立替精算など・課税対象から除外）
   taxColumn: TaxColumn;
   dependents: number; // 扶養親族等の数（甲欄）
   empInsuranceEnrolled: boolean;
   shahoEnrolled: boolean;
+  /**
+   * 標準報酬月額の正式決定額（年金機構の通知書の額）。
+   * 標準報酬月額は資格取得時・定時決定で固定されるため、決まっていれば必ずこれを使う。
+   * 未設定（null）のときだけ当月報酬から等級表で推計する（簡易方式）。
+   */
+  smrOfficial?: number | null;
   kaigoApplicable: boolean;
   taxOverride: number | null; // 源泉の手入力（あれば常に優先）
 }
@@ -139,7 +148,10 @@ export function computeDeductions(input: DeductionInput): DeductionResult {
   let pension = 0;
   let smr: number | null = null;
   if (input.shahoEnrolled && gross > 0) {
-    smr = standardMonthlyRemuneration(gross);
+    // 正式決定額があればそれを使う。無ければ当月報酬から推計（簡易方式）。
+    smr = input.smrOfficial && input.smrOfficial > 0
+      ? input.smrOfficial
+      : standardMonthlyRemuneration(gross);
     const healthRate = KENPO_RATE + (input.kaigoApplicable ? KAIGO_RATE : 0);
     healthInsurance = roundZeni((smr * healthRate) / 2);
     const pensionSmr = Math.min(650000, Math.max(88000, smr));
@@ -148,8 +160,8 @@ export function computeDeductions(input: DeductionInput): DeductionResult {
 
   const socialTotal = empInsurance + healthInsurance + pension;
 
-  // 課税対象 = 総支給 − 非課税交通費 − 社会保険料
-  const taxableBase = Math.max(0, gross - commute - socialTotal);
+  // 課税対象 = 総支給 − 非課税交通費 − 非課税の調整 − 社会保険料
+  const taxableBase = Math.max(0, gross - commute - (input.nonTaxable ?? 0) - socialTotal);
 
   const incomeTaxAuto = withholdingTax(taxableBase, input.taxColumn, input.dependents);
   const incomeTax = input.taxOverride ?? incomeTaxAuto;

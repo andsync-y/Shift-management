@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { updateStaffProfile } from "../actions";
 import { EMPLOYMENT_LABELS_JA, ROLE_LABELS_JA, WORK_STATUS_LABELS_JA, type Profile } from "@/lib/types";
+import { shiftLengthLabel } from "@/lib/work-hours";
 
 // 雇用形態・電話・時給・週時間の編集（オーナー専用ページ内）。
 export default function ProfileEditor({
@@ -86,6 +87,15 @@ export default function ProfileEditor({
               <input name="contracted_weekly_hours" type="number" min={0} max={168} step={0.5} className="input" defaultValue={profile.contracted_weekly_hours ?? ""} placeholder="例: 20（空欄=実績）" />
             </div>
             <div className="field">
+              <label>1日の勤務時間（拘束・h）</label>
+              <input name="standard_shift_hours" type="number" min={0} max={24} step={0.25} className="input" defaultValue={profile.standard_shift_hours ?? ""} placeholder="例: 8.5（空欄=枠のまま）" />
+              <p className="help" style={{ margin: "4px 0 0" }}>
+                {profile.standard_shift_hours
+                  ? `${shiftLengthLabel(profile.standard_shift_hours)}。シフト生成はこの長さで割り当てます。`
+                  : "正社員など1日の勤務時間が決まっている人に設定。例: 8.5 → 実働7.5h（休憩60分）。"}
+              </p>
+            </div>
+            <div className="field">
               <label>週の最低時間</label>
               <input name="min_hours_per_week" type="number" min={0} className="input" defaultValue={profile.min_hours_per_week} />
             </div>
@@ -130,6 +140,15 @@ export default function ProfileEditor({
                 介護保険 第2号（40〜64歳）
               </label>
             </div>
+            <div className="field">
+              <label>標準報酬月額（円）</label>
+              <input name="smr_official" type="number" min={0} step={1000} className="input" defaultValue={profile.smr_official ?? ""} placeholder="例: 300000（空欄=推計）" />
+              <p className="help" style={{ margin: "4px 0 0" }}>
+                年金機構の<strong>「資格取得確認および標準報酬決定通知書」</strong>の額を入れる。
+                標準報酬月額は資格取得時・定時決定で固定されるため、通知が来たら必ず登録すること。
+                空欄だと当月報酬から推計するため、残業やバックで等級がずれる。
+              </p>
+            </div>
           </div>
         </section>
 
@@ -142,8 +161,16 @@ export default function ProfileEditor({
               <input name="bank_code" type="text" inputMode="numeric" className="input" defaultValue={profile.bank_code ?? ""} placeholder="例: 0009" />
             </div>
             <div className="field">
+              <label>銀行名（カナ）</label>
+              <input name="bank_name" type="text" className="input" defaultValue={profile.bank_name ?? ""} placeholder="例: ｼﾞｭｳﾛｸ" />
+            </div>
+            <div className="field">
               <label>支店コード（3桁）</label>
               <input name="branch_code" type="text" inputMode="numeric" className="input" defaultValue={profile.branch_code ?? ""} placeholder="例: 123" />
+            </div>
+            <div className="field">
+              <label>支店名（カナ）</label>
+              <input name="branch_name" type="text" className="input" defaultValue={profile.branch_name ?? ""} placeholder="例: ﾅｶﾞﾗｼﾃﾝ" />
             </div>
             <div className="field">
               <label>預金種目</label>
@@ -160,6 +187,10 @@ export default function ProfileEditor({
               <label>受取人名（カナ）</label>
               <input name="recipient_kana" type="text" className="input" defaultValue={profile.recipient_kana ?? ""} placeholder="例: ﾌｸﾀﾞ ｱｲﾅ" />
             </div>
+            <p className="help" style={{ gridColumn: "1 / -1", margin: "2px 0 0" }}>
+              銀行名・支店名は全角カナで入れても自動で半角に変換されます。三井住友はコードから
+              自動補完しますが、<strong>しょうしんの総合振込は名称が空だとエラー</strong>になるため登録してください。
+            </p>
           </div>
         </section>
       </div>

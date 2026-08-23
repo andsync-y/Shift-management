@@ -21,14 +21,22 @@ export interface Profile {
   commute_allowance?: number; // 月額交通費（円・固定。距離未設定時のフォールバック）
   commute_distance_km?: number | null; // 片道距離(km)。設定時は 片道×2×15円×勤務日数 で自動計算
   contracted_weekly_hours?: number | null; // 週の所定労働時間（社保判定用）
+  // 1日の所定勤務時間（拘束・時間）。例 8.5 → 実働7.5h（休憩60分）。
+  // 設定するとシフト生成がこの長さを上限に割り当てる。null=枠の長さのまま。
+  standard_shift_hours?: number | null;
   tax_column?: "kou" | "otsu"; // 源泉の税区分。甲=扶養控除等申告書を当店に提出済み / 乙=未提出（他社が本業）
   dependents_count?: number; // 扶養親族等の数（甲欄の源泉計算用）
   emp_insurance_enrolled?: boolean; // 雇用保険 加入
   shaho_enrolled?: boolean; // 社会保険（健保・厚年）加入
   kaigo_applicable?: boolean; // 介護保険 第2号（40〜64歳）
+  // 標準報酬月額（年金機構の決定通知書の額）。設定時はこの額で保険料を計算する。
+  // null なら当月報酬から等級表で推計（簡易方式）。
+  smr_official?: number | null;
   nomination_back_rate?: number; // 指名バック単価（円/指名）
   bank_code?: string | null; // 振込先 銀行コード(4)
+  bank_name?: string | null; // 振込先 銀行名（カナ）。銀行によっては全銀ファイルで必須
   branch_code?: string | null; // 振込先 支店コード(3)
+  branch_name?: string | null; // 振込先 支店名（カナ）
   account_type?: string | null; // 預金種目 1=普通 2=当座
   account_number?: string | null; // 口座番号
   recipient_kana?: string | null; // 受取人名カナ
@@ -42,6 +50,15 @@ export interface Profile {
   line_user_id: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** 月別の給与調整（立替精算・臨時手当・貸付返済など）。amount>0=支給 / <0=控除 */
+export interface PayrollAdjustment {
+  staff_id: string;
+  month: string; // "YYYY-MM"
+  amount: number;
+  label: string | null;
+  taxable: boolean; // false=非課税（課税対象から除外）
 }
 
 export interface AvailabilityPreference {

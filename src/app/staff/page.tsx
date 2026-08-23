@@ -9,6 +9,7 @@ import {
   type StoreEvent,
   type TimeOffRequest,
 } from "@/lib/types";
+import { netHours } from "@/lib/work-hours";
 import ShiftCalendarView from "@/components/ShiftCalendarView";
 import CalendarSubscribe from "@/components/CalendarSubscribe";
 
@@ -82,13 +83,8 @@ export default async function StaffShiftsPage({
     ]);
 
   const myShifts = (shifts as Shift[] | null)?.filter((s) => s.staff_id === me.id) ?? [];
-  const myHours = myShifts.reduce((sum, s) => {
-    const dur =
-      (Number(s.end_time.slice(0, 2)) * 60 + Number(s.end_time.slice(3, 5)) -
-        Number(s.start_time.slice(0, 2)) * 60 - Number(s.start_time.slice(3, 5))) /
-      60;
-    return sum + dur;
-  }, 0);
+  // 表示は実働（休憩控除後）＝賃金の対象になる時間。給与明細と同じ数え方にする。
+  const myHours = myShifts.reduce((sum, s) => sum + netHours(s.start_time, s.end_time), 0);
 
   return (
     <div className="page">
@@ -119,7 +115,7 @@ export default async function StaffShiftsPage({
           <div className="eyebrow">Total Hours</div>
           <div className="big en">
             {myHours.toFixed(1)}
-            <small>時間</small>
+            <small>時間（実働）</small>
           </div>
         </div>
       </div>

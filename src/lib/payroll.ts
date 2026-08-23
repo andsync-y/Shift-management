@@ -11,17 +11,11 @@
 // すべて分単位で集計し、最後に円へ丸める（四捨五入）。
 // =====================================================================
 
+import { breakMinutesFor, mondayKey } from "@/lib/work-hours";
+
 const DAY = 86400000;
 const HOUR = 3600000;
 const JST = 9 * HOUR;
-
-// その日付が属する週（月曜始まり）の月曜日を "YYYY-MM-DD" で返す。
-function mondayKey(date: string): string {
-  const d = new Date(date + "T00:00:00Z");
-  const offset = (d.getUTCDay() + 6) % 7; // 月曜からの経過日数
-  d.setUTCDate(d.getUTCDate() - offset);
-  return d.toISOString().slice(0, 10);
-}
 
 export interface PayrollRecord {
   work_date: string; // "YYYY-MM-DD"（JST出勤日）
@@ -201,7 +195,7 @@ export function computePayroll(
       dayNight += nightMinutes(inMs, outMs);
       inOut.push({ in: hmJst(inMs), out: hmJst(outMs) });
     }
-    const brk = rawMin > 480 ? 60 : rawMin > 360 ? 45 : 0;
+    const brk = breakMinutesFor(rawMin);
     // 1分単位（丸めなし）で賃金計算する。
     const net = Math.max(0, rawMin - brk);
     const ot = Math.max(0, net - 480);

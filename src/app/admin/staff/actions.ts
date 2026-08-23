@@ -90,14 +90,18 @@ const profileSchema = z.object({
   hourly_wage: z.coerce.number().int().nonnegative().optional().or(z.literal("")),
   commute_distance_km: z.coerce.number().nonnegative().max(999).optional().or(z.literal("")),
   contracted_weekly_hours: z.coerce.number().nonnegative().max(168).optional().or(z.literal("")),
+  standard_shift_hours: z.coerce.number().positive().max(24).optional().or(z.literal("")),
   tax_column: z.enum(["kou", "otsu"]).default("otsu"),
   dependents_count: z.coerce.number().int().nonnegative().max(20).default(0),
   // チェックボックスは未チェックだと送信されない → 値があれば true
   emp_insurance_enrolled: z.string().optional().transform((v) => v != null),
   shaho_enrolled: z.string().optional().transform((v) => v != null),
   kaigo_applicable: z.string().optional().transform((v) => v != null),
+  smr_official: z.coerce.number().int().min(58000).max(1390000).optional().or(z.literal("")),
   bank_code: z.string().trim().optional().or(z.literal("")),
+  bank_name: z.string().trim().optional().or(z.literal("")),
   branch_code: z.string().trim().optional().or(z.literal("")),
+  branch_name: z.string().trim().optional().or(z.literal("")),
   account_type: z.enum(["1", "2"]).default("1"),
   account_number: z.string().trim().optional().or(z.literal("")),
   recipient_kana: z.string().trim().optional().or(z.literal("")),
@@ -139,13 +143,21 @@ export async function updateStaffProfile(
         d.contracted_weekly_hours === "" || d.contracted_weekly_hours === undefined
           ? null
           : d.contracted_weekly_hours,
+      standard_shift_hours:
+        d.standard_shift_hours === "" || d.standard_shift_hours === undefined
+          ? null
+          : d.standard_shift_hours,
       tax_column: d.tax_column,
       dependents_count: d.dependents_count,
       emp_insurance_enrolled: d.emp_insurance_enrolled,
       shaho_enrolled: d.shaho_enrolled,
       kaigo_applicable: d.kaigo_applicable,
+      smr_official:
+        d.smr_official === "" || d.smr_official === undefined ? null : d.smr_official,
       bank_code: d.bank_code ? d.bank_code : null,
+      bank_name: d.bank_name ? d.bank_name : null,
       branch_code: d.branch_code ? d.branch_code : null,
+      branch_name: d.branch_name ? d.branch_name : null,
       account_type: d.account_type,
       account_number: d.account_number ? d.account_number : null,
       recipient_kana: d.recipient_kana ? d.recipient_kana : null,
