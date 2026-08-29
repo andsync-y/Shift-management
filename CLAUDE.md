@@ -31,6 +31,7 @@
 | `docs/SHIFT_OFFER.md` | 出勤打診エンジン（休み承認→早番/遅番の欠員を自動打診） |
 | `docs/STORE_EVENTS.md` | 店休・店舗お知らせ（日単位イベントをカレンダーにバナー表示） |
 | `docs/PERSONAL_BLACKOUTS.md` | 個別予定の不可時間（タイムツリー画像取り込み→生成で回避） |
+| `docs/ABSENCE.md` | 欠勤記録（欠勤・無断欠勤・遅刻・早退／LINE連絡→手入力・欠勤率） |
 | `docs/PREOPEN_RESERVATION.md` | プレオープン簡易予約（モデル客・スタッフ各自・1枠4名） |
 | `docs/SMART_LOCK.md` | 入口スマートロック（セサミ）＋ 公式LINEのリッチメニュー |
 | `docs/KIOSK_PUNCH.md` | タブレット打刻キオスク（名前ボタン＋セルフィーで出勤/退勤） |
