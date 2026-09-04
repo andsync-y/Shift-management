@@ -27,18 +27,32 @@ const weeklyHours = (min: number) => (min / 60).toFixed(1);
 interface ShahoJudge {
   hours: number; // 判定に使った週時間
   usingContract: boolean; // true=所定労働時間 / false=実績週平均で代用
-  isInsured: boolean; // 加入対象か
+  enrolled: boolean; // 実際に加入しているか（profiles.shaho_enrolled＝給与から控除される）
+  shouldEnroll: boolean; // 週30時間以上＝本来は加入対象か
   label: string;
-  cls: string; // バッジ用クラス（late=該当）
+  cls: string; // バッジ用クラス（late=注意）
 }
 
-// 社会保険の加入判定（目安）。週30時間以上で加入対象。
-// 所定労働時間があればそれを、無ければ実績週平均を使う。
-function shahoJudge(contractedHrs: number | null, actualAvgMin: number): ShahoJudge {
+// 社会保険の状態。「実際に加入しているか」と「週30時間で加入対象か」は別物なので分けて返す。
+//
+// ⚠️ 給与から社保を引くかどうかは profiles.shaho_enrolled だけで決まる（computeDeductions）。
+//    週30時間の判定は“目安”であって、控除には影響しない。以前ここが時間だけを見ていたため、
+//    所定労働時間を入れた人だけが「社保」と表示され、実際の加入者3名に何も出ない状態になっていた。
+function shahoJudge(
+  contractedHrs: number | null,
+  actualAvgMin: number,
+  enrolled: boolean
+): ShahoJudge {
   const usingContract = contractedHrs != null && contractedHrs > 0;
   const hours = usingContract ? contractedHrs! : actualAvgMin / 60;
-  if (hours >= 30) return { hours, usingContract, isInsured: true, label: "加入対象", cls: "late" };
-  return { hours, usingContract, isInsured: false, label: "対象外", cls: "" };
+  const shouldEnroll = hours >= 30;
+  if (enrolled) {
+    return { hours, usingContract, enrolled, shouldEnroll, label: "加入中", cls: "early" };
+  }
+  if (shouldEnroll) {
+    return { hours, usingContract, enrolled, shouldEnroll, label: "要検討（30h以上）", cls: "late" };
+  }
+  return { hours, usingContract, enrolled, shouldEnroll, label: "対象外", cls: "" };
 }
 
 export default async function PayrollPage({
@@ -216,14 +230,18 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       {weeklyHours(pay.avgWeeklyMin)}h
                       {(() => {
-                        const j = shahoJudge(s.contracted_weekly_hours ?? null, pay.avgWeeklyMin);
+                        const j = shahoJudge(
+                          s.contracted_weekly_hours ?? null,
+                          pay.avgWeeklyMin,
+                          s.shaho_enrolled ?? false
+                        );
                         return j.cls ? (
                           <span
                             className={`mk ${j.cls}`}
                             style={{ marginLeft: 6 }}
                             title={`社保: ${j.label}（${j.usingContract ? "所定" : "実績"} ${j.hours.toFixed(1)}h/週）`}
                           >
-                            社保
+                            {j.enrolled ? "社保" : "30h"}
                           </span>
                         ) : null;
                       })()}
@@ -389,12 +407,17 @@ export default async function PayrollPage({
                   <th>スタッフ</th>
                   <th style={{ textAlign: "right" }}>週所定</th>
                   <th style={{ textAlign: "right" }}>実績週平均</th>
+                  <th>加入状況</th>
                   <th>判定</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(({ staff: s, pay }) => {
-                  const j = shahoJudge(s.contracted_weekly_hours ?? null, pay.avgWeeklyMin);
+                  const j = shahoJudge(
+                    s.contracted_weekly_hours ?? null,
+                    pay.avgWeeklyMin,
+                    s.shaho_enrolled ?? false
+                  );
                   return (
                     <tr key={s.id}>
                       <td style={{ whiteSpace: "nowrap" }}>
@@ -415,6 +438,13 @@ export default async function PayrollPage({
                         )}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
+                        {j.enrolled ? (
+                          <span className="mk early">加入中</span>
+                        ) : (
+                          <span className="muted">未加入</span>
+                        )}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         <span className={`mk ${j.cls}`}>{j.label}</span>
                       </td>
                     </tr>
@@ -424,7 +454,10 @@ export default async function PayrollPage({
             </table>
             <p className="help" style={{ marginBottom: 0 }}>
               <strong>週所定</strong>＝契約上の週の所定労働時間（「スタッフ管理」で設定。未設定なら実績週平均で<span className="mk" style={{ margin: "0 3px" }}>代用</span>）。
-              <span className="mk late" style={{ margin: "0 4px" }}>加入対象</span>＝週30時間以上。最終判断は社労士等にご確認ください。
+              <strong>加入状況</strong>＝スタッフ管理の「社会保険 加入」設定。<strong>給与から社保を引くかどうかはこれだけで決まります</strong>。
+              <span className="mk late" style={{ margin: "0 4px" }}>要検討（30h以上）</span>は週30時間を超えているのに未加入という意味で、控除には影響しません。
+              加入・脱退の切り替えは<strong>その月の給与を締めてから</strong>行ってください（設定は月別ではないため、遡って全月に効きます）。
+              最終判断は社労士等にご確認ください。
             </p>
           </div>
         </div>
