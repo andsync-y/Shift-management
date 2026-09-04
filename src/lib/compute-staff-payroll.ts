@@ -33,6 +33,8 @@ export interface StaffPayrollInput {
   kaisukenCount: number;
   /** 源泉所得税の手入力（あれば自動計算より優先。無ければ null） */
   taxOverride: number | null;
+  /** 対象月の日数。週平均（社保判定の目安）の分母に使う。省略時は勤務週数で割る。 */
+  periodDays?: number;
   /**
    * 月別の調整（立替精算・臨時手当・貸付返済など）。無ければ null。
    * amount > 0 は支給・amount < 0 は控除。taxable=false は課税対象から除く。
@@ -75,7 +77,9 @@ export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResul
     records,
     staff.hourly_wage,
     staff.commute_allowance ?? 0,
-    staff.commute_distance_km ?? 0
+    staff.commute_distance_km ?? 0,
+    undefined,
+    input.periodDays ?? 0
   );
 
   const nominationBack = NOMINATION_BACK_RATE * nominationCount;

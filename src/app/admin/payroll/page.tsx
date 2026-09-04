@@ -111,6 +111,8 @@ export default async function PayrollPage({
           kaisukenCount: kaisCount,
           taxOverride: taxOverrides.get(s.id) ?? null,
           adjustment: adjustments.get(s.id) ?? null,
+          // 週平均（社保判定の目安）を対象月の日数で割るため
+          periodDays: new Date(y, m, 0).getDate(),
         });
       const rate = NOMINATION_BACK_RATE;
       return {

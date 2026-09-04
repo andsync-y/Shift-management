@@ -159,7 +159,13 @@ export function computePayroll(
   wage: number | null,
   commuteFlat = 0,
   commuteDistanceKm = 0,
-  commuteRatePerKm = COMMUTE_RATE_PER_KM
+  commuteRatePerKm = COMMUTE_RATE_PER_KM,
+  /**
+   * 週平均の分母に使う対象期間の日数（その月の日数）。
+   * 省略すると「勤務のあった週数」で割るが、月初・月末の半端な週も1週と数えるため
+   * 週平均が実態より低く出る（例: 8月は6週にまたがるので 127h→21.2h と表示された）。
+   */
+  periodDays = 0
 ): PayrollResult {
   // 日付ごとに集計
   const byDate = new Map<string, PayrollRecord[]>();
@@ -231,8 +237,11 @@ export function computePayroll(
     weekTotals.set(wk, (weekTotals.get(wk) ?? 0) + d.workedMin);
   }
   const weekCount = weekTotals.size;
-  const avgWeeklyMin = weekCount
-    ? Math.round([...weekTotals.values()].reduce((a, b) => a + b, 0) / weekCount)
+  // 週平均は「対象期間の週数」で割る（社保の30時間判定の目安に使うため）。
+  // periodDays が渡っていればそれを7で割った週数を、無ければ従来どおり勤務週数を使う。
+  const weeks = periodDays > 0 ? periodDays / 7 : weekCount;
+  const avgWeeklyMin = weeks
+    ? Math.round([...weekTotals.values()].reduce((a, b) => a + b, 0) / weeks)
     : 0;
 
   return {
