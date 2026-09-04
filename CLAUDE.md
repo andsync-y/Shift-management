@@ -37,6 +37,7 @@
 | `docs/KIOSK_PUNCH.md` | タブレット打刻キオスク（名前ボタン＋セルフィーで出勤/退勤） |
 | `docs/STORE_KPI.md` | 店舗KPI（本部システムから日次取得→kiosk表示・手入力フォールバック） |
 | `docs/PAYROLL.md` | 給与計算（実打刻ベース・休憩/残業/深夜・総支給） |
+| `docs/SALONBOARD_CHECK.md` | サロンボード突合（指名数・回数券本数の検算／給与確定前） |
 | `docs/ACCOUNTING.md` | 経理（領収書OCR・カード/EC明細・自動マッチング・監査ログ・月次P&L） |
 | `docs/FC_HQ_EXPORT.md` | FC本部システム連携（勤務時間・スタッフ情報の転記支援＋保護JSON API） |
 | `docs/DEPLOY_AND_DOMAIN.md` | デプロイ・独自ドメイン設定 |

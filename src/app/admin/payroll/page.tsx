@@ -12,6 +12,7 @@ import AdjustmentInput from "./AdjustmentInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
 import KaisukenCsvImport from "./KaisukenCsvImport";
+import SalonBoardCheck from "./SalonBoardCheck";
 import SendPayslipsButton from "./SendPayslipsButton";
 
 function pad(n: number) {
@@ -181,6 +182,7 @@ export default async function PayrollPage({
           <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <FinalizeButton month={month} />
             <KaisukenCsvImport month={month} />
+            <SalonBoardCheck month={month} />
             <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px" }} href={`/admin/payroll/print?month=${month}`}>
               🖨 給与明細を印刷
             </a>

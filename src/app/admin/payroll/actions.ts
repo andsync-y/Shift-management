@@ -5,6 +5,8 @@ import { requireAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { tallyVisitCsv, type VisitTallyResult } from "@/lib/fc-hq/visits-csv";
 import { buildNameIndex, matchStaffCounts, ticketCountsFrom, type StaffNameRow } from "@/lib/fc-kpi/match";
+import { tallySalonBoardCsv, type SalonBoardResult } from "@/lib/salonboard/accounting-csv";
+import { kaisukenBack, NOMINATION_BACK_RATE } from "@/lib/payroll";
 import type { FcKpiData } from "@/lib/fc-kpi/types";
 import { dispatchKpiSync } from "@/lib/fc-kpi/dispatch";
 
@@ -319,5 +321,138 @@ export async function importKaisukenFromVisitCsv(
   return {
     ok: true,
     message: `${label}の回数券 計${tally.totalKaisuken}本を ${rows.length}名 に取り込みました（来店${tally.monthRows}件）${warn}。`,
+  };
+}
+
+// ===== サロンボードとの突合 =====
+// 給与のバックは本部システム(zn-stretch)の担当別売上＝スタッフの手入力から取り込んでいる。
+// サロンボードは実際の会計そのものなので、給与を締める前にこちらと突き合わせる。
+// バック合計で¥19万規模になる項目なので、手入力の誤りはそのまま金銭の誤りになる。
+
+export interface SalonBoardDiffRow {
+  staff: string; // サロンボードの担当名
+  matched: boolean; // アプリのスタッフと突合できたか
+  salonNomination: number;
+  storedNomination: number;
+  salonKaisuken: number;
+  storedKaisuken: number;
+  /** サロンボードの数字で計算し直したときのバック差額（＋なら支給不足） */
+  backDiff: number;
+  visits: number;
+  newVisits: number;
+}
+
+export interface SalonBoardCompareResult {
+  ok: boolean;
+  message: string;
+  rows?: SalonBoardDiffRow[];
+  totalBackDiff?: number;
+  canceledAccounts?: number;
+}
+
+function backFor(nomination: number, kaisuken: number): number {
+  return NOMINATION_BACK_RATE * nomination + kaisukenBack(kaisuken);
+}
+
+/** サロンボードCSVと、いまアプリに入っている指名数・回数券本数を突き合わせる（書き込みなし）。 */
+export async function compareSalonBoard(
+  month: string,
+  csvText: string
+): Promise<SalonBoardCompareResult> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+  if (!csvText.trim()) return { ok: false, message: "CSVが空です。" };
+
+  let tally: SalonBoardResult;
+  try {
+    tally = tallySalonBoardCsv(csvText, month);
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "CSVの解析に失敗しました。" };
+  }
+  const label = monthLabel(month);
+  if (tally.monthRows === 0) {
+    const has = tally.monthsInCsv.length ? `（このCSVに入っているのは ${tally.monthsInCsv.join("・")}）` : "";
+    return { ok: false, message: `${label}の会計データがCSVにありません${has}。` };
+  }
+
+  const supabase = await createClient();
+  const index = await fetchNameIndex(supabase);
+  const [{ data: nomRaw }, { data: kaisRaw }] = await Promise.all([
+    supabase.from("nomination_counts").select("staff_id, count").eq("month", month),
+    supabase.from("kaisuken_counts").select("staff_id, count").eq("month", month),
+  ]);
+  const nom = new Map(((nomRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
+  const kais = new Map(((kaisRaw as { staff_id: string; count: number }[] | null) ?? []).map((r) => [r.staff_id, r.count]));
+
+  const rows: SalonBoardDiffRow[] = tally.tallies.map((t) => {
+    const id = index.get(t.staff);
+    const storedNomination = id ? nom.get(id) ?? 0 : 0;
+    const storedKaisuken = id ? kais.get(id) ?? 0 : 0;
+    return {
+      staff: t.staff,
+      matched: !!id,
+      salonNomination: t.nominations,
+      storedNomination,
+      salonKaisuken: t.kaisuken,
+      storedKaisuken,
+      backDiff: backFor(t.nominations, t.kaisuken) - backFor(storedNomination, storedKaisuken),
+      visits: t.visits,
+      newVisits: t.newVisits,
+    };
+  });
+  const totalBackDiff = rows.reduce((s, r) => s + r.backDiff, 0);
+  const diffCount = rows.filter((r) => r.backDiff !== 0).length;
+
+  return {
+    ok: true,
+    message:
+      diffCount === 0
+        ? `${label}：サロンボードと一致しました（${rows.length}名・来店${tally.tallies.reduce((s, t) => s + t.visits, 0)}件）。`
+        : `${label}：${diffCount}名に差異があります。バック差額 ${totalBackDiff >= 0 ? "+" : ""}¥${totalBackDiff.toLocaleString()}。`,
+    rows,
+    totalBackDiff,
+    canceledAccounts: tally.canceledAccounts,
+  };
+}
+
+/** 突合結果をサロンボードの数字で上書きする（指名数・回数券本数）。 */
+export async function applySalonBoard(
+  month: string,
+  csvText: string
+): Promise<{ ok: boolean; message: string }> {
+  await requireAdmin();
+  if (!/^\d{4}-\d{2}$/.test(month)) return { ok: false, message: "月の形式が不正です。" };
+
+  let tally: SalonBoardResult;
+  try {
+    tally = tallySalonBoardCsv(csvText, month);
+  } catch (e) {
+    return { ok: false, message: e instanceof Error ? e.message : "CSVの解析に失敗しました。" };
+  }
+  if (tally.monthRows === 0) return { ok: false, message: `${monthLabel(month)}の会計データがCSVにありません。` };
+
+  const supabase = await createClient();
+  const index = await fetchNameIndex(supabase);
+  const nomMatch = matchStaffCounts(index, tally.tallies.map((t) => ({ name: t.staff, count: t.nominations })), "件");
+  const kaisMatch = matchStaffCounts(index, tally.tallies.map((t) => ({ name: t.staff, count: t.kaisuken })), "本");
+
+  if (nomMatch.rows.length) {
+    const { error } = await supabase
+      .from("nomination_counts")
+      .upsert(nomMatch.rows.map((r) => ({ ...r, month })), { onConflict: "staff_id,month" });
+    if (error) return { ok: false, message: `指名数の反映に失敗: ${error.message}` };
+  }
+  if (kaisMatch.rows.length) {
+    const { error } = await supabase
+      .from("kaisuken_counts")
+      .upsert(kaisMatch.rows.map((r) => ({ ...r, month })), { onConflict: "staff_id,month" });
+    if (error) return { ok: false, message: `回数券本数の反映に失敗: ${error.message}` };
+  }
+
+  revalidatePath("/admin/payroll");
+  const warn = nomMatch.unmatched.length ? `（未一致: ${nomMatch.unmatched.join("・")}）` : "";
+  return {
+    ok: true,
+    message: `サロンボードの数字を ${nomMatch.rows.length}名 に反映しました（指名${nomMatch.total}件 / 回数券${kaisMatch.total}本）${warn}。`,
   };
 }
