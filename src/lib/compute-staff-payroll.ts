@@ -21,6 +21,7 @@ import {
   type PayrollResult,
 } from "@/lib/payroll";
 import { computeDeductions, type DeductionResult } from "@/lib/deductions";
+import { shahoAppliesTo } from "@/lib/shaho";
 
 /** 月次給与の計算に必要な、スタッフ1名分の入力。 */
 export interface StaffPayrollInput {
@@ -33,6 +34,11 @@ export interface StaffPayrollInput {
   kaisukenCount: number;
   /** 源泉所得税の手入力（あれば自動計算より優先。無ければ null） */
   taxOverride: number | null;
+  /**
+   * 対象月 "YYYY-MM"。社会保険の資格取得日・喪失日から「この月に保険料が発生するか」を
+   * 判定するために使う。省略すると旧フラグ shaho_enrolled だけで判定する。
+   */
+  month?: string;
   /** 対象月の日数。週平均（社保判定の目安）の分母に使う。省略時は勤務週数で割る。 */
   periodDays?: number;
   /**
@@ -88,6 +94,16 @@ export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResul
   // 負の調整で総支給がマイナスになると保険料計算が壊れるため0で止める。
   const gross = Math.max(0, pay.gross + nominationBack + kaisukenBackYen + adjustment);
 
+  // 社保は「その月に資格があるか」で決める。加入日を入れておけば、加入前の月を
+  // 計算しても引かれない（フラグを手で切り替える必要がない）。
+  const shahoEnrolled = input.month
+    ? shahoAppliesTo(input.month, {
+        enrolledOn: staff.shaho_enrolled_on ?? null,
+        leftOn: staff.shaho_left_on ?? null,
+        enrolledFlag: staff.shaho_enrolled ?? false,
+      })
+    : (staff.shaho_enrolled ?? false);
+
   const deduction = computeDeductions({
     gross,
     // 交通費は非課税なので課税対象から除外する
@@ -95,7 +111,7 @@ export function computeStaffPayroll(input: StaffPayrollInput): StaffPayrollResul
     taxColumn: staff.tax_column ?? "otsu",
     dependents: staff.dependents_count ?? 0,
     empInsuranceEnrolled: staff.emp_insurance_enrolled ?? true,
-    shahoEnrolled: staff.shaho_enrolled ?? false,
+    shahoEnrolled,
     kaigoApplicable: staff.kaigo_applicable ?? false,
     smrOfficial: staff.smr_official ?? null,
     // 非課税の調整（立替金の精算など）は交通費と同じく課税対象から外す。

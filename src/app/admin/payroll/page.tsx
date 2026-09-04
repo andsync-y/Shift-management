@@ -5,6 +5,7 @@ import { displayName } from "@/lib/display-name";
 import { hhmm, NOMINATION_BACK_RATE } from "@/lib/payroll";
 import { TAX_COLUMN_LABELS_JA } from "@/lib/deductions";
 import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
+import { shahoAppliesTo, shahoStatusLabel } from "@/lib/shaho";
 import NominationInput from "./NominationInput";
 import KaisukenInput from "./KaisukenInput";
 import TaxInput from "./TaxInput";
@@ -112,6 +113,7 @@ export default async function PayrollPage({
           kaisukenCount: kaisCount,
           taxOverride: taxOverrides.get(s.id) ?? null,
           adjustment: adjustments.get(s.id) ?? null,
+          month,
           // 週平均（社保判定の目安）を対象月の日数で割るため
           periodDays: new Date(y, m, 0).getDate(),
         });
@@ -237,7 +239,11 @@ export default async function PayrollPage({
                         const j = shahoJudge(
                           s.contracted_weekly_hours ?? null,
                           pay.avgWeeklyMin,
-                          s.shaho_enrolled ?? false
+                          shahoAppliesTo(month, {
+                            enrolledOn: s.shaho_enrolled_on ?? null,
+                            leftOn: s.shaho_left_on ?? null,
+                            enrolledFlag: s.shaho_enrolled ?? false,
+                          })
                         );
                         return j.cls ? (
                           <span
@@ -417,10 +423,15 @@ export default async function PayrollPage({
               </thead>
               <tbody>
                 {rows.map(({ staff: s, pay }) => {
+                  const period = {
+                    enrolledOn: s.shaho_enrolled_on ?? null,
+                    leftOn: s.shaho_left_on ?? null,
+                    enrolledFlag: s.shaho_enrolled ?? false,
+                  };
                   const j = shahoJudge(
                     s.contracted_weekly_hours ?? null,
                     pay.avgWeeklyMin,
-                    s.shaho_enrolled ?? false
+                    shahoAppliesTo(month, period)
                   );
                   return (
                     <tr key={s.id}>
@@ -443,9 +454,11 @@ export default async function PayrollPage({
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
                         {j.enrolled ? (
-                          <span className="mk early">加入中</span>
+                          <span className="mk early" title={s.shaho_enrolled_on ? `資格取得 ${s.shaho_enrolled_on}` : "加入フラグ（日付未設定）"}>
+                            加入中
+                          </span>
                         ) : (
-                          <span className="muted">未加入</span>
+                          <span className="muted">{shahoStatusLabel(month, period)}</span>
                         )}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
@@ -458,7 +471,8 @@ export default async function PayrollPage({
             </table>
             <p className="help" style={{ marginBottom: 0 }}>
               <strong>週所定</strong>＝契約上の週の所定労働時間（「スタッフ管理」で設定。未設定なら実績週平均で<span className="mk" style={{ margin: "0 3px" }}>代用</span>）。
-              <strong>加入状況</strong>＝スタッフ管理の「社会保険 加入」設定。<strong>給与から社保を引くかどうかはこれだけで決まります</strong>。
+              <strong>加入状況</strong>＝スタッフ管理の<strong>資格取得日・喪失日</strong>から、その月に保険料が発生するかを判定した結果。
+              <strong>給与から社保を引くかどうかはこれで決まります</strong>（日付が未設定の人だけ旧「加入」チェックで判定）。
               <span className="mk late" style={{ margin: "0 4px" }}>要検討（30h以上）</span>は週30時間を超えているのに未加入という意味で、控除には影響しません。
               加入・脱退の切り替えは<strong>その月の給与を締めてから</strong>行ってください（設定は月別ではないため、遡って全月に効きます）。
               最終判断は社労士等にご確認ください。

@@ -67,6 +67,16 @@
     週平均が実態より低く出ていた**（2026年8月は暦の6週にまたがり、実働127hが21.2hと表示。
     正しくは約28.7h）。社保の30時間判定を見誤る原因になるため 2026-09 に修正。
   - 表示専用の値で、**賃金・控除には一切影響しない**。
+- **社会保険の加入期間（資格取得日・喪失日）**：`profiles.shaho_enrolled_on` / `shaho_left_on`。
+  - **保険料が発生する月**＝資格取得日の属する月 〜 **資格喪失日の属する月の前月**まで。
+    月末時点で被保険者資格があればその月の保険料が発生する。喪失日は**退職日の翌日**なので、
+    10/31退職なら `2026-11-01` と入れて10月分まで発生する。
+  - 判定は `src/lib/shaho.ts` の `shahoAppliesTo(month, {enrolledOn, leftOn, enrolledFlag})`。
+    `computeStaffPayroll` に `month` を渡すとこれで判定する（画面・印刷・PDF・振込の4か所すべて）。
+  - **日付が両方とも未設定のスタッフだけ**、旧フラグ `shaho_enrolled` で判定する（後方互換）。
+  - ⚠️ 旧フラグは月の区別が無く、加入前の月を計算しても引かれてしまうため、**締めるたびに
+    手でオン・オフする運用**になっていた（7月の振込で誤って引かれたファイルを作りかけている）。
+    **日付を入れればこの切り替えは不要**になる。
 - **社会保険の表示（給与画面）**：「加入状況」と「判定」は別物として出す。
   - **加入状況**＝`profiles.shaho_enrolled`。**給与から社保を引くかどうかはこれだけで決まる**（`computeDeductions`）。
   - **判定**＝週30時間以上かの目安。所定労働時間（`contracted_weekly_hours`）があればそれを、
@@ -183,6 +193,8 @@
 - `supabase/migrations/0037_kaisuken_back.sql`：`kaisuken_counts`（月別 回数券販売本数）。回数券バック（本数連動）の元データ。
 - `src/lib/fc-hq/visits-csv.ts`：本部「来店記録」CSVのパース・担当別集計（回数券本数／指名／新規成約率）。テストは `tests/visits-csv.test.ts`。
 - `src/lib/fc-kpi/match.ts`：本部の担当名 → スタッフの突合（表示名優先）と 新規＋更新 の合算。FC取込・CSV取込で共用。テストは `tests/fc-kpi-match.test.ts`。
+- `src/lib/shaho.ts`：社保の加入期間判定（資格取得日・喪失日 → その月に保険料が発生するか）。テストは `tests/shaho.test.ts`。
+- `supabase/migrations/0046_shaho_dates.sql`：`profiles.shaho_enrolled_on` / `shaho_left_on`。
 - `supabase/migrations/0038_payroll_deductions.sql`：`profiles` に税・保険設定（`tax_column` / `dependents_count` / `emp_insurance_enrolled` / `shaho_enrolled` / `kaigo_applicable`）＋ `income_tax_overrides`（月別 源泉の手入力）。
 - `supabase/migrations/0031_bank_account.sql`：`profiles` に振込先口座（銀行/支店コード・預金種目・口座番号・受取人カナ）。
 - `supabase/migrations/0042_bank_names.sql`：`profiles.bank_name` / `branch_name`（振込先の金融機関名・支店名。銀行によっては全銀ファイルで必須）。
