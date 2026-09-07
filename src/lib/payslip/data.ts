@@ -74,6 +74,7 @@ export async function collectPayslips(
       kaisukenCount: kaisCount,
       taxOverride: taxOverrides.get(s.id) ?? null,
       adjustment: adjustments.get(s.id) ?? null,
+      month,
     });
     if (pay.workedMin <= 0 && count === 0 && kaisCount === 0 && adjustment === 0) continue; // 対象なし
     entries.push({

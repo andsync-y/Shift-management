@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
       kaisukenCount: kais.get(s.id) ?? 0,
       taxOverride: taxOverrides.get(s.id) ?? null,
       adjustment: adjustments.get(s.id) ?? null,
+      month,
     });
     const amount = ded.net;
     if (amount <= 0) continue;

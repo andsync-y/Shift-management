@@ -129,10 +129,30 @@ export default function ProfileEditor({
               </label>
             </div>
             <div className="field">
+              <label>社会保険 資格取得日</label>
+              <input name="shaho_enrolled_on" type="date" className="input en" defaultValue={profile.shaho_enrolled_on ?? ""} />
+              <p className="help" style={{ margin: "4px 0 0" }}>
+                年金機構の決定通知書の日付。<strong>この月から給与に社保が入る</strong>ので、
+                加入前の月を計算しても引かれません。入れておけば毎月チェックを切り替える必要がなくなります。
+              </p>
+            </div>
+            <div className="field">
+              <label>社会保険 資格喪失日</label>
+              <input name="shaho_left_on" type="date" className="input en" defaultValue={profile.shaho_left_on ?? ""} />
+              <p className="help" style={{ margin: "4px 0 0" }}>
+                退職日の<strong>翌日</strong>。この日の属する月の<strong>前月まで</strong>保険料が発生します
+                （10/31退職なら11/1と入れて10月分まで）。継続中は空欄。
+              </p>
+            </div>
+            <div className="field">
               <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
                 <input name="shaho_enrolled" type="checkbox" defaultChecked={profile.shaho_enrolled ?? false} />
-                社会保険（健保・厚年）加入
+                社会保険 加入（日付を使わない場合）
               </label>
+              <p className="help" style={{ margin: "4px 0 0" }}>
+                上の日付が両方とも空のときだけ使われる旧方式。
+                <strong>月の区別が無いため全月に効きます</strong>。できるだけ日付で管理してください。
+              </p>
             </div>
             <div className="field">
               <label style={{ display: "flex", alignItems: "center", gap: 8 }}>
