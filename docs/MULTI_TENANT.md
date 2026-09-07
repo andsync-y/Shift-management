@@ -34,16 +34,25 @@
 4. ビュー（`v_labor_cost_*` / `v_pl_monthly` / `v_expense_monthly`）は
    すべて列を明示列挙しているため、列追加の影響を受けない（確認済み）。
 
-## 適用手順
+## 適用状況
+
+**Step A は 2026-09-07 深夜（閉店中）に本番へ適用済み。**
+Supabase の移行履歴には `20260907165626_multi_tenant_store_id` として記録されている。
+
+### ⚠️ `supabase db push` は使わないこと
+
+適用時に判明したが、**本番DBの移行履歴には `0001`〜`0046` が1件も記録されていない**
+（`list_migrations` の結果は `20260907165626` の1件のみ）。過去の移行は
+SQL Editor などから手で当てられており、リポジトリのファイル名と履歴が同期していない。
+
+この状態で `supabase db push` を実行すると、**既に適用済みの46ファイルを
+再実行しようとして失敗するか、二重適用になる**。
+
+適用は **Supabase ダッシュボードの SQL Editor に貼る**（または MCP の `apply_migration`）で行う。
+履歴の同期は別途、腰を据えてやる課題として残す。
 
 ⚠️ **営業時間中に実行しない。** 打刻が止まると現場が困る。閉店後（22:00以降）か開店前に行う。
-
-```bash
-supabase db push          # または Supabase ダッシュボードの SQL Editor に貼る
-```
-
 DDLはトランザクション内で実行されるため、途中で失敗しても全体がロールバックされる。
-中途半端な状態にはならない。
 
 ### 適用前チェック（実行済み・2026-09-07）
 
@@ -55,15 +64,26 @@ DDLはトランザクション内で実行されるため、途中で失敗し�
 | `stores` テーブルの既存 | なし |
 | `store_settings` の行数（一意制約が通るか） | 1 |
 
-### 適用後の確認
+### 適用後の検証結果（2026-09-07・実測）
+
+| 確認項目 | 結果 |
+|---|---|
+| `store_id` を持つ表 | **23**（すべて NOT NULL・DEFAULT・FK・索引つき） |
+| `stores` の行数 | 1 |
+| 既存データの紐付き | `time_records` 320件すべてが単一店舗 |
+| 行数の変化 | なし（profiles 10／time_records 320／shifts 479／receipts 58／payroll_adjustments 1） |
+| RLSポリシー数 | 43（うち `stores` の新規2件）。**既存41件は無変更** |
+| `store_id` を参照するポリシー | **0**（設計どおり。Step C で追加する） |
+| `npm run typecheck` | 通過 |
+| `npm test` | **157件すべて成功** |
+
+再確認したいときのクエリ:
 
 ```sql
--- 23テーブルすべてに store_id が入ったか
 select count(*) from information_schema.columns
-where table_schema='public' and column_name='store_id';   -- 23 になるはず
+where table_schema='public' and column_name='store_id';   -- 23
 
--- 既存データが現店舗に紐づいたか
-select store_id, count(*) from time_records group by 1;   -- 1行だけ返るはず
+select store_id, count(*) from time_records group by 1;   -- 1行だけ
 ```
 
 ## 設計メモ
