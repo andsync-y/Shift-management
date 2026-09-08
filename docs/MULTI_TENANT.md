@@ -18,8 +18,8 @@
 
 | 段階 | 内容 | 状態 |
 |---|---|---|
-| **Step A** | `stores` テーブル作成、全業務テーブルへ `store_id` を追加（DEFAULT付き・NOT NULL）。**RLSは変更しない** | 本PR |
-| Step B | アプリ側で `store_id` を明示セット、クエリに店舗の絞り込みを追加 | 未着手 |
+| **Step A** | `stores` テーブル作成、全業務テーブルへ `store_id` を追加（DEFAULT付き・NOT NULL）。**RLSは変更しない** | ✅ 適用済み |
+| **Step B** | `store_id` の DEFAULT を「ログイン中ユーザーの店舗」にする。サービスロール経路の洗い出し | PR準備済み・**未適用** |
 | Step C | RLSポリシーに店舗条件を追加、DEFAULT を外す | 未着手 |
 
 **Step A だけでは複数店舗を安全に同居させられない。** Step C まで終えて初めて、
@@ -101,3 +101,91 @@ select store_id, count(*) from time_records group by 1;   -- 1行だけ
 
 - 予約機能の設計は、この Step C 完了後に着手する。
   先にテナントキーを入れておかないと、予約テーブルだけ後から作り直すことになる。
+
+
+---
+
+# Step B：DEFAULT を動的にする
+
+## 方針：46か所を書き換えるのではなく、DEFAULT を賢くする
+
+アプリ側の INSERT / UPSERT は **46か所**ある（`.insert(` 29 ＋ `.upsert(` 17）。
+そのすべてに `store_id` を書き足すこともできるが、**1か所でも書き漏らすと
+黙って既定店舗に書き込まれる**。レビューでも気づきにくい。
+
+そこで DEFAULT 自体を変える。
+
+```sql
+alter table X alter column store_id set default coalesce(current_store_id(), '<既定店舗>');
+```
+
+| 呼び出し元 | `current_store_id()` | 結果 |
+|---|---|---|
+| ログイン中のユーザー操作 | その人の所属店舗 | **正しい店舗が入る** |
+| サービスロール（`createAdminClient`） | `auth.uid()` が null → null | 既定店舗にフォールバック |
+
+これで46か所のうち**ユーザー操作ぶんは自動的に正しくなる**。
+アプリ側で明示が要るのは、下のサービスロール経路だけに絞られる。
+
+## ⚠️ 2店舗目を入れる前に潰すこと（サービスロール経路）
+
+以下は `createAdminClient()`（RLSをバイパス・`auth.uid()` が null）で書き込むため、
+DEFAULT が**既定店舗にフォールバックする**。1店舗の間は正しく動くが、
+2店舗目を入れると誤った店舗に書き込まれる。
+
+`src/lib/store.ts` の `requireStoreId()` を使い、`store_id` を明示すること。
+
+| 書込数 | ファイル | 対象テーブル |
+|---|---|---|
+| 3 | `src/lib/offers/engine.ts` | availability_preferences / profiles / shift_offers ほか |
+| 3 | `src/app/admin/accounting/actions.ts` | card_transactions / monthly_sales / receipts |
+| 2 | `src/app/api/cron/clock-reminder/route.ts` | clock_reminders / shifts / time_records |
+| 1 | `src/app/api/timecard/punch/route.ts` | time_records |
+| 1 | `src/app/api/line/webhook/route.ts` | time_records |
+| 1 | `src/app/api/kpi/ingest/route.ts` | fc_kpi |
+| 1 | `src/app/api/kiosk/punch/route.ts` | time_records |
+| 1 | `src/app/api/accounting/receipt-upload/route.ts` | receipts |
+| 1 | `src/app/api/accounting/receipt-ocr/route.ts` | receipts |
+| 1 | `src/app/admin/staff/actions.ts` | profiles |
+
+`profiles` は別枠。新規ユーザー作成トリガー（`handle_new_user`）が走る時点では
+本人の `profiles` 行がまだ無く、自分の店舗を引けない。招待・作成時に呼び出し側で
+`store_id` を明示すること。
+
+## 適用手順
+
+Step A と同じ。**営業時間中に実行しない。** `supabase db push` は使わない（下記参照）。
+
+適用後の確認:
+
+```sql
+select table_name, column_default
+from information_schema.columns
+where table_schema='public' and column_name='store_id'
+order by table_name;
+-- すべて coalesce(current_store_id(), '00000000-...-0001'::uuid) になっているはず
+```
+
+---
+
+# 🔴 別件で見つかった問題：適用されていないマイグレーションが5本ある
+
+Step B の調査中に判明した。**コードが参照しているのに本番DBに存在しないテーブル**が5つある。
+
+| テーブル | 定義しているマイグレーション | 本番DB |
+|---|---|---|
+| `shift_offers` | `0009_shift_offers.sql` | **無い** |
+| `shift_offer_candidates` | `0009_shift_offers.sql` | **無い** |
+| `staff_blackouts` | `0014_staff_blackouts.sql` | **無い** |
+| `monthly_sales` | `0023_monthly_sales.sql` | **無い** |
+| `absences` | `0045_absences.sql` | **無い** |
+
+つまり **シフトオファー / 個人ブラックアウト / 月次売上 / 欠勤管理 の各機能は、
+本番では動いていない**（該当コードに到達するとエラーになるはず）。
+
+原因は移行履歴の同期ずれ（上記「`supabase db push` は使わないこと」と同根）。
+`0001`〜`0046` が履歴に記録されていないため、どれが当たっていてどれが当たっていないのかを
+DB側から判定できない状態だった。
+
+**対応は Step C とは切り離して、別途フルの棚卸しが要る。**
+この5本を適用するときは、`store_id` の追加も同時に行うこと（Step A の対象に入っていない）。
