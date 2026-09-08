@@ -96,6 +96,8 @@ const profileSchema = z.object({
   // チェックボックスは未チェックだと送信されない → 値があれば true
   emp_insurance_enrolled: z.string().optional().transform((v) => v != null),
   shaho_enrolled: z.string().optional().transform((v) => v != null),
+  shaho_enrolled_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
+  shaho_left_on: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional().or(z.literal("")),
   kaigo_applicable: z.string().optional().transform((v) => v != null),
   smr_official: z.coerce.number().int().min(58000).max(1390000).optional().or(z.literal("")),
   bank_code: z.string().trim().optional().or(z.literal("")),
@@ -151,6 +153,8 @@ export async function updateStaffProfile(
       dependents_count: d.dependents_count,
       emp_insurance_enrolled: d.emp_insurance_enrolled,
       shaho_enrolled: d.shaho_enrolled,
+      shaho_enrolled_on: d.shaho_enrolled_on ? d.shaho_enrolled_on : null,
+      shaho_left_on: d.shaho_left_on ? d.shaho_left_on : null,
       kaigo_applicable: d.kaigo_applicable,
       smr_official:
         d.smr_official === "" || d.smr_official === undefined ? null : d.smr_official,

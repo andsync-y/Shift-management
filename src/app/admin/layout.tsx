@@ -11,6 +11,7 @@ const GROUPS: NavGroup[] = [
       { href: "/admin/shifts", label: "シフト作成" },
       { href: "/admin/requests", label: "休み希望" },
       { href: "/admin/timecards", label: "勤怠管理" },
+      { href: "/admin/absences", label: "欠勤記録" },
       { href: "/admin/timecards/fc-export", label: "FC本部 転記" },
       { href: "/admin/payroll", label: "給与計算" },
       { href: "/admin/documents", label: "店舗書類" },

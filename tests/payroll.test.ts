@@ -209,3 +209,39 @@ describe("週平均（社保判定の元になる値）", () => {
     assert.equal(r.avgWeeklyMin, 450, "(600+300)/2");
   });
 });
+
+// --- 週平均（社保30時間判定の目安）の分母 -------------------------------
+test("週平均は対象月の日数で割る（半端な週を1週と数えない）", () => {
+  // 2026年8月は土曜始まり。月初(1,2日)と月末(31日)に勤務があると暦の6週にまたがるため、
+  // 「勤務のあった週数」で割ると半端な週も1週と数えて週平均が実態より低く出る。
+  const days = [1, 2, 4, 5, 7, 8, 10, 11, 13, 14, 16, 17, 19, 20, 22, 23, 25, 26, 31];
+  const recs = days.map((d) => {
+    const dd = String(d).padStart(2, "0");
+    return {
+      work_date: `2026-08-${dd}`,
+      clock_in: `2026-08-${dd}T00:30:00Z`, // 09:30 JST
+      clock_out: `2026-08-${dd}T07:30:00Z`, // 16:30 JST（実働6.25h）
+    };
+  });
+
+  const old = computePayroll(recs, 1600);
+  assert.equal(old.workedMin, 6.25 * 60 * days.length);
+  assert.equal(old.weekCount, 6); // 暦の週は6つにまたがる
+  assert.equal(old.avgWeeklyMin, Math.round(old.workedMin / 6)); // 約19.8h
+
+  // 月の日数(31)で割る＝4.43週。これが社保判定に使うべき値。
+  const fixed = computePayroll(recs, 1600, 0, 0, undefined, 31);
+  assert.equal(fixed.avgWeeklyMin, Math.round(old.workedMin / (31 / 7))); // 約26.8h
+  assert.ok(fixed.avgWeeklyMin > old.avgWeeklyMin);
+  assert.equal(fixed.workedMin, old.workedMin); // 賃金の元は変わらない
+});
+
+test("periodDays 未指定なら従来どおり勤務週数で割る", () => {
+  const recs = [
+    { work_date: "2026-08-03", clock_in: "2026-08-03T00:30:00Z", clock_out: "2026-08-03T07:30:00Z" },
+    { work_date: "2026-08-10", clock_in: "2026-08-10T00:30:00Z", clock_out: "2026-08-10T07:30:00Z" },
+  ];
+  const r = computePayroll(recs, 1600);
+  assert.equal(r.weekCount, 2);
+  assert.equal(r.avgWeeklyMin, Math.round(r.workedMin / 2));
+});

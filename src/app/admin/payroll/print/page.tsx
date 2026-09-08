@@ -81,7 +81,8 @@ export default async function PayslipPrintPage({
           nominationCount: count,
           kaisukenCount: kaisCount,
           taxOverride: taxOverrides.get(s.id) ?? null,
-      adjustment: adjustments.get(s.id) ?? null,
+          adjustment: adjustments.get(s.id) ?? null,
+          month,
         });
       const rate = NOMINATION_BACK_RATE;
       const kaisRate = kaisukenBackRate(kaisCount);
