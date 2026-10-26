@@ -26,6 +26,13 @@ function dateLabel(workDate: string): string {
   const w = WEEK[new Date(Date.UTC(y, m - 1, d)).getUTCDay()];
   return `${m}/${d}（${w}）`;
 }
+// 補正された側（出勤／退勤）を表す文言
+function correctedLabel(r: Pick<TimeRecord, "in_corrected" | "out_corrected">): string {
+  if (r.in_corrected && r.out_corrected) return "出勤・退勤";
+  if (r.in_corrected) return "出勤";
+  if (r.out_corrected) return "退勤";
+  return "";
+}
 function csvCell(v: string): string {
   return /[",\r\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
 }
@@ -101,7 +108,7 @@ export default function TimeCardManager({
 
   // CSV（その月の全記録を出力。給与計算用）
   function exportCsv() {
-    const header = ["スタッフ", "日付", "出勤", "退勤", "勤務時間(分)", "種別"];
+    const header = ["スタッフ", "日付", "出勤", "退勤", "勤務時間(分)", "種別", "補正"];
     const lines = records.map((r) => {
       const mins = minutesBetween(r.clock_in, r.clock_out);
       return [
@@ -111,6 +118,7 @@ export default function TimeCardManager({
         r.clock_out ? toLocalInput(r.clock_out).replace("T", " ") : "",
         mins == null ? "" : String(mins),
         r.source ?? "",
+        correctedLabel(r),
       ];
     });
     const csv = [header, ...lines].map((row) => row.map(csvCell).join(",")).join("\r\n");
@@ -223,8 +231,17 @@ export default function TimeCardManager({
                   <span className="tc-name tc-ellip" title={r.staffName}>
                     <span className="dot" style={{ background: colorOf(r.staff_id) }} />
                     <span className="tc-ellip">{r.staffName}</span>
-                    {r.source === "manual" && (
-                      <span className="mk late" style={{ fontSize: 10 }}>手動</span>
+                    {(r.in_corrected || r.out_corrected) && (
+                      <span
+                        className="mk late"
+                        style={{ fontSize: 10 }}
+                        title={`${correctedLabel(r)}をあとから過去の時刻で入力・修正した記録です`}
+                      >
+                        補正{r.in_corrected && r.out_corrected ? "" : r.in_corrected ? "・出" : "・退"}
+                      </span>
+                    )}
+                    {r.source === "manual" && !(r.in_corrected || r.out_corrected) && (
+                      <span className="mk late" style={{ fontSize: 10 }} title="管理画面で追加した記録です">手動</span>
                     )}
                     {r.inPhotoUrl && (
                       <a className="tc-photo" href={r.inPhotoUrl} target="_blank" rel="noreferrer" title="出勤時の写真">📷出</a>

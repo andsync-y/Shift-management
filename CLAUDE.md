@@ -35,6 +35,7 @@
 | `docs/PREOPEN_RESERVATION.md` | プレオープン簡易予約（モデル客・スタッフ各自・1枠4名） |
 | `docs/SMART_LOCK.md` | 入口スマートロック（セサミ）＋ 公式LINEのリッチメニュー |
 | `docs/KIOSK_PUNCH.md` | タブレット打刻キオスク（名前ボタン＋セルフィーで出勤/退勤） |
+| `docs/TIMECARD_CORRECTION.md` | 勤怠の補正表示（過去の時刻で入力・修正した打刻に「補正」バッジ） |
 | `docs/STORE_KPI.md` | 店舗KPI（本部システムから日次取得→kiosk表示・手入力フォールバック） |
 | `docs/PAYROLL.md` | 給与計算（実打刻ベース・休憩/残業/深夜・総支給） |
 | `docs/SALONBOARD_CHECK.md` | サロンボード突合（指名数・回数券本数の検算／給与確定前） |

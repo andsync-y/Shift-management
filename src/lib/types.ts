@@ -176,6 +176,8 @@ export interface TimeRecord {
   in_lng: number | null;
   in_photo_url?: string | null; // 出勤時セルフィー（Storage パス・キオスク打刻）
   out_photo_url?: string | null; // 退勤時セルフィー（Storage パス・キオスク打刻）
+  in_corrected?: boolean; // 出勤が入力時点より過去の時刻で記録・変更された（後日補正など）
+  out_corrected?: boolean; // 退勤が同上
   note: string | null;
   created_at: string;
   updated_at: string;
