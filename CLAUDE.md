@@ -31,13 +31,16 @@
 | `docs/SHIFT_OFFER.md` | 出勤打診エンジン（休み承認→早番/遅番の欠員を自動打診） |
 | `docs/STORE_EVENTS.md` | 店休・店舗お知らせ（日単位イベントをカレンダーにバナー表示） |
 | `docs/PERSONAL_BLACKOUTS.md` | 個別予定の不可時間（タイムツリー画像取り込み→生成で回避） |
+| `docs/ABSENCE.md` | 欠勤記録（欠勤・無断欠勤・遅刻・早退／LINE連絡→手入力・欠勤率） |
 | `docs/PREOPEN_RESERVATION.md` | プレオープン簡易予約（モデル客・スタッフ各自・1枠4名） |
 | `docs/SMART_LOCK.md` | 入口スマートロック（セサミ）＋ 公式LINEのリッチメニュー |
 | `docs/KIOSK_PUNCH.md` | タブレット打刻キオスク（名前ボタン＋セルフィーで出勤/退勤） |
 | `docs/STORE_KPI.md` | 店舗KPI（本部システムから日次取得→kiosk表示・手入力フォールバック） |
 | `docs/PAYROLL.md` | 給与計算（実打刻ベース・休憩/残業/深夜・総支給） |
+| `docs/SALONBOARD_CHECK.md` | サロンボード突合（指名数・回数券本数の検算／給与確定前） |
 | `docs/ACCOUNTING.md` | 経理（領収書OCR・カード/EC明細・自動マッチング・監査ログ・月次P&L） |
 | `docs/FC_HQ_EXPORT.md` | FC本部システム連携（勤務時間・スタッフ情報の転記支援＋保護JSON API） |
+| `docs/SECURITY.md` | DBアクセス制御（RLS・ビュー・権限昇格防止・staff_directory） |
 | `docs/DEPLOY_AND_DOMAIN.md` | デプロイ・独自ドメイン設定 |
 | `docs/design-brief.md` | デザイン方針 |
 

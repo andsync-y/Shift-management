@@ -5,6 +5,7 @@ import { displayName } from "@/lib/display-name";
 import { hhmm, NOMINATION_BACK_RATE } from "@/lib/payroll";
 import { TAX_COLUMN_LABELS_JA } from "@/lib/deductions";
 import { computeStaffPayroll, groupRecordsByStaff } from "@/lib/compute-staff-payroll";
+import { shahoAppliesTo, shahoStatusLabel } from "@/lib/shaho";
 import NominationInput from "./NominationInput";
 import KaisukenInput from "./KaisukenInput";
 import TaxInput from "./TaxInput";
@@ -12,6 +13,7 @@ import AdjustmentInput from "./AdjustmentInput";
 import TransferPanel from "./TransferPanel";
 import FinalizeButton from "./FinalizeButton";
 import KaisukenCsvImport from "./KaisukenCsvImport";
+import SalonBoardCheck from "./SalonBoardCheck";
 import SendPayslipsButton from "./SendPayslipsButton";
 
 function pad(n: number) {
@@ -27,18 +29,32 @@ const weeklyHours = (min: number) => (min / 60).toFixed(1);
 interface ShahoJudge {
   hours: number; // 判定に使った週時間
   usingContract: boolean; // true=所定労働時間 / false=実績週平均で代用
-  isInsured: boolean; // 加入対象か
+  enrolled: boolean; // 実際に加入しているか（profiles.shaho_enrolled＝給与から控除される）
+  shouldEnroll: boolean; // 週30時間以上＝本来は加入対象か
   label: string;
-  cls: string; // バッジ用クラス（late=該当）
+  cls: string; // バッジ用クラス（late=注意）
 }
 
-// 社会保険の加入判定（目安）。週30時間以上で加入対象。
-// 所定労働時間があればそれを、無ければ実績週平均を使う。
-function shahoJudge(contractedHrs: number | null, actualAvgMin: number): ShahoJudge {
+// 社会保険の状態。「実際に加入しているか」と「週30時間で加入対象か」は別物なので分けて返す。
+//
+// ⚠️ 給与から社保を引くかどうかは profiles.shaho_enrolled だけで決まる（computeDeductions）。
+//    週30時間の判定は“目安”であって、控除には影響しない。以前ここが時間だけを見ていたため、
+//    所定労働時間を入れた人だけが「社保」と表示され、実際の加入者3名に何も出ない状態になっていた。
+function shahoJudge(
+  contractedHrs: number | null,
+  actualAvgMin: number,
+  enrolled: boolean
+): ShahoJudge {
   const usingContract = contractedHrs != null && contractedHrs > 0;
   const hours = usingContract ? contractedHrs! : actualAvgMin / 60;
-  if (hours >= 30) return { hours, usingContract, isInsured: true, label: "加入対象", cls: "late" };
-  return { hours, usingContract, isInsured: false, label: "対象外", cls: "" };
+  const shouldEnroll = hours >= 30;
+  if (enrolled) {
+    return { hours, usingContract, enrolled, shouldEnroll, label: "加入中", cls: "early" };
+  }
+  if (shouldEnroll) {
+    return { hours, usingContract, enrolled, shouldEnroll, label: "要検討（30h以上）", cls: "late" };
+  }
+  return { hours, usingContract, enrolled, shouldEnroll, label: "対象外", cls: "" };
 }
 
 export default async function PayrollPage({
@@ -97,6 +113,9 @@ export default async function PayrollPage({
           kaisukenCount: kaisCount,
           taxOverride: taxOverrides.get(s.id) ?? null,
           adjustment: adjustments.get(s.id) ?? null,
+          month,
+          // 週平均（社保判定の目安）を対象月の日数で割るため
+          periodDays: new Date(y, m, 0).getDate(),
         });
       const rate = NOMINATION_BACK_RATE;
       return {
@@ -165,6 +184,7 @@ export default async function PayrollPage({
           <span style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <FinalizeButton month={month} />
             <KaisukenCsvImport month={month} />
+            <SalonBoardCheck month={month} />
             <a className="btn-outline" style={{ fontSize: 12.5, padding: "7px 12px" }} href={`/admin/payroll/print?month=${month}`}>
               🖨 給与明細を印刷
             </a>
@@ -216,14 +236,22 @@ export default async function PayrollPage({
                     <td className="en" style={{ textAlign: "right", whiteSpace: "nowrap" }}>
                       {weeklyHours(pay.avgWeeklyMin)}h
                       {(() => {
-                        const j = shahoJudge(s.contracted_weekly_hours ?? null, pay.avgWeeklyMin);
+                        const j = shahoJudge(
+                          s.contracted_weekly_hours ?? null,
+                          pay.avgWeeklyMin,
+                          shahoAppliesTo(month, {
+                            enrolledOn: s.shaho_enrolled_on ?? null,
+                            leftOn: s.shaho_left_on ?? null,
+                            enrolledFlag: s.shaho_enrolled ?? false,
+                          })
+                        );
                         return j.cls ? (
                           <span
                             className={`mk ${j.cls}`}
                             style={{ marginLeft: 6 }}
                             title={`社保: ${j.label}（${j.usingContract ? "所定" : "実績"} ${j.hours.toFixed(1)}h/週）`}
                           >
-                            社保
+                            {j.enrolled ? "社保" : "30h"}
                           </span>
                         ) : null;
                       })()}
@@ -389,12 +417,22 @@ export default async function PayrollPage({
                   <th>スタッフ</th>
                   <th style={{ textAlign: "right" }}>週所定</th>
                   <th style={{ textAlign: "right" }}>実績週平均</th>
+                  <th>加入状況</th>
                   <th>判定</th>
                 </tr>
               </thead>
               <tbody>
                 {rows.map(({ staff: s, pay }) => {
-                  const j = shahoJudge(s.contracted_weekly_hours ?? null, pay.avgWeeklyMin);
+                  const period = {
+                    enrolledOn: s.shaho_enrolled_on ?? null,
+                    leftOn: s.shaho_left_on ?? null,
+                    enrolledFlag: s.shaho_enrolled ?? false,
+                  };
+                  const j = shahoJudge(
+                    s.contracted_weekly_hours ?? null,
+                    pay.avgWeeklyMin,
+                    shahoAppliesTo(month, period)
+                  );
                   return (
                     <tr key={s.id}>
                       <td style={{ whiteSpace: "nowrap" }}>
@@ -415,6 +453,15 @@ export default async function PayrollPage({
                         )}
                       </td>
                       <td style={{ whiteSpace: "nowrap" }}>
+                        {j.enrolled ? (
+                          <span className="mk early" title={s.shaho_enrolled_on ? `資格取得 ${s.shaho_enrolled_on}` : "加入フラグ（日付未設定）"}>
+                            加入中
+                          </span>
+                        ) : (
+                          <span className="muted">{shahoStatusLabel(month, period)}</span>
+                        )}
+                      </td>
+                      <td style={{ whiteSpace: "nowrap" }}>
                         <span className={`mk ${j.cls}`}>{j.label}</span>
                       </td>
                     </tr>
@@ -424,7 +471,11 @@ export default async function PayrollPage({
             </table>
             <p className="help" style={{ marginBottom: 0 }}>
               <strong>週所定</strong>＝契約上の週の所定労働時間（「スタッフ管理」で設定。未設定なら実績週平均で<span className="mk" style={{ margin: "0 3px" }}>代用</span>）。
-              <span className="mk late" style={{ margin: "0 4px" }}>加入対象</span>＝週30時間以上。最終判断は社労士等にご確認ください。
+              <strong>加入状況</strong>＝スタッフ管理の<strong>資格取得日・喪失日</strong>から、その月に保険料が発生するかを判定した結果。
+              <strong>給与から社保を引くかどうかはこれで決まります</strong>（日付が未設定の人だけ旧「加入」チェックで判定）。
+              <span className="mk late" style={{ margin: "0 4px" }}>要検討（30h以上）</span>は週30時間を超えているのに未加入という意味で、控除には影響しません。
+              加入・脱退の切り替えは<strong>その月の給与を締めてから</strong>行ってください（設定は月別ではないため、遡って全月に効きます）。
+              最終判断は社労士等にご確認ください。
             </p>
           </div>
         </div>

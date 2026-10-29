@@ -254,3 +254,54 @@ describe("月別の調整（立替精算・臨時手当・貸付返済）", () =
     assert.equal(plain.deduction.net, withNull.deduction.net);
   });
 });
+
+// --- 社保の資格取得日で月ごとに判定する -------------------------------
+test("加入日より前の月は社保が引かれない（フラグの切り替えが要らない）", () => {
+  // 旧フラグは立っているが、資格取得日が10/1なので9月には効かない
+  const staff = staffOf({ shaho_enrolled: true, shaho_enrolled_on: "2026-10-01", smr_official: 220000 });
+
+  const sep = computeStaffPayroll({
+    staff,
+    records: [rec("2026-09-01", "09:30", "18:00")],
+    nominationCount: 0,
+    kaisukenCount: 0,
+    taxOverride: null,
+    month: "2026-09",
+  });
+  assert.equal(sep.deduction.healthInsurance, 0);
+  assert.equal(sep.deduction.pension, 0);
+
+  const oct = computeStaffPayroll({
+    staff,
+    records: [rec("2026-10-01", "09:30", "18:00")],
+    nominationCount: 0,
+    kaisukenCount: 0,
+    taxOverride: null,
+    month: "2026-10",
+  });
+  assert.ok(oct.deduction.healthInsurance > 0);
+  assert.ok(oct.deduction.pension > 0);
+});
+
+test("資格喪失日の属する月の前月まで引かれる", () => {
+  const staff = staffOf({ shaho_enrolled_on: "2026-04-01", shaho_left_on: "2026-11-01", smr_official: 220000 });
+  const oct = computeStaffPayroll({
+    staff, records: [rec("2026-10-01", "09:30", "18:00")],
+    nominationCount: 0, kaisukenCount: 0, taxOverride: null, month: "2026-10",
+  });
+  const nov = computeStaffPayroll({
+    staff, records: [rec("2026-11-02", "09:30", "18:00")],
+    nominationCount: 0, kaisukenCount: 0, taxOverride: null, month: "2026-11",
+  });
+  assert.ok(oct.deduction.pension > 0);
+  assert.equal(nov.deduction.pension, 0);
+});
+
+test("month を渡さなければ従来どおり旧フラグで判定する", () => {
+  const staff = staffOf({ shaho_enrolled: true, smr_official: 220000 });
+  const r = computeStaffPayroll({
+    staff, records: [rec("2026-09-01", "09:30", "18:00")],
+    nominationCount: 0, kaisukenCount: 0, taxOverride: null,
+  });
+  assert.ok(r.deduction.healthInsurance > 0);
+});

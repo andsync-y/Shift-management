@@ -26,7 +26,7 @@ export type PreopenData = {
 export async function loadPreopenData(): Promise<PreopenData> {
   const supabase = await createClient();
   const [{ data: profilesRaw }, { data: reservationsRaw }, { data: shiftsRaw }] = await Promise.all([
-    supabase.from("profiles").select("id, full_name, display_name, role, display_color"),
+    supabase.from("staff_directory").select("id, full_name, display_name, role, display_color"),
     supabase
       .from("preopen_reservations")
       .select("*")
