@@ -68,7 +68,8 @@ export default async function StaffShiftsPage({
   const [{ data: shifts }, { data: staff }, { data: timeOff }, { data: storeEvents }] =
     await Promise.all([
       supabase.from("shifts").select("*").eq("period_id", latest.id),
-      supabase.from("profiles").select("*"),
+      // 他人の口座・パスワード等は読めない（RLS）。氏名・色だけの名簿ビューを使う
+      supabase.from("staff_directory").select("*"),
       supabase
         .from("time_off_requests")
         .select("*")
